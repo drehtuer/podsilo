@@ -1,0 +1,55 @@
+{
+  // Podsilo dev container — plain Ubuntu 24.04 + JDK 17 + Android SDK.
+  // No devcontainer "features" and no prebuilt vendor image on purpose: everything
+  // this container needs is either an Ubuntu package or Google's command-line tools.
+  "name": "podsilo",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "args": {
+      // Match the WSL2 host user so bind-mounted files are not root-owned.
+      // Override here if `id -u` / `id -g` on the host are not 1000.
+      "USER_UID": "1000",
+      "USER_GID": "1000",
+      // Must equal `getent group kvm | cut -d: -f3` on the WSL2 host, otherwise
+      // the container user cannot open /dev/kvm for the Tier 2 emulator.
+      "KVM_GID": "993"
+    }
+  },
+
+  "workspaceFolder": "/workspaces/podsilo",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/podsilo,type=bind,consistency=cached",
+
+  // Persist everything expensive to re-download. The Android SDK is installed by
+  // post-create.sh into this volume rather than baked into the image.
+  "mounts": [
+    "source=podsilo-android-sdk,target=/opt/android-sdk,type=volume",
+    "source=podsilo-gradle,target=/home/dev/.gradle,type=volume",
+    "source=podsilo-android-user,target=/home/dev/.android,type=volume"
+  ],
+
+  // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
+  // Windows 11 + `nestedVirtualization=true` in .wslconfig + Docker Engine
+  // installed inside the WSL2 distro (not Docker Desktop).
+  // If `ls -l /dev/kvm` fails on the host, DELETE this line — otherwise the
+  // container will not start at all. Tier 1 and Tier 3 do not need it.
+  "runArgs": ["--device=/dev/kvm"],
+
+  "remoteUser": "dev",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "fwcd.kotlin",
+        "vscjava.vscode-gradle",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "files.eol": "\n"
+      }
+    }
+  }
+}
