@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Über den Wolken - Der Podcast</title>
+    <link>https://example.com/</link>
+    <description>Ein Feed, der tatsächlich in ISO-8859-1 kodiert ist, nicht in UTF-8.</description>
+    <item>
+      <title>Warum Käse besser schmeckt als Brötchen</title>
+      <guid isPermaLink="false">iso-8859-1-episode</guid>
+      <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+      <description>Umlaute wie ä, ö, ü und ß müssen korrekt aus Latin-1-Bytes dekodiert werden.</description>
+      <enclosure url="https://example.com/episodes/kaese.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+  </channel>
+</rss>

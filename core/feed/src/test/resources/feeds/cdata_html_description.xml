@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Feed With CDATA HTML Descriptions</title>
+    <link>https://example.com/</link>
+    <description>Show notes are often full HTML wrapped in CDATA.</description>
+    <item>
+      <title>Episode With HTML Show Notes</title>
+      <guid isPermaLink="false">cdata-episode</guid>
+      <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+      <description><![CDATA[<p>This episode covers <strong>a lot</strong>.</p><ul><li>One</li><li>Two</li></ul>]]></description>
+      <content:encoded><![CDATA[<p>Full show notes with <a href="https://example.com">a link</a>.</p>]]></content:encoded>
+      <enclosure url="https://example.com/episodes/cdata.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+  </channel>
+</rss>

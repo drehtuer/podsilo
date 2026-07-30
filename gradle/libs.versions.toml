@@ -1,8 +1,12 @@
 # Version catalog. Only entries this Gradle skeleton actually uses are pinned
 # here — see CLAUDE.md §3 ("pin versions... no floating +") and §9 (new
 # dependencies get proposed, not pre-populated speculatively). Room, Hilt,
-# Retrofit, Stalla, jaudiotagger, WorkManager, Paging, MockK, Turbine, and
-# MockWebServer get added when the module that needs them is actually built.
+# Retrofit, WorkManager, Paging, MockK, Turbine, and MockWebServer get added
+# when the module that needs them is actually built.
+#
+# rssparser (not Stalla — see docs/decisions/0005) and jaudiotagger (the
+# Adonai/Kaned1as Android fork via JitPack, not the stale upstream — see
+# docs/decisions/0006) are pinned here for :core:feed and :core:download.
 [versions]
 agp = "9.3.1"
 kotlin = "2.4.10"
@@ -12,6 +16,9 @@ androidxActivityCompose = "1.11.0"
 androidxLifecycleRuntimeKtx = "2.9.4"
 kotlinxCoroutines = "1.11.0"
 junit4 = "4.13.2"
+robolectric = "4.15.1"
+rssparser = "6.1.8"
+jaudiotagger = "2.3.15"
 ktlintGradle = "14.2.0"
 detekt = "1.23.8"
 
@@ -27,6 +34,9 @@ compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+rssparser = { group = "com.prof18.rssparser", name = "rssparser", version.ref = "rssparser" }
+jaudiotagger = { group = "com.github.Adonai", name = "jaudiotagger", version.ref = "jaudiotagger" }
 detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
 
 [plugins]

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Feed With Bad Dates</title>
+    <link>https://example.com/</link>
+    <description>Some feeds have malformed or missing pubDate values.</description>
+    <item>
+      <title>Episode With a Malformed Date</title>
+      <guid isPermaLink="false">malformed-date</guid>
+      <pubDate>not a valid date at all</pubDate>
+      <description>pubDate is present but garbage.</description>
+      <enclosure url="https://example.com/episodes/malformed-date.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+    <item>
+      <title>Episode With No Date At All</title>
+      <guid isPermaLink="false">no-date</guid>
+      <description>No pubDate element whatsoever.</description>
+      <enclosure url="https://example.com/episodes/no-date.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+  </channel>
+</rss>

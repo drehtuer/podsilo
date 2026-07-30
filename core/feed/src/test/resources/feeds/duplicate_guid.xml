@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Feed With a Reused GUID</title>
+    <link>https://example.com/</link>
+    <description>Some feeds reuse a guid across episodes, usually by accident.</description>
+    <item>
+      <title>Second Episode, Same GUID</title>
+      <guid isPermaLink="false">reused-guid</guid>
+      <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+      <description>This one was published later but shares its guid with the item below.</description>
+      <enclosure url="https://example.com/episodes/second.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+    <item>
+      <title>First Episode, Same GUID</title>
+      <guid isPermaLink="false">reused-guid</guid>
+      <pubDate>Tue, 07 Jul 2026 09:00:00 +0000</pubDate>
+      <description>The original episode with this guid.</description>
+      <enclosure url="https://example.com/episodes/first.mp3" length="900" type="audio/mpeg"/>
+      <itunes:duration>1600</itunes:duration>
+    </item>
+  </channel>
+</rss>

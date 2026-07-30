@@ -88,7 +88,7 @@ follows from it.
 | `:core:sync` | JVM | Reconciliation logic + `SyncOrchestrator` (order-of-operations per CLAUDE.md §5). Depends on `:core:model` only — receives repository/client implementations via constructor injection. |
 | `:core:database` | Android library | Room entities, DAOs, migrations; **implements** `FeedRepository`, `EpisodeRepository`, `EpisodeLedgerRepository`, `SyncStateRepository` from `:core:model`. |
 | `:core:datastore` | Android library | Settings storage (Nextcloud URL/credentials, folder URI, sync interval, naming templates) via Jetpack DataStore + Keystore-backed encryption for the app password. Implements `SettingsRepository`. |
-| `:core:feed` | Android library | Wraps Stalla; fetches + parses feed XML into `Feed`/`Episode`. Hosts `FeedRefreshWorker`. |
+| `:core:feed` | Android library | Wraps rssparser (docs/decisions/0005, not Stalla); fetches + parses feed XML into `Feed`/`Episode`. Hosts `FeedRefreshWorker`. |
 | `:core:gpodder` | Android library (see [§12](#12-open-decisions--resolve-beforewhile-implementing) — could be JVM) | Retrofit client for the four GPodder endpoints; **implements** `GpodderClient` from `:core:model`. |
 | `:core:download` | Android library | Download queue (`DownloadWorker`), cache→tag→SAF-copy pipeline, WorkManager state. Depends on `:core:model`, `:core:naming`. |
 | `:feature:episodes` | Android library (Compose) | Episode list + filters + triage actions. Depends on `:core:model` (ports only); Hilt-injected ViewModel gets real repositories from `:app`'s graph. |
@@ -539,7 +539,7 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 
 ### RSS → `Episode`/`Feed` field mapping
 
-| Local field | RSS/Atom source (via Stalla) | Fallback chain |
+| Local field | RSS/Atom source (via rssparser -- docs/decisions/0005) | Fallback chain |
 |---|---|---|
 | `Feed.title` | `<channel><title>` | — |
 | `Feed.imageUrl` | `<itunes:image>` or `<image><url>` | none → `null` |
@@ -547,8 +547,17 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 | `Episode.enclosureUrl` | `<enclosure url="">` | episode without an enclosure is not downloadable — exclude or flag, decide during `:core:feed` implementation |
 | `Episode.title` | `<title>` | — |
 | `Episode.description` | `<description>` or `<content:encoded>` | none → `null` |
-| `Episode.pubDate` | `<pubDate>` | other date field Stalla exposes → date first locally seen (§6) |
+| `Episode.pubDate` | `<pubDate>` | other date field the parser exposes → date first locally seen (§6) |
 | `Episode.durationMs` | `<itunes:duration>` | none → `null`, never invented |
+
+**Built so far (Tier 2):** `FeedXmlParser`/`decodeFeedXml`/`RssMapping.kt` in `:core:feed` implement
+this table's mapping from raw bytes to `ParsedFeed` (episodes + feed title/image) — see
+`docs/decisions/0005` for why rssparser, not Stalla. **Not yet built:** the HTTP-fetch layer this
+section's sequence diagram shows (conditional `GET`, `FeedRefreshWorker`, `FeedRepository`/
+`EpisodeRepository` wiring) — that's Tier 3/4b. `decodeFeedXml` also rewrites the XML prolog's
+declared encoding to `UTF-8` after decoding, not just the characters — rssparser re-serialises the
+string as UTF-8 bytes before re-parsing it, so a stale non-UTF-8 declaration left in the text causes
+a double-decode of non-ASCII characters; discovered via the "wrong encoding" fixture test failing.
 
 ### Sequence: feed refresh
 
@@ -559,7 +568,7 @@ sequenceDiagram
     participant ER as EpisodeRepository impl
     participant HTTP as OkHttp
     participant Feed as Podcast RSS server
-    participant P as Stalla parser
+    participant P as rssparser
 
     W->>FR: observeAll() / getAll()
     FR-->>W: List<Feed>
@@ -581,7 +590,7 @@ sequenceDiagram
 ```
 
 Malformed-feed handling (missing GUIDs, duplicate GUIDs, missing enclosures, bad dates, wrong
-encoding, CDATA HTML, no `itunes:duration`) is Stalla's problem to survive and `:core:feed`'s tests
+encoding, CDATA HTML, no `itunes:duration`) is rssparser's problem to survive and `:core:feed`'s tests
 to cover with fixtures — never a hand-rolled parser fallback (CLAUDE.md §3).
 
 ---
@@ -754,6 +763,14 @@ Extension resolution order (§6): response `Content-Type` → URL path extension
 belong entirely inside `NamingTemplateEngine` (`:core:naming`) — `:core:download` just calls
 `resolve()` and uses whatever comes back; it should contain zero string-sanitisation logic of its
 own.
+
+**Built so far (Tier 2):** `AudioTagWriter`/`AudioTagData` in `:core:download` implement step D —
+see `docs/decisions/0006` for why the Adonai/Kaned1as Android fork, not upstream jaudiotagger.
+Writes are per-field best-effort (`TagWriteOutcome.PartialSuccess` lists any `FieldKey` the
+container's tag format wouldn't accept) with a container-level `Failure` outcome for an unreadable
+file — never an exception, matching CLAUDE.md §6's "never lose a successful download because a tag
+write failed." **Not yet built:** steps A/B/E/F/G (the download itself, verification, SAF copy,
+cache cleanup, ledger write) — that's Tier 4b, needs WorkManager and SAF.
 
 ---
 
