@@ -204,12 +204,15 @@ erDiagram
     }
     EPISODE_LEDGER {
         string episodeKey PK "same value-space as EPISODE.episodeKey, not an enforced FK"
+        string feedUrl "denormalised from EPISODE at write time — see docs/decisions/0001"
+        string enclosureUrl "denormalised from EPISODE at write time — see docs/decisions/0001"
         string state "QUEUED / DOWNLOADING / DOWNLOADED / SKIPPED / ERROR / HANDLED_REMOTELY"
         long actionedAt "epoch millis"
         boolean syncedToServer "outbox flag"
         int attempts
         string lastError "nullable"
         string writtenFileName "nullable, retry idempotency only"
+        int durationSeconds "nullable, snapshot from EPISODE at write time — see docs/decisions/0001"
     }
     SYNC_STATE {
         int id PK "always 1 — single row"
@@ -259,13 +262,16 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 
 | Field | Type | Nullable | Written by | Notes |
 |---|---|---|---|---|
-| `episodeKey` | `String` | No (PK) | — | Shares key space with `Episode.episodeKey`; see FK note above. |
+| `episodeKey` | `String` | No (PK) | — | Shares key space with `Episode.episodeKey`; see FK note above. `guid` is **not** a separate column — it's derived (`episodeKey.takeIf { it != enclosureUrl }`). |
+| `feedUrl` | `String` | No | Snapshot of `Episode.feedUrl` at write time | Denormalised, not looked up via `Episode` — see `docs/decisions/0001-episode-ledger-row-denormalized-fields.md`. Needed so a POST retry after the feed is unsubscribed can still build a valid outbound action. |
+| `enclosureUrl` | `String` | No | Snapshot of `Episode.enclosureUrl` at write time | Same rationale as `feedUrl`. |
 | `state` | `String`/enum | No | UI (QUEUED/SKIPPED), `DownloadWorker` (DOWNLOADING/DOWNLOADED/ERROR), `SyncOrchestrator` (HANDLED_REMOTELY) | See [§9](#9-episode-ledger-state-machine) for the full transition table. There is **no persisted "NEW" value** — new means no row exists at all. |
-| `actionedAt` | `Long` | No | Whoever writes `state` | Epoch millis. For rows created from a remote action, parsed from the action's ISO-8601 `timestamp` field (see §6's timestamp-format gotcha). |
+| `actionedAt` | `Long` | No | Whoever writes `state` | Epoch millis. For rows created from a remote action, parsed from the action's ISO-8601 `timestamp` field, interpreted as UTC — see `docs/decisions/0003-gpodder-action-timestamp-as-utc.md`. |
 | `syncedToServer` | `Boolean` | No | `false` on local write, `true` only on confirmed 2xx POST | This is literally the outbox flag — `getUnsynced()` is `WHERE syncedToServer = 0`. |
 | `attempts` | `Int` | No | `DownloadWorker` / outbox push | Retry counter. |
 | `lastError` | `String` | Yes | `DownloadWorker` / outbox push | Human-readable, for the error state UI. |
 | `writtenFileName` | `String` | Yes | `DownloadWorker`, after a successful SAF copy | Retry idempotency **only** — never used as an existence check (CLAUDE.md §11's single most important invariant). |
+| `durationSeconds` | `Int` | Yes | Snapshot of `Episode.durationMs` (converted to seconds) at write time | Used only to encode a skip's `PLAY` `total`/`position` — see `docs/decisions/0001-...` and `docs/decisions/0002-skip-as-play-encoding.md`. `null` when the feed never supplied a usable duration. |
 
 **SyncState** — single row, `id = 1` always
 
@@ -349,15 +355,30 @@ data class Episode(
 
 enum class LedgerState { QUEUED, DOWNLOADING, DOWNLOADED, SKIPPED, ERROR, HANDLED_REMOTELY }
 
+// guid ?: enclosureUrl — the server's identification rule (CLAUDE.md §5). Episode.episodeKey and
+// the key used to match incoming EpisodeActions both go through this one function.
+fun episodeKey(guid: String?, enclosureUrl: String): String = guid ?: enclosureUrl
+
 data class EpisodeLedgerRow(
     val episodeKey: String,
+    val feedUrl: String, // denormalised from Episode at write time — docs/decisions/0001
+    val enclosureUrl: String, // denormalised from Episode at write time — docs/decisions/0001
     val state: LedgerState,
     val actionedAt: Long,
     val syncedToServer: Boolean,
     val attempts: Int,
     val lastError: String?,
     val writtenFileName: String?,
-)
+    val durationSeconds: Int? = null, // snapshot from Episode at write time — docs/decisions/0001
+) {
+    val guid: String? get() = episodeKey.takeIf { it != enclosureUrl } // derived, not stored
+}
+
+sealed interface SyncOutcome {
+    data object Success : SyncOutcome
+    data class Retry(val reason: String) : SyncOutcome // transient (network) — worth WorkManager retrying
+    data class Failure(val reason: String) : SyncOutcome // non-transient — retrying won't help
+}
 
 data class SyncState(val lastEpisodeActionSyncTs: Long, val deviceId: String)
 
@@ -392,12 +413,13 @@ interface GpodderClient {
 }
 
 data class SubscriptionDelta(val add: List<String>, val remove: List<String>, val timestamp: Long)
+enum class EpisodeActionType { DOWNLOAD, PLAY, DELETE, NEW }
 data class EpisodeAction(
     val podcast: String,
     val episode: String,
     val guid: String?,
-    val action: String, // "DOWNLOAD" | "PLAY" | "DELETE" | "NEW"
-    val timestamp: String, // ISO-8601, no offset — see §6
+    val action: EpisodeActionType,
+    val timestamp: String, // ISO-8601, no offset, interpreted as UTC — see §6 and docs/decisions/0003
     val started: Int? = null,
     val position: Int? = null,
     val total: Int? = null,
@@ -492,7 +514,10 @@ sequenceDiagram
 | Ledger state | Emitted `action` | `started` | `position` | `total` |
 |---|---|---|---|---|
 | `DOWNLOADED` | `DOWNLOAD` | — | — | — |
-| `SKIPPED` | `PLAY` | `0` | `total` (see below) | duration if known, else **TBD — see §12** |
+| `SKIPPED` | `PLAY` | `0` | equal to `total` | `EpisodeLedgerRow.durationSeconds` if known, else `0` |
+
+Resolved per AntennaPod's own convention — see `docs/decisions/0002-skip-as-play-encoding.md`.
+Implemented in `net.drehtuer.podsilo.core.sync.toOutboundAction()` (`:core:sync`).
 
 ### Remote `EpisodeAction` → ledger state mapping (inbound)
 
@@ -739,10 +764,10 @@ guessed, because gpodder-sync semantics beyond the four endpoints are convention
 Recording them here so they don't get silently decided mid-implementation; each should graduate to a
 short ADR in `docs/decisions/` once resolved.
 
-1. **Skip-as-`PLAY` when duration is unknown.** CLAUDE.md §5: "if no usable duration exists, still
-   send `PLAY`, and document what you put in `position`/`total`. Do not invent a plausible-looking
-   duration." This document deliberately leaves the `total`/`position` values as **TBD** in §6's
-   mapping table — do not fill this in without reading AntennaPod's implementation first.
+1. **Resolved** — Skip-as-`PLAY` when duration is unknown. See
+   `docs/decisions/0002-skip-as-play-encoding.md`: matches AntennaPod's own convention
+   (`started = 0`, `position = total`, `total = duration` if known else `0`, never fabricated).
+   Implemented and tested in `:core:sync` (`toOutboundAction()`, `OutboundEpisodeActionTest`).
 2. **Subscriptions `add`/`remove` response shape**, specifically for the no-`since` call `:core:sync`
    depends on. CLAUDE.md §5 says applying `add` then subtracting `remove` is correct under either
    plausible interpretation, but "verify against `opodsync` and `nextcloud-gpodder` before relying on
@@ -754,17 +779,30 @@ short ADR in `docs/decisions/` once resolved.
    `GpodderClient` *interface* in `:core:model` (§2/§5), this choice doesn't affect `:core:sync`'s
    testability either way. Low priority, but flagging it since a same-module or a JVM-module version
    have different Robolectric/Android-dependency implications for `:core:gpodder`'s own tests.
-4. **"Trigger a sync pass" vs. "download worker POSTs directly."** §10 documents the download flow as
-   *write ledger, then enqueue `SyncWorker`* rather than `DownloadWorker` calling `GpodderClient`
-   itself. This satisfies CLAUDE.md's "ledger row first, then POST" ordering and keeps exactly one
-   code path doing outbound POSTs, but it is this document's design choice, not something CLAUDE.md
-   states outright — confirm it still reads as correct once `:core:sync`'s tests are written, in
-   particular the "successful download + failed POST + app restart" test case (§7 item 8).
-5. **Fallback for `pubDate`'s device timezone.** §6: "Normalise to a single fixed timezone (the
-   device's, chosen once and documented)." Which exact fixed zone (device-at-first-parse vs. always
-   re-resolved) needs to be pinned down and documented when `:core:naming` is implemented — a naive
-   "always use `TimeZone.getDefault()` at format time" would violate "the same episode never produces
-   two different dates on two syncs" if the device's zone setting changes between syncs.
+4. **Still open (partially validated).** "Trigger a sync pass" vs. "download worker POSTs directly."
+   §10 documents the download flow as *write ledger, then enqueue `SyncWorker`* rather than
+   `DownloadWorker` calling `GpodderClient` itself. `:core:sync`'s own tests confirm the underlying
+   durability property holds at the `SyncOrchestrator` level regardless of who triggers it — see
+   `SyncOrchestratorTest`'s "successful download, then failed POST, then app restart" case (two
+   separate `SyncOrchestrator` instances sharing the same repositories, mimicking a process restart,
+   never double-push). What's *not* yet validated is the `DownloadWorker` → `SyncWorker` enqueue
+   wiring itself, since `:core:download` and `:app`'s `SyncWorker` don't exist yet (Tier 4b).
+5. **Resolved** — Fallback for `pubDate`'s device timezone. See
+   `docs/decisions/0004-naming-date-timezone-and-missing-date-fallback.md`: `ZoneId` is injected
+   into `DefaultNamingTemplateEngine` at construction (never re-resolved mid-call); the "same
+   episode, same date across retries" guarantee is upheld by reusing `EpisodeLedgerRow.writtenFileName`
+   on retry (§6/§11), not by anything inside `:core:naming` itself. A genuinely missing `pubDate`
+   formats as the sortable placeholder `"00000000"`, never an empty string.
+6. **New, resolved** — `EpisodeLedgerRow` needed two more denormalised fields than originally
+   specified in §4. See `docs/decisions/0001-episode-ledger-row-denormalized-fields.md`: `feedUrl`,
+   `enclosureUrl`, and `durationSeconds` are captured at write time so the outbox can build a valid
+   `EpisodeAction` even if the originating `Episode` row has since been pruned (feed unsubscribed
+   before a failed push retries). `:core:sync` still only depends on `FeedRepository`,
+   `EpisodeLedgerRepository`, `SyncStateRepository`, and `GpodderClient` — never `EpisodeRepository`
+   — exactly as §2/§5 originally specified.
+7. **New, resolved** — Which clock the naive `EpisodeAction.timestamp` field represents. See
+   `docs/decisions/0003-gpodder-action-timestamp-as-utc.md`: always UTC, both rendering outbound
+   and parsing inbound, so timestamp comparisons agree across devices regardless of local timezone.
 
 ---
 

@@ -13,7 +13,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import net.drehtuer.podsilo.core.model.greeting
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,7 +28,8 @@ private fun PodsiloHelloWorld() {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             Text(
-                text = greeting(),
+                // Placeholder until :feature:episodes/:feature:settings land (CLAUDE.md §10 step 8).
+                text = "Podsilo",
                 modifier = Modifier.wrapContentSize(Alignment.Center),
             )
         }

@@ -235,3 +235,98 @@ directly by the author rather than inferred. Namespace confirmed with the author
 - No GitHub issue/PR templates, no `docs/decisions/` ADRs — nothing architecturally contentious was
   decided here beyond tool versions (recorded above).
 - Nothing committed to git. All of the above is currently unstaged/untracked working-tree state.
+
+---
+
+## 2026-07-30 — Tier 1: `:core:model`, `:core:naming`, `:core:sync`
+
+**Attempted:** implement all three Tier 1 modules from `TODO.md` (the testability-tier build order
+agreed with the author, which reorders CLAUDE.md §10 so `:core:sync` lands before `:core:gpodder`
+since it never actually depends on it). Goal was full CLAUDE.md §12 definition-of-done: tests
+alongside the code, `ktlintCheck`/`detekt`/`test` all green, decisions documented rather than
+silently made.
+
+**What was built**
+
+- `:core:model` — `Feed`, `Episode`, `LedgerState`, `EpisodeLedgerRow`, `SyncState`,
+  `SyncOutcome`, the `episodeKey()` identification-rule helper, and all six port interfaces
+  (`FeedRepository`, `EpisodeRepository`, `EpisodeLedgerRepository`, `SyncStateRepository`,
+  `GpodderClient`, `NamingTemplateEngine`) plus their DTOs, matching `docs/architecture.md` §5.
+  Added `kotlinx-coroutines-core` to the version catalog (mandated by CLAUDE.md's dependency
+  table, no ask needed). Removed the `Greeting.kt` skeleton placeholder and `:app`'s
+  `MainActivity.kt` reference to it.
+- `:core:naming` — sanitisation, UTF-8-byte-safe truncation (via `java.text.BreakIterator` for
+  grapheme-cluster safety), Windows reserved-name escaping, title-cleanup rules, collision
+  suffixing, `{guid_short}` hashing, date formatting with injected `ZoneId`, URL-based extension
+  resolution, and a template tokenizer/engine tying it all together. Zero new dependencies —
+  everything is JDK stdlib. 75 tests, table-driven per CLAUDE.md §7 item 5's checklist (illegal
+  chars, trailing dots/spaces, reserved names, umlauts/CJK/RTL/emoji, NFD→NFC, 400-char truncation,
+  empty-after-sanitising, missing/malformed dates, collision suffixing).
+- `:core:sync` — `SyncOrchestrator` (full sync pass in CLAUDE.md §5's exact order), `reconcile()`
+  (inbound remote-action reconciliation), `toOutboundAction()` (outbound ledger→action mapping),
+  and GPodder timestamp round-tripping. Tested entirely with hand-written in-memory fakes of the
+  four ports — no MockWebServer, no Room, no Android. 35 tests, including the CLAUDE.md §7 item 8
+  "triage durability" case (failed push, simulated app restart via a second orchestrator instance
+  sharing the same fake repositories, confirms exactly one push ever happens) and the item 1
+  canned reconciliation cases (clock skew, duplicate actions, episode not in any subscribed feed,
+  downloaded-remotely-while-queued-locally, guid-less CDN migration).
+
+**Decisions surfaced mid-implementation, not pre-planned**
+
+Two real gaps showed up only once the outbound-mapping code was actually being written, both
+flagged to the author before proceeding rather than silently decided (CLAUDE.md §9 "ask rather
+than assume... schema changes... sync conflict rules"):
+
+1. `EpisodeLedgerRow` as originally specified (episodeKey + bookkeeping only) can't always build
+   its own outbound `EpisodeAction` — the documented sync order (pull subscriptions, which prunes
+   `Episode` rows for unsubscribed feeds, *then* push unsynced ledger rows) can delete the very
+   `Episode` data an outbox push needs, if a previous push attempt failed. Fixed by denormalising
+   `feedUrl`/`enclosureUrl`/`durationSeconds` onto the ledger row at write time. Recorded as
+   `docs/decisions/0001-episode-ledger-row-denormalized-fields.md`.
+2. Skip-as-`PLAY` duration encoding (architecture.md's open decision #1) needed AntennaPod's actual
+   source, not a guess. Found `SynchronizationQueueImpl.enqueueEpisodePlayed()` via the GitHub API's
+   tree endpoint (code search needs auth; the tree/raw-file endpoints don't) — confirmed
+   `position == total` on completion and no special-casing of a missing duration. Recorded as
+   `docs/decisions/0002-skip-as-play-encoding.md`.
+
+Both were put to the author as a single `AskUserQuestion` with a recommended default before any
+code was written against them; both recommendations were accepted as-is.
+
+Two smaller decisions were made without asking, since they were implementation-detail latitude the
+architecture doc already explicitly granted: which clock a naive GPodder action timestamp
+represents (`docs/decisions/0003-gpodder-action-timestamp-as-utc.md` — UTC, for
+cross-device-comparable ordering) and how `:core:naming` handles the `{date}` timezone
+(`docs/decisions/0004-naming-date-timezone-and-missing-date-fallback.md` — injected `ZoneId`, never
+re-resolved mid-call).
+
+**What needed correction during implementation (not user correction — self-caught via tests)**
+
+- First sanitisation pass treated tab/newline as "illegal characters" (replaced with a visible
+  `_`) rather than whitespace to collapse — caught by a table-driven test
+  (`whitespace runs collapse to a single space` with an embedded tab), fixed by reordering the
+  pipeline so whitespace collapse runs before illegal-character replacement.
+- Detekt (via the `detekt-formatting` plugin) and the `ktlint-gradle` plugin's own CLI disagreed on
+  wrapping for some multi-argument calls — `ktlintFormat` would produce output that still failed
+  `detekt`'s formatting ruleset. Worked around by shortening call sites (extracting repeated
+  constructor calls into small test-local factory functions) rather than fighting the two tools'
+  differing line-wrap heuristics. Not a code problem, but worth knowing about for future modules:
+  don't assume `ktlintFormat` alone guarantees `detekt` passes when both are configured.
+- `Episode.of()` factory (added preemptively "to enforce the identification rule") tripped
+  detekt's `LongParameterList` and had no caller yet (`:core:feed` doesn't exist). Deleted rather
+  than suppressed — matches CLAUDE.md's "don't build framework code with no second caller."
+
+**Verified on this host**
+
+`./gradlew ktlintCheck detekt test` — all green across the whole repo (114 tests across the three
+new modules; the still-empty modules report `NO-SOURCE`, as expected at this point in the build
+order). `:app` still compiles after removing the `greeting()` placeholder it referenced.
+
+**Not done / explicitly out of scope for this step**
+
+- Tier 2 (`:core:feed` parsing, jaudiotagger tag rewriting), Tier 3 (`:core:gpodder`,
+  `:core:feed`'s HTTP layer), and Tier 4 (Room, DataStore, WorkManager, SAF, Compose UI) per
+  `TODO.md` — next up.
+- The subscriptions `add`/`remove` response-shape open decision (#2) and the
+  `com.android.library` vs. `kotlin("jvm")` question for `:core:gpodder` (#3) are both still open,
+  by design — they need `:core:gpodder` to exist to verify against `opodsync`.
+- Nothing committed to git.

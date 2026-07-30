@@ -10,6 +10,7 @@ composeBom = "2026.06.01"
 androidxCoreKtx = "1.17.0"
 androidxActivityCompose = "1.11.0"
 androidxLifecycleRuntimeKtx = "2.9.4"
+kotlinxCoroutines = "1.11.0"
 junit4 = "4.13.2"
 ktlintGradle = "14.2.0"
 detekt = "1.23.8"
@@ -18,6 +19,7 @@ detekt = "1.23.8"
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCoreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycleRuntimeKtx" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }

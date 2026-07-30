@@ -1,0 +1,301 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package net.drehtuer.podsilo.core.sync
+
+import kotlinx.coroutines.runBlocking
+import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.Feed
+import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.model.SyncOutcome
+import net.drehtuer.podsilo.core.model.SyncState
+import net.drehtuer.podsilo.core.model.port.EpisodeAction
+import net.drehtuer.podsilo.core.model.port.EpisodeActionPage
+import net.drehtuer.podsilo.core.model.port.EpisodeActionType
+import net.drehtuer.podsilo.core.model.port.SubscriptionDelta
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.IOException
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+
+class SyncOrchestratorTest {
+    private val fixedClock: Clock = Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneOffset.UTC)
+
+    private fun orchestratorOf(
+        feedRepository: FakeFeedRepository = FakeFeedRepository(),
+        ledgerRepository: FakeEpisodeLedgerRepository = FakeEpisodeLedgerRepository(),
+        syncStateRepository: FakeSyncStateRepository = FakeSyncStateRepository(),
+        gpodderClient: FakeGpodderClient = FakeGpodderClient(),
+    ) = SyncOrchestrator(feedRepository, ledgerRepository, syncStateRepository, gpodderClient, fixedClock)
+
+    private fun downloadedRow(episodeKey: String = "guid-1") =
+        EpisodeLedgerRow(
+            episodeKey = episodeKey,
+            feedUrl = "https://example.com/feed.xml",
+            enclosureUrl = "https://example.com/ep1.mp3",
+            state = LedgerState.DOWNLOADED,
+            actionedAt = Instant.parse("2026-07-14T09:00:00Z").toEpochMilli(),
+            syncedToServer = false,
+            attempts = 0,
+            lastError = null,
+            writtenFileName = "20260714_Episode.mp3",
+        )
+
+    private fun feed(url: String) =
+        Feed(
+            url = url,
+            title = url,
+            imageUrl = null,
+            firstSeenAt = 0L,
+            lastRefreshedAt = null,
+            httpEtag = null,
+            httpLastModified = null,
+        )
+
+    @Test
+    fun `a full pass with nothing to do returns success and advances the sync timestamp`() =
+        runBlocking {
+            val syncStateRepository = FakeSyncStateRepository()
+            val page = EpisodeActionPage(emptyList(), timestamp = 999L)
+            val gpodderClient = FakeGpodderClient(episodeActionsPage = page)
+            val orchestrator = orchestratorOf(syncStateRepository = syncStateRepository, gpodderClient = gpodderClient)
+
+            val outcome = orchestrator.sync()
+
+            assertEquals(SyncOutcome.Success, outcome)
+            assertEquals(999L, syncStateRepository.current.lastEpisodeActionSyncTs)
+        }
+
+    @Test
+    fun `subscriptions are pulled as a full current set, preserving already-known feed metadata`() =
+        runBlocking {
+            val existingFeed =
+                Feed(
+                    url = "https://example.com/feed.xml",
+                    title = "Der Podcast",
+                    imageUrl = "https://example.com/art.png",
+                    firstSeenAt = 111L,
+                    lastRefreshedAt = 222L,
+                    httpEtag = "etag",
+                    httpLastModified = "last-mod",
+                )
+            val feedRepository = FakeFeedRepository(initial = listOf(existingFeed))
+            val subscriptions =
+                SubscriptionDelta(
+                    add = listOf("https://example.com/feed.xml", "https://new.example.com/feed.xml"),
+                    remove = emptyList(),
+                    timestamp = 0L,
+                )
+            val gpodderClient = FakeGpodderClient(subscriptions = subscriptions)
+
+            orchestratorOf(feedRepository = feedRepository, gpodderClient = gpodderClient).sync()
+
+            val byUrl = feedRepository.current.associateBy { it.url }
+            assertEquals(existingFeed, byUrl.getValue("https://example.com/feed.xml")) // untouched, not re-created
+            val newFeed = byUrl.getValue("https://new.example.com/feed.xml")
+            assertEquals("https://new.example.com/feed.xml", newFeed.title) // URL placeholder until first fetch
+            assertEquals(fixedClock.millis(), newFeed.firstSeenAt)
+        }
+
+    @Test
+    fun `add and remove both containing the same url is a net removal`() =
+        runBlocking {
+            val subscriptions =
+                SubscriptionDelta(
+                    add = listOf("https://example.com/feed.xml"),
+                    remove = listOf("https://example.com/feed.xml"),
+                    timestamp = 0L,
+                )
+            val feedRepository = FakeFeedRepository()
+            val gpodderClient = FakeGpodderClient(subscriptions = subscriptions)
+
+            orchestratorOf(feedRepository = feedRepository, gpodderClient = gpodderClient).sync()
+
+            assertTrue(feedRepository.current.isEmpty())
+        }
+
+    @Test
+    fun `a successful push marks the row synced`() =
+        runBlocking {
+            val ledgerRepository = FakeEpisodeLedgerRepository(initial = listOf(downloadedRow()))
+            val gpodderClient = FakeGpodderClient()
+
+            val outcome = orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
+
+            assertEquals(SyncOutcome.Success, outcome)
+            assertEquals(1, gpodderClient.postedActions.size)
+            assertEquals(EpisodeActionType.DOWNLOAD, gpodderClient.postedActions.single().action)
+            assertTrue(ledgerRepository.allRows.single().syncedToServer)
+        }
+
+    @Test
+    fun `only downloaded and skipped rows are ever pushed -- never subscription_change`() =
+        runBlocking {
+            // FakeGpodderClient/GpodderClient expose no subscription_change/create method at all --
+            // it is structurally impossible for this orchestrator to call it (CLAUDE.md section 1).
+            val queuedRow = downloadedRow("guid-2").copy(state = LedgerState.QUEUED, syncedToServer = false)
+            val errorRow = downloadedRow("guid-3").copy(state = LedgerState.ERROR, syncedToServer = false)
+            val ledgerRepository = FakeEpisodeLedgerRepository(initial = listOf(downloadedRow(), queuedRow, errorRow))
+            val gpodderClient = FakeGpodderClient()
+
+            orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
+
+            assertEquals(1, gpodderClient.postedActions.size)
+            assertEquals(EpisodeActionType.DOWNLOAD, gpodderClient.postedActions.single().action)
+            val byKey = ledgerRepository.allRows.associateBy { it.episodeKey }
+            assertTrue(byKey.getValue("guid-1").syncedToServer)
+            val queuedMessage = "QUEUED row has no representable action, so it can't be marked synced"
+            val errorMessage = "ERROR row has no representable action, so it can't be marked synced"
+            assertFalse(queuedMessage, byKey.getValue("guid-2").syncedToServer)
+            assertFalse(errorMessage, byKey.getValue("guid-3").syncedToServer)
+        }
+
+    @Test
+    fun `a failed push returns Retry and leaves the row unsynced -- no re-download bug`() =
+        runBlocking {
+            val ledgerRepository = FakeEpisodeLedgerRepository(initial = listOf(downloadedRow()))
+            val gpodderClient = FakeGpodderClient(postResult = Result.failure(IOException("connection reset")))
+
+            val outcome = orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
+
+            assertTrue(outcome is SyncOutcome.Retry)
+            val message = "row must remain unsynced so it is retried, not silently dropped"
+            assertFalse(message, ledgerRepository.allRows.single().syncedToServer)
+        }
+
+    @Test
+    fun `a failed push does not advance past reconciliation -- order of operations stops early`() =
+        runBlocking {
+            val ledgerRepository = FakeEpisodeLedgerRepository(initial = listOf(downloadedRow()))
+            val syncStateRepository = FakeSyncStateRepository()
+            val gpodderClient =
+                FakeGpodderClient(
+                    postResult = Result.failure(IOException("connection reset")),
+                    episodeActionsPage = EpisodeActionPage(emptyList(), timestamp = 12345L),
+                )
+
+            orchestratorOf(
+                ledgerRepository = ledgerRepository,
+                syncStateRepository = syncStateRepository,
+                gpodderClient = gpodderClient,
+            ).sync()
+
+            val message = "fetchEpisodeActions must not run after a failed push"
+            assertTrue(message, gpodderClient.fetchEpisodeActionsSinceValues.isEmpty())
+            assertEquals(0L, syncStateRepository.current.lastEpisodeActionSyncTs)
+        }
+
+    @Test
+    fun `successful download, then failed POST, then app restart -- retried on the next pass without re-download`() =
+        runBlocking {
+            // Simulates a restart by constructing a second SyncOrchestrator against the same
+            // (persistent, in this fake, in-memory) repositories -- the durability property under
+            // test is that the ledger row survives independently of any in-flight orchestrator state.
+            val ledgerRepository = FakeEpisodeLedgerRepository(initial = listOf(downloadedRow()))
+            val feedRepository = FakeFeedRepository()
+            val syncStateRepository = FakeSyncStateRepository()
+            val failingClient = FakeGpodderClient(postResult = Result.failure(IOException("offline")))
+
+            val firstPassOutcome =
+                orchestratorOf(
+                    feedRepository = feedRepository,
+                    ledgerRepository = ledgerRepository,
+                    syncStateRepository = syncStateRepository,
+                    gpodderClient = failingClient,
+                ).sync()
+            assertTrue(firstPassOutcome is SyncOutcome.Retry)
+            assertFalse(ledgerRepository.allRows.single().syncedToServer)
+
+            // "App restart": a fresh orchestrator instance, same repositories, network now available.
+            val succeedingClient = FakeGpodderClient()
+            val secondPassOutcome =
+                orchestratorOf(
+                    feedRepository = feedRepository,
+                    ledgerRepository = ledgerRepository,
+                    syncStateRepository = syncStateRepository,
+                    gpodderClient = succeedingClient,
+                ).sync()
+
+            assertEquals(SyncOutcome.Success, secondPassOutcome)
+            assertTrue(ledgerRepository.allRows.single().syncedToServer)
+            assertEquals(1, succeedingClient.postedActions.size) // exactly one push, never duplicated
+        }
+
+    @Test
+    fun `a remote echo of our own already-synced download is a no-op, not a duplicate download trigger`() =
+        runBlocking {
+            val syncedRow = downloadedRow().copy(syncedToServer = true)
+            val ledgerRepository = FakeEpisodeLedgerRepository(initial = listOf(syncedRow))
+            val echoAction =
+                EpisodeAction(
+                    podcast = syncedRow.feedUrl,
+                    episode = syncedRow.enclosureUrl,
+                    guid = syncedRow.guid,
+                    action = EpisodeActionType.DOWNLOAD,
+                    timestamp = "2026-07-14T09:00:00",
+                )
+            val page = EpisodeActionPage(listOf(echoAction), timestamp = 1L)
+            val gpodderClient = FakeGpodderClient(episodeActionsPage = page)
+
+            orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
+
+            val row = ledgerRepository.allRows.single()
+            assertEquals(LedgerState.DOWNLOADED, row.state) // unchanged -- terminal, never becomes HANDLED_REMOTELY
+            assertEquals("20260714_Episode.mp3", row.writtenFileName) // untouched
+        }
+
+    @Test
+    fun `a network failure pulling subscriptions yields Retry without touching local state`() =
+        runBlocking {
+            val feedRepository = FakeFeedRepository(initial = listOf(feed("https://example.com/feed.xml")))
+            val gpodderClient = FakeGpodderClient(subscriptionsFailure = IOException("host unreachable"))
+
+            val outcome = orchestratorOf(feedRepository = feedRepository, gpodderClient = gpodderClient).sync()
+
+            assertTrue(outcome is SyncOutcome.Retry)
+            assertEquals(1, feedRepository.current.size) // untouched
+        }
+
+    @Test
+    fun `an unexpected non-IO exception yields Failure, not Retry`() =
+        runBlocking {
+            val gpodderClient = FakeGpodderClient(subscriptionsFailure = IllegalStateException("malformed response"))
+
+            val outcome = orchestratorOf(gpodderClient = gpodderClient).sync()
+
+            assertTrue(outcome is SyncOutcome.Failure)
+        }
+
+    @Test
+    fun `remote actions are reconciled into the ledger and the new sync timestamp is persisted`() =
+        runBlocking {
+            val remoteAction =
+                EpisodeAction(
+                    podcast = "https://example.com/feed.xml",
+                    episode = "https://example.com/ep-remote.mp3",
+                    guid = "guid-remote",
+                    action = EpisodeActionType.DOWNLOAD,
+                    timestamp = "2026-07-14T09:00:00",
+                )
+            val ledgerRepository = FakeEpisodeLedgerRepository()
+            val initialSyncState = SyncState(lastEpisodeActionSyncTs = 500L, deviceId = "device-a")
+            val syncStateRepository = FakeSyncStateRepository(initialSyncState)
+            val page = EpisodeActionPage(listOf(remoteAction), timestamp = 999L)
+            val gpodderClient = FakeGpodderClient(episodeActionsPage = page)
+
+            orchestratorOf(
+                ledgerRepository = ledgerRepository,
+                syncStateRepository = syncStateRepository,
+                gpodderClient = gpodderClient,
+            ).sync()
+
+            assertEquals(LedgerState.HANDLED_REMOTELY, ledgerRepository.allRows.single().state)
+            assertEquals(999L, syncStateRepository.current.lastEpisodeActionSyncTs)
+            assertEquals("device-a", syncStateRepository.current.deviceId) // device id preserved, not regenerated
+            val fetchedSinceValues = gpodderClient.fetchEpisodeActionsSinceValues
+            assertEquals(listOf(500L), fetchedSinceValues) // fetched using the persisted cursor
+        }
+}
