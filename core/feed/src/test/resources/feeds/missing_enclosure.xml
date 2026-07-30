@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Feed With a Non-Episode Item</title>
+    <link>https://example.com/</link>
+    <description>Some feeds include announcement-only items with no enclosure at all.</description>
+    <item>
+      <title>Season 3 Coming Soon</title>
+      <guid isPermaLink="false">announcement-only</guid>
+      <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+      <description>A text-only announcement item -- not downloadable, must be excluded.</description>
+    </item>
+    <item>
+      <title>Episode With an Enclosure</title>
+      <guid isPermaLink="false">real-episode</guid>
+      <pubDate>Tue, 07 Jul 2026 09:00:00 +0000</pubDate>
+      <description>A normal episode.</description>
+      <enclosure url="https://example.com/episodes/real.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+  </channel>
+</rss>

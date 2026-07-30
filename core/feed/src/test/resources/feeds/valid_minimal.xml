@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Der Podcast</title>
+    <link>https://example.com/</link>
+    <description>A podcast about things.</description>
+    <itunes:image href="https://example.com/art.jpg"/>
+    <item>
+      <title>Folge 2: Warum Hamburg immer regnet</title>
+      <guid isPermaLink="false">guid-episode-2</guid>
+      <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+      <description>Eine Folge über das Wetter in Hamburg.</description>
+      <enclosure url="https://example.com/episodes/ep2.mp3" length="12345678" type="audio/mpeg"/>
+      <itunes:duration>01:32:15</itunes:duration>
+    </item>
+    <item>
+      <title>Folge 1: Der Anfang</title>
+      <guid isPermaLink="false">guid-episode-1</guid>
+      <pubDate>Tue, 07 Jul 2026 09:00:00 +0000</pubDate>
+      <description>Die allererste Folge.</description>
+      <enclosure url="https://example.com/episodes/ep1.mp3" length="10000000" type="audio/mpeg"/>
+      <itunes:duration>3600</itunes:duration>
+    </item>
+  </channel>
+</rss>

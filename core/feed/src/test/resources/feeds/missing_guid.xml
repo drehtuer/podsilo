@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Feed Without GUIDs</title>
+    <link>https://example.com/</link>
+    <description>Some feeds just don't bother with guid elements.</description>
+    <item>
+      <title>Episode Without a GUID</title>
+      <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+      <description>No guid element at all -- episodeKey must fall back to the enclosure URL.</description>
+      <enclosure url="https://example.com/episodes/no-guid.mp3" length="1000" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+  </channel>
+</rss>

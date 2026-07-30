@@ -48,19 +48,32 @@ updated to match what was actually built.
 
 ## Tier 2 — External JVM libraries, no network/Android (fixture-driven unit tests)
 
-- [ ] **Feed parsing** (inside `:core:feed`) — Stalla integration mapping RSS/Atom bytes →
-  `Feed`/`Episode`. Test against static fixtures in `src/test/resources/feeds/` (missing GUIDs,
-  duplicate GUIDs, missing enclosures, bad dates, CDATA HTML, wrong encoding, no
-  `itunes:duration`) — no HTTP call in these tests at all (architecture.md §7).
-- [ ] **Tag rewriting** (inside `:core:download`) — jaudiotagger integration: write
-  title/artist/album/date/genre/track/comment to a real temp `java.io.File`; best-effort fallback
-  on unsupported/corrupt containers. No Android, no network — verify licence/Android-compatibility
-  and record the choice in `docs/decisions/` before writing code (CLAUDE.md §6 flags this as
-  unconfirmed).
+**Update (2026-07-30): Tier 2 is complete.** 24 + 5 = 29 new tests, `./gradlew ktlintCheck detekt
+test assembleDebug` green across the whole repo. Both library choices deviated from CLAUDE.md's
+named picks — see below and `docs/decisions/0005`/`0006`.
+
+- [x] **Feed parsing** (inside `:core:feed`) — ~~Stalla~~ **`com.prof18.rssparser`** integration
+  mapping RSS/Atom bytes → `Feed`/`Episode`. Stalla (CLAUDE.md's primary pick) turned out to be
+  unmaintained since 2021; switched to the fallback CLAUDE.md itself names, put to the author as a
+  question first (`docs/decisions/0005`). Tested against static fixtures in
+  `src/test/resources/feeds/` (missing GUIDs, duplicate GUIDs, missing enclosures, bad dates, CDATA
+  HTML, a genuinely non-UTF-8-encoded fixture, no `itunes:duration`) — no HTTP call in these tests
+  at all (architecture.md §7). **Needs Robolectric** in local unit tests, unexpectedly — rssparser's
+  Android Kotlin-Multiplatform target resolves `org.xmlpull.v1.XmlPullParserFactory` at runtime,
+  which only a real device or Robolectric provides. Still Tier 1/2 in spirit per CLAUDE.md §4
+  (headless, no emulator) — see `docs/decisions/0005` for the full explanation.
+- [x] **Tag rewriting** (inside `:core:download`) — jaudiotagger integration via
+  **`com.github.Adonai:jaudiotagger`** (the Android-compatible fork, via JitPack — not the stale
+  upstream Maven Central artifact, which also turned out unmaintained since 2021; see
+  `docs/decisions/0006`). Writes title/artist/album/year/genre/track/comment to a real temp
+  `java.io.File` (an ffmpeg-generated silent MP3 fixture); best-effort per-field fallback via
+  `TagWriteOutcome.PartialSuccess`, and a container-level `Failure` for an unreadable/corrupt file
+  — never an exception. No Android, no network, no Robolectric needed (jaudiotagger has no Android
+  dependency at all).
 
 Both sit logically inside Android library modules but their core logic has no Android/network
-dependency — build and test as isolated classes first, wire into the module's Android scaffolding
-later.
+dependency — built and tested as isolated classes, not yet wired into the modules' Android
+scaffolding (WorkManager/SAF, Tier 4b).
 
 ## Tier 3 — Require networking mocks (MockWebServer)
 

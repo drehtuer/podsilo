@@ -330,3 +330,87 @@ order). `:app` still compiles after removing the `greeting()` placeholder it ref
   `com.android.library` vs. `kotlin("jvm")` question for `:core:gpodder` (#3) are both still open,
   by design — they need `:core:gpodder` to exist to verify against `opodsync`.
 - Nothing committed to git.
+
+---
+
+## 2026-07-30 — Tier 2: `:core:feed` parsing, `:core:download` tag rewriting
+
+**Attempted:** the two Tier 2 items from `TODO.md` — RSS/Atom feed parsing and audio tag rewriting —
+both explicitly flagged in `TODO.md` as needing a library-choice verification step before writing
+any code.
+
+**What was found before writing any code**
+
+Both of CLAUDE.md's named library picks turned out to be stale, discovered by actually checking
+Maven Central's repository metadata (not just a search-index snapshot, which can lag):
+
+- **Stalla** (feed parsing): no release since May 2021, 39 open issues — effectively abandoned.
+- **jaudiotagger** (tag writing, canonical `net.jthink` artifact): also no release since 2021, and
+  Android compatibility was never confirmed for it. Also discovered while checking: AntennaPod
+  (CLAUDE.md's suggested reference implementation) doesn't actually use jaudiotagger at all — it
+  hand-rolls its own ID3 reader and never writes tags, so there was no reference to check tag
+  details against for this one, unlike the gpodder-sync conventions in `docs/decisions/0002`.
+
+Put both to the author as a single `AskUserQuestion` with researched, recommended alternatives
+before writing anything against either choice (CLAUDE.md §3/§9: flag a doubtful fit rather than
+silently substituting or silently proceeding). Both recommendations accepted:
+
+- **`com.prof18.rssparser:rssparser`** (CLAUDE.md's own named fallback) — actively maintained, a
+  release published the same day this decision was made. Full write-up: `docs/decisions/0005`.
+- **`com.github.Adonai:jaudiotagger` via JitPack** — a fork specifically targeting Android
+  compatibility, last touched 2023. Adding JitPack as a dependency source (not just a library
+  choice) was flagged separately since it's a different trust model than Maven Central. Full
+  write-up: `docs/decisions/0006`.
+
+**What needed correction during implementation (self-caught via tests, not user correction)**
+
+- rssparser is a genuine Kotlin Multiplatform library. `:core:feed` is an Android library module, so
+  Gradle resolves rssparser's *android* target, whose `XmlPullParserFactory.newInstance()` call
+  needs Robolectric to resolve in local unit tests (confirmed by reading rssparser's own test
+  suite, which depends on Robolectric for exactly this reason). Added
+  `testImplementation(libs.robolectric)` to `:core:feed` rather than assuming "Tier 2 means no
+  Android tooling at all" — CLAUDE.md §4 explicitly allows Robolectric in its headless/no-emulator
+  Tier 1 definition, so this isn't a tier violation, just a correction to `TODO.md`'s own
+  simplified phrasing.
+- A subtler bug: after decoding a genuinely non-UTF-8-encoded fixture (ISO-8859-1, generated with
+  `iconv` so the bytes were real, not just a mislabeled UTF-8 file) to a correct Kotlin `String`,
+  rssparser's `parse(String)` re-serialises that string back to bytes as UTF-8 before re-parsing
+  it. The prolog's declared encoding was still textually `ISO-8859-1` (unchanged by the decode
+  step), so the library decoded its own fresh UTF-8 bytes as ISO-8859-1 and mangled every umlaut a
+  second time. Caught by the integration test, not by the isolated decoding unit test (which
+  didn't exercise the round-trip through rssparser). Fixed by having `decodeFeedXml` rewrite the
+  prolog's declared encoding to `UTF-8` after decoding, not just decode the characters.
+
+**What was built**
+
+- `:core:feed` — `ItunesDuration.kt` (parses `itunes:duration`'s three accepted formats),
+  `FeedXmlDecoding.kt` (encoding-declaration-aware byte→String decoding), `RssMapping.kt` (maps
+  rssparser's `RssChannel`/`RssItem` to `ParsedFeed`/`Episode`, excluding enclosure-less items and
+  deduplicating reused GUIDs by keeping the first/newest occurrence), `FeedXmlParser.kt` (ties it
+  together). 24 tests, fixture-driven (`src/test/resources/feeds/`), including a `wrong_encoding`
+  fixture with real ISO-8859-1 bytes generated via `iconv`, not just a mislabeled file.
+- `:core:download` — `AudioTagWriter`/`AudioTagData`/`TagWriteOutcome` (best-effort per-field tag
+  writes: title/artist/album/year/genre/track/comment). 5 tests against an ffmpeg-generated silent
+  MP3 fixture (`src/test/resources/audio/silence.mp3`), including unreadable-file and
+  nonexistent-file cases, asserting `Failure` rather than a thrown exception either way.
+- `docs/decisions/0005` and `0006` for the library-choice ADRs; `docs/architecture.md` §2/§7/§11
+  updated to reference rssparser/the jaudiotagger fork instead of Stalla/upstream jaudiotagger and
+  to note what's actually built vs. still pending (the HTTP-fetch layer and SAF/WorkManager pieces,
+  both Tier 3/4b).
+
+**Verified on this host**
+
+`./gradlew ktlintCheck detekt test assembleDebug` — all green across the whole repo. 143 tests
+total across the five modules built so far (Tier 1: 114, Tier 2: 29).
+
+**Not done / explicitly out of scope for this step**
+
+- Tier 3 (`:core:gpodder`, `:core:feed`'s HTTP-fetch layer with MockWebServer) and Tier 4 (Room,
+  DataStore, WorkManager, SAF, Compose UI) — next up per `TODO.md`.
+- Did not independently verify the exact `javax.sound`/AWT incompatibility the jaudiotagger fork
+  works around versus upstream (flagged in `docs/decisions/0006` as worth checking if a specific
+  container format fails tagging on-device later).
+- The RFC-822 `pubDate` parser only tries the one standard format
+  (`DateTimeFormatter.RFC_1123_DATE_TIME`) — real feeds are known to produce other date-string
+  variants CLAUDE.md's fallback chain anticipates; not exhaustive, documented as a known gap in
+  `RssMapping.kt`'s KDoc rather than silently claimed complete.
