@@ -89,7 +89,7 @@ follows from it.
 | `:core:database` | Android library | Room entities, DAOs, migrations; **implements** `FeedRepository`, `EpisodeRepository`, `EpisodeLedgerRepository`, `SyncStateRepository` from `:core:model`. |
 | `:core:datastore` | Android library | Settings storage (Nextcloud URL/credentials, folder URI, sync interval, naming templates) via Jetpack DataStore + Keystore-backed encryption for the app password. Implements `SettingsRepository`. |
 | `:core:feed` | Android library | Wraps rssparser (docs/decisions/0005, not Stalla); fetches + parses feed XML into `Feed`/`Episode`. Hosts `FeedRefreshWorker`. |
-| `:core:gpodder` | Android library (see [§12](#12-open-decisions--resolve-beforewhile-implementing) — could be JVM) | Retrofit client for the four GPodder endpoints; **implements** `GpodderClient` from `:core:model`. |
+| `:core:gpodder` | **JVM** (converted from Android library — `docs/decisions/0007`) | Retrofit client for the three GPodder endpoints Podsilo calls; **implements** `GpodderClient` from `:core:model`. |
 | `:core:download` | Android library | Download queue (`DownloadWorker`), cache→tag→SAF-copy pipeline, WorkManager state. Depends on `:core:model`, `:core:naming`. |
 | `:feature:episodes` | Android library (Compose) | Episode list + filters + triage actions. Depends on `:core:model` (ports only); Hilt-injected ViewModel gets real repositories from `:app`'s graph. |
 | `:feature:settings` | Android library (Compose) | Credentials, folder picker, naming template editor + live preview. |
@@ -462,6 +462,24 @@ Two different formatters, two different meanings. Getting this wrong doesn't cra
 silently breaks incremental sync in a way that looks like "sync just doesn't work." Unit-test the
 round-trip explicitly (CLAUDE.md §11).
 
+> **Corrected in Tier 3:** the per-action `timestamp` row above (and CLAUDE.md §11) describes an
+> older reality. Both reference servers now emit an offset — `nextcloud-gpodder` sends
+> `2021-10-06T11:49:23+00:00` (PHP `format("c")`), `opodsync` sends a trailing `Z`. Podsilo parses
+> all three forms and emits the bare one, which both servers read as UTC. See
+> `docs/decisions/0009` for the full verified contract and `0003` for the amended timestamp
+> decision.
+
+**Built so far (Tier 3):** `:core:gpodder`'s `RetrofitGpodderClient` implements all three endpoints
+above, with DTOs and mapping that absorb the differences between the two reference servers
+(action-name casing, the `-1` absent-playback-value sentinel, `opodsync`'s extra `update_urls`
+field). `RetrofitGpodderClientTest` drives it against MockWebServer — exact paths, query params,
+bare-array POST body, Basic auth header, and the 401/500/timeout/malformed-body paths.
+
+⚠️ **`POST episode_action/create` is not as reliable as a 2xx implies.** `nextcloud-gpodder` >=
+3.13.3 discards any non-`PLAY` action and still returns 200, so `DOWNLOAD` never lands on a real
+Nextcloud. Podsilo emits it regardless — see `docs/decisions/0008` before designing anything that
+depends on downloads being visible to other clients.
+
 ### Sequence: full sync pass
 
 Order of operations exactly per CLAUDE.md §5: pull subscriptions (full) → push unsynced ledger rows
@@ -592,6 +610,14 @@ sequenceDiagram
 Malformed-feed handling (missing GUIDs, duplicate GUIDs, missing enclosures, bad dates, wrong
 encoding, CDATA HTML, no `itunes:duration`) is rssparser's problem to survive and `:core:feed`'s tests
 to cover with fixtures — never a hand-rolled parser fallback (CLAUDE.md §3).
+
+**Built so far (Tier 3):** `FeedFetcher` implements the conditional-GET half of the sequence above
+— sends `If-None-Match`/`If-Modified-Since` from stored validators, maps 304 to
+`FeedFetchResult.NotModified`, follows redirects, and returns 4xx/5xx/timeout/unreachable-host as
+`FeedFetchResult` values rather than throwing (CLAUDE.md §8). It returns the response's `ETag`/
+`Last-Modified` for the caller to persist; it holds no state between calls. **Not yet built:**
+`FeedRefreshWorker` and the `FeedRepository`/`EpisodeRepository` writes the diagram shows around it
+— those need WorkManager and Room (Tier 4).
 
 ---
 
@@ -785,17 +811,17 @@ short ADR in `docs/decisions/` once resolved.
    `docs/decisions/0002-skip-as-play-encoding.md`: matches AntennaPod's own convention
    (`started = 0`, `position = total`, `total = duration` if known else `0`, never fabricated).
    Implemented and tested in `:core:sync` (`toOutboundAction()`, `OutboundEpisodeActionTest`).
-2. **Subscriptions `add`/`remove` response shape**, specifically for the no-`since` call `:core:sync`
-   depends on. CLAUDE.md §5 says applying `add` then subtracting `remove` is correct under either
-   plausible interpretation, but "verify against `opodsync` and `nextcloud-gpodder` before relying on
-   it" — do that once `:core:gpodder`'s integration tests run against the disposable opodsync
-   container, not just against recorded fixtures.
-3. **Whether `:core:gpodder` should be `com.android.library` or `kotlin("jvm")`.** It's currently
-   scaffolded as an Android library module. Nothing in its actual job (Retrofit/OkHttp HTTP client,
-   DTOs, DTO↔domain mapping) needs Android — and because `:core:sync` only ever depends on the
-   `GpodderClient` *interface* in `:core:model` (§2/§5), this choice doesn't affect `:core:sync`'s
-   testability either way. Low priority, but flagging it since a same-module or a JVM-module version
-   have different Robolectric/Android-dependency implications for `:core:gpodder`'s own tests.
+2. **Resolved** — Subscriptions `add`/`remove` response shape. See
+   `docs/decisions/0009-gpodder-api-wire-contract.md`: `gpodder_subscriptions` is a state table,
+   not an append-only log, so without `since`, `add` is the **complete current set** and is
+   **disjoint** from `remove` by construction. CLAUDE.md §5's `set = add − remove` is correct as
+   specified; `SyncOrchestrator.pullSubscriptions()` needed no change. Verified by reading both
+   servers' source — **still to re-verify against a live `opodsync` container** once CLAUDE.md §4's
+   compose profile exists.
+3. **Resolved** — `:core:gpodder` is now `kotlin("jvm")`, not `com.android.library`. See
+   `docs/decisions/0007-core-gpodder-is-a-jvm-module.md`: nothing in the module touches an Android
+   API, so a JVM module compiles that property in rather than leaving it to review, and its
+   MockWebServer tests run on the plain `test` task with no Robolectric.
 4. **Still open (partially validated).** "Trigger a sync pass" vs. "download worker POSTs directly."
    §10 documents the download flow as *write ledger, then enqueue `SyncWorker`* rather than
    `DownloadWorker` calling `GpodderClient` itself. `:core:sync`'s own tests confirm the underlying
@@ -817,9 +843,22 @@ short ADR in `docs/decisions/` once resolved.
    before a failed push retries). `:core:sync` still only depends on `FeedRepository`,
    `EpisodeLedgerRepository`, `SyncStateRepository`, and `GpodderClient` — never `EpisodeRepository`
    — exactly as §2/§5 originally specified.
-7. **New, resolved** — Which clock the naive `EpisodeAction.timestamp` field represents. See
-   `docs/decisions/0003-gpodder-action-timestamp-as-utc.md`: always UTC, both rendering outbound
-   and parsing inbound, so timestamp comparisons agree across devices regardless of local timezone.
+7. **New, resolved (and amended in Tier 3)** — Which clock the `EpisodeAction.timestamp` field
+   represents. See `docs/decisions/0003-gpodder-action-timestamp-as-utc.md`: Podsilo emits the bare
+   UTC form, and parses bare / `+HH:MM` / `Z` alike. The original assumption that servers only ever
+   send the offset-less form was **wrong** — see decision #8 below.
+8. **New, unresolvable — a real limitation, not a design choice.** `nextcloud-gpodder` >= 3.13.3
+   silently discards every posted episode action that isn't `PLAY` (`filterOnlyPlays` in
+   `EpisodeActionController`) and still returns HTTP 200. **`DOWNLOAD` actions therefore never reach
+   the shared log on a real Nextcloud**, making CLAUDE.md §1 requirement 9's cross-client half
+   unachievable there. Author-approved decision: keep emitting `DOWNLOAD` (honest, and correct
+   against `opodsync`/older servers), document the gap. Full analysis of what still works and what
+   doesn't: `docs/decisions/0008-nextcloud-gpodder-discards-download-actions.md`. **Do not** "fix"
+   this by emitting `PLAY` on download — CLAUDE.md §5 forbids it, and 0008 explains why.
+9. **New, resolved** — The rest of the wire contract (action-name casing, the `-1` absent-value
+   sentinel, bare-array POST body, auth headers, `since` boundary inclusivity, and where the two
+   reference servers disagree). See `docs/decisions/0009-gpodder-api-wire-contract.md`; handled at
+   the DTO boundary in `:core:gpodder` so no caller sees the differences.
 
 ---
 

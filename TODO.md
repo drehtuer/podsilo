@@ -77,18 +77,42 @@ scaffolding (WorkManager/SAF, Tier 4b).
 
 ## Tier 3 — Require networking mocks (MockWebServer)
 
-- [ ] **`:core:gpodder`** — Retrofit/OkHttp client implementing `GpodderClient`. Assert exact
-  request shape (paths, query params, JSON body) and both timestamp formats (Unix-seconds
-  `since`/response `timestamp` vs. ISO-8601-no-offset per-action `timestamp` — CLAUDE.md's
-  hardest-flagged gotcha), plus 401/500/timeout/malformed-body handling. **Resolve open decision
-  #2** against recorded fixtures here; re-verify later against the live `opodsync` compose
-  profile.
-- [ ] **Feed HTTP fetch layer** (inside `:core:feed`, on top of Tier 2's parsing) — conditional
-  GET (`ETag`/`If-None-Match`, `Last-Modified`/`If-Modified-Since`), 304 handling, redirects,
-  timeouts, via MockWebServer.
+**Update (2026-07-30): Tier 3 is complete.** 58 new tests (20 + 13 fetch + 2 parse/compose + 23
+sync-side, incl. the invariant + timestamp cases), `./gradlew ktlintCheck detekt test
+assembleDebug` green — 185 tests total. Reading the reference servers' source turned up two things
+neither CLAUDE.md nor the API docs record; see `docs/decisions/0008` and `0009`.
+
+- [x] **`:core:gpodder`** — Retrofit/OkHttp client implementing `GpodderClient`. Asserts exact
+  request shape (paths, query params, bare-JSON-array body, Basic auth header) and both timestamp
+  formats, plus 401/500/timeout/malformed-body handling. **Open decision #2 resolved**
+  (`docs/decisions/0009`): `add` without `since` is the full current set and is disjoint from
+  `remove`, so CLAUDE.md §5's `set = add − remove` was correct as specified. **Also resolved open
+  decision #3** — this module is now `kotlin("jvm")`, not an Android library
+  (`docs/decisions/0007`).
+  - ⚠️ **`nextcloud-gpodder` silently discards `DOWNLOAD`/`DELETE` actions on POST and returns
+    200 anyway** (`filterOnlyPlays`, verified at source). Cross-client download dedup is therefore
+    impossible against real Nextcloud; skip-as-`PLAY` is unaffected, and Podsilo's own local ledger
+    still prevents re-downloads. Decision (author-approved): keep emitting `DOWNLOAD` and document
+    it — `docs/decisions/0008`. Note `opodsync` *does* store `DOWNLOAD`, so it will not reproduce
+    this.
+  - ⚠️ CLAUDE.md §11's "ISO-8601 **without** offset" for the per-action timestamp is **stale** —
+    both servers now emit an offset (`+00:00`) or `Z`. Parsing is lenient across all three forms;
+    ADR 0003 amended.
+- [x] **Feed HTTP fetch layer** (inside `:core:feed`, on top of Tier 2's parsing) — `FeedFetcher`
+  with conditional GET (`ETag`/`If-None-Match`, `Last-Modified`/`If-Modified-Since`), 304 →
+  `NotModified`, redirects followed, and 4xx/5xx/timeout/unreachable-host all returned as
+  `FeedFetchResult` values rather than thrown (CLAUDE.md §8).
+- [x] **No-auto-download invariant** (CLAUDE.md §7 item 6, listed below as "worth doing early") —
+  sync half in `:core:sync`'s `NoAutoDownloadInvariantTest` (large fresh subscription list, repeated
+  passes, and 500 inbound remote actions all produce zero posted actions and zero self-created
+  ledger rows); parse half in `:core:feed` (a 500-episode feed parses with no ledger/client to
+  touch). The "downloads exactly zero files" half still needs `DownloadWorker` — Tier 4b.
 
 Both are plain-JVM (OkHttp/Retrofit need no Android runtime) — CLAUDE.md's own Tier 1 definition
-already includes MockWebServer; this is just the sub-bucket called out separately.
+already includes MockWebServer; this is just the sub-bucket called out separately. `:core:feed`'s
+fetch tests do run on the plain JVM runner; only its *parser* tests need Robolectric
+(`docs/decisions/0005`), which is why the fetch→parse composition test lives in the parser's test
+class rather than the fetcher's.
 
 ## Tier 4 — Require Android framework (Robolectric, then real device/emulator)
 
@@ -119,10 +143,11 @@ already includes MockWebServer; this is just the sub-bucket called out separatel
 
 ### Worth doing early despite appearing last
 
-- [ ] CLAUDE.md §7 item 6, the no-auto-download invariant test (500-episode fixture → assert
-  zero downloads, zero actions, fail if `subscription_change/create` is ever hit) only needs
-  Tier 1's fakes plus Tier 3's `MockWebServer` — write it as soon as Tier 3 lands, then re-run it
-  end-to-end once Tier 4b exists.
+- [x] CLAUDE.md §7 item 6, the no-auto-download invariant test — **done in Tier 3**, in two halves
+  (`:core:sync`'s `NoAutoDownloadInvariantTest` + `:core:feed`'s 500-episode parse test), plus the
+  `subscription_change/create` assertion in `:core:gpodder`'s MockWebServer test. **Still to do
+  once Tier 4b exists:** the "downloads exactly zero *files*" assertion, which needs a real
+  `DownloadWorker` to observe.
 
 ## Open question
 

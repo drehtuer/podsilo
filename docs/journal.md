@@ -414,3 +414,95 @@ total across the five modules built so far (Tier 1: 114, Tier 2: 29).
   (`DateTimeFormatter.RFC_1123_DATE_TIME`) — real feeds are known to produce other date-string
   variants CLAUDE.md's fallback chain anticipates; not exhaustive, documented as a known gap in
   `RssMapping.kt`'s KDoc rather than silently claimed complete.
+
+---
+
+## 2026-07-30 — Tier 3: `:core:gpodder` client, feed HTTP layer, no-auto-download invariant
+
+**Attempted:** the two Tier 3 items (`:core:gpodder` Retrofit client, `:core:feed`'s HTTP fetch
+layer), plus CLAUDE.md §7 item 6's no-auto-download invariant test that `TODO.md` flagged as worth
+doing as soon as Tier 3 landed.
+
+**The headline finding: a stated core requirement is only half-achievable**
+
+CLAUDE.md §5 says to infer the GPodder contract "from implementations, not assumptions", so before
+writing DTOs I read `thrillfall/nextcloud-gpodder`'s and `kd2org/opodsync`'s source. That turned up
+something no documentation mentions, which I then verified first-hand rather than trusting the
+research pass:
+
+`EpisodeActionController::create()` calls `filterOnlyPlays()`, which drops every posted action whose
+type isn't `play` — and still returns HTTP 200. CHANGELOG: *"3.13.3 — #168 ignore actions DELETE and
+DOWNLOAD"*. So on a real Nextcloud, Podsilo's `DOWNLOAD` actions are accepted, acknowledged, and
+discarded. CLAUDE.md §1 requirement 9 ("Mark-on-download", "a core requirement, not a
+nice-to-have") is achievable *locally* — the `EpisodeLedger` still prevents re-downloads on this
+device, and that invariant was always local (§11) — but its **cross-client** half is impossible
+against this server. Skip-as-`PLAY` is unaffected.
+
+This went to the author as an explicit question rather than being absorbed, because the workaround
+that *would* fix it (emit `PLAY` on download) is something CLAUDE.md §5 forbids by name. Decision:
+keep emitting `DOWNLOAD`, document the gap (`docs/decisions/0008`). A trap worth remembering:
+`opodsync` — the container CLAUDE.md §4 specifies for CI — *does* store `DOWNLOAD`, so integration
+tests there will happily "prove" behaviour that real Nextcloud silently drops.
+
+**A second correction: CLAUDE.md §11's timestamp format is stale**
+
+§11 documents the per-action `timestamp` as ISO-8601 *without* offset. Neither server emits that any
+more — `nextcloud-gpodder` uses PHP `format("c")` (`…+00:00`, CHANGELOG: "Always respond with
+timezone in timestamps"), `opodsync` emits a trailing `Z`. Parsing is now lenient across all three
+forms; ADR 0003 amended.
+
+Worth recording how this played out in the tests: Tier 1 had a test asserting an offset-bearing
+timestamp parses to `null`, named "the wrong format for this field". It passed, and it was
+confirming a mistaken belief rather than correct behaviour — a reminder that a green test only
+proves the code matches the assumption baked into it. Replaced, not relaxed.
+
+Also nearly shipped a real bug while fixing this: parsing to `LocalDateTime` silently discards the
+offset, so `…T11:49:23+02:00` reads as 11:49 UTC instead of 09:49. Caught it while writing the
+parser rather than after, switched to `OffsetDateTime`, and added a dedicated regression test —
+none of the UTC-equivalent test cases would ever have failed on it.
+
+**What was built**
+
+- `:core:gpodder` — `RetrofitGpodderClient` implementing all three endpoints, with DTOs that absorb
+  every difference between the two servers (action-name casing, the `-1` absent-playback sentinel
+  vs. omission, `opodsync`'s extra `update_urls`). Basic auth via a pre-emptive interceptor rather
+  than OkHttp's `authenticator` (which only fires after a 401 — one wasted round-trip per request
+  against a server that always requires auth). 20 MockWebServer tests: exact paths, query params,
+  bare-JSON-array body, auth header, and 401/500/timeout/malformed-body.
+- `:core:feed` — `FeedFetcher` with conditional GET, 304 → `NotModified`, redirect following, and
+  all failures as `FeedFetchResult` values rather than exceptions (CLAUDE.md §8). 13 tests.
+- **No-auto-download invariant** in two halves: `:core:sync`'s `NoAutoDownloadInvariantTest` (large
+  fresh subscription list, repeated passes, 500 inbound remote actions → zero posted actions, zero
+  self-created ledger rows) and a 500-episode parse test in `:core:feed`. The
+  `subscription_change/create` half is structural (no such method exists on the client) and also
+  asserted over the wire.
+- ADRs `0007` (`:core:gpodder` → JVM module, resolving architecture.md §12 #3), `0008` (the
+  `DOWNLOAD` limitation), `0009` (the full verified wire contract, resolving §12 #2 — CLAUDE.md's
+  `set = add − remove` turned out to be correct exactly as specified).
+
+**Decisions made without asking**
+
+- Converted `:core:gpodder` from `com.android.library` to `kotlin("jvm")`. Architecture.md flagged
+  this as an open question and explicitly low-priority/reversible; nothing in the module touches an
+  Android API, and as a JVM module that property is compiled in rather than review-enforced, with
+  tests on the plain `test` task instead of AGP's unit-test variant. Flagged in ADR 0007 that Hilt
+  wiring from a JVM module is *unverified* (Tier 4c) with a documented fallback.
+- Pinned OkHttp 5.4.0 explicitly even though Retrofit 3.0.0 declares 4.12.0 transitively — Gradle
+  resolves to the higher version anyway, so pinning makes it deliberate rather than accidental.
+  Verified the combination works with a throwaway compile probe before writing code against it.
+
+**Verified on this host**
+
+`./gradlew ktlintCheck detekt test assembleDebug` — all green. **185 tests** total (Tier 1: 114,
+Tier 2: 29, Tier 3: +42 net, including the amended/expanded timestamp cases).
+
+**Not done / known gaps**
+
+- Everything about the server contract is verified by *reading source*, not by running against a
+  live server. CLAUDE.md §4's disposable `opodsync` compose profile still doesn't exist — and per
+  ADR 0008, when it does, it will *not* reproduce the `DOWNLOAD`-dropping behaviour.
+- The invariant test's "downloads exactly zero **files**" half needs a real `DownloadWorker`
+  (Tier 4b) to observe. What's asserted today is zero actions and zero ledger rows.
+- ktlint and detekt continue to disagree about wrapping/indentation in a few spots (same friction
+  as Tier 1). Worked around by restructuring the code rather than suppressing either — but
+  `ktlintFormat` still does not guarantee `detekt` passes, and each round-trip costs a cycle.
