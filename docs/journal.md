@@ -142,3 +142,96 @@ left `podsilo-android-sdk` partially populated (~819 MB: `emulator` + `system-im
 `platform-tools`, `build-tools`, or `platforms`), so that run did not finish. Left the volume alone —
 re-running `post-create.sh` is idempotent and completes it. Note that image predates Claude Code, so a
 **Rebuild Container** is required to pick it up.
+
+---
+
+## 2026-07-30 (later still) — Gradle/Android skeleton, git/GitHub setup, hello-world proof
+
+**Attempted:** CLAUDE.md §10 build order step 1 — Gradle skeleton with all §5 modules, version
+catalog, ktlint/detekt, CI workflow — plus `LICENSE`/`.gitignore`/`.gitattributes`, requested
+directly by the author rather than inferred. Namespace confirmed with the author up front:
+`net.drehtuer.podsilo`.
+
+**What was built**
+
+- `LICENSE` (GPLv3 full text, fetched verbatim from gnu.org rather than reproduced from memory),
+  `.gitignore`, `.gitattributes`, `.editorconfig` (incl. `ktlint_code_style`, and a
+  `ktlint_function_naming_ignore_when_annotated_with = Composable` override — see below).
+- `.github/workflows/ci.yml`: checkout → JDK 17 (Temurin) → `gradle/actions/setup-gradle` →
+  `ktlintCheck` → `detekt` → `test` → `assembleDebug`. No emulator job (Tier 2 is not the supported
+  path per §4).
+- Gradle wrapper bootstrapped at **9.6.1**, AGP **9.3.1**, Kotlin **2.4.10**, Compose BOM
+  **2026.06.01**, ktlint-gradle **14.2.0**, detekt **1.23.8** — all verified live against Google's
+  Maven / Maven Central / Gradle Plugin Portal at plan time, not recalled from training data (the
+  container's clock is 2026-07-30; my knowledge cutoff is Jan 2026, so anything Android-tooling
+  related this recent had to be checked, not guessed).
+- All eleven modules from §5's architecture diagram now exist as Gradle modules. Per §5,
+  `:core:model`, `:core:naming`, `:core:sync` are plain `kotlin("jvm")` (no Android dependency,
+  exactly as mandated); everything else under `:core:*`/`:feature:*` is `com.android.library`; `:app`
+  is `com.android.application` + Compose. Only `:core:model` (a `greeting()` function + JUnit4 test)
+  and `:app` (a one-screen Compose hello world calling into `:core:model`) have real content — the
+  rest are empty stubs with a correct plugin/namespace, per the build order's own "empty modules"
+  wording. No Room/Hilt/Retrofit/Stalla/jaudiotagger/WorkManager/Paging wired in yet; the version
+  catalog only pins what this skeleton actually uses.
+
+**What didn't work first time (all found by actually running the build, not by inspection)**
+
+- **AGP 9.0 removed the need for — and now hard-errors on — `org.jetbrains.kotlin.android`.** AGP has
+  built-in Kotlin support since 9.0; applying the old plugin throws
+  `InvalidUserCodeException: 'org.jetbrains.kotlin.android' plugin is no longer required`. This
+  postdates my training data entirely — first seen as a live build failure. Fix: drop the plugin
+  (and its catalog entry) from every Android module; `org.jetbrains.kotlin.plugin.compose` alone is
+  enough for Compose modules. The `kotlin { compilerOptions { jvmTarget = ... } }` block that plugin
+  used to provide is gone too — dropped it and rely on `compileOptions` `sourceCompatibility`/
+  `targetCompatibility` instead, which is enough at this skeleton stage.
+- **compileSdk 35 is no longer enough for current `androidx.core`/`androidx.activity`.** Fresh
+  `androidx.core:core-ktx:1.17.0` and `androidx.activity:activity-compose:1.11.0` both fail AAR
+  metadata checks below compileSdk 36. Bumped the project to **compileSdk/targetSdk 37**
+  (`platforms;android-37.0` + `build-tools;37.0.0`, both installed into the existing SDK volume) and
+  updated `post-create.sh`'s default `SDK_PACKAGES` to match, so a fresh container provisions the
+  right platform without a manual step. Left the Tier 2 emulator system image on `android-35` —
+  changing that is out of scope here and Tier 2 is already flagged unverified.
+- **`@Composable` functions collide with both linters' default naming rules** (ktlint
+  `standard:function-naming`, detekt `FunctionNaming` both expect a lowercase first letter).
+  Fixed once per tool rather than renaming the function to something un-idiomatic:
+  `.editorconfig`'s `ktlint_function_naming_ignore_when_annotated_with = Composable`, and a
+  `config/detekt/detekt.yml` with `naming: FunctionNaming: ignoreAnnotated: [Composable]`
+  (`buildUponDefaultConfig = true`, so this is the only override on top of detekt's defaults).
+- Root `build.gradle.kts`'s subprojects block references `rootProject.libs.detekt.formatting` (a
+  version-catalog typesafe accessor) from inside `subprojects { }` — worked on the first real build,
+  worth noting since it wasn't obvious it would resolve correctly from that scope without an explicit
+  `rootProject.` qualifier trip-up.
+
+**Verified on this host**
+
+- `./gradlew clean ktlintCheck detekt test assembleDebug` — **all green**, from a clean build, exactly
+  the task sequence CI runs. `:core:model`'s `GreetingTest` (2 cases) is the actual Tier 1 proof;
+  `app-debug.apk` (29 MB) is the actual Tier 3-adjacent proof that AGP + Compose + the
+  `:app → :core:model` module wiring compile together.
+- SDK state on this host: `platform-tools`, `build-tools;35.0.0` + `;37.0.0`, `platforms;android-35`
+  + `;android-37.0` all present in the existing `podsilo-android-sdk` volume; no manual step needed
+  beyond what `post-create.sh` now installs by default.
+
+**Flagged, not silently decided**
+
+- AGP/Kotlin/Compose versions above are *current stable as of today*, not conservative/LTS picks —
+  reasonable given CLAUDE.md's "prefer the boring, widely-used option" now means "current" this deep
+  into AGP 9's life, but it is a live judgement call, not something CLAUDE.md pins explicitly.
+- ktlint-gradle (jlleitschuh) and detekt-gradle are new build-tooling dependencies not in §3's
+  table. Treated as implementation detail of the already-mandated "ktlint + detekt configured and
+  passing" (§8) rather than a new app-facing dependency needing sign-off, but noted here per §9's
+  "ask rather than assume" spirit.
+- A harmless-for-now deprecation warning surfaces on every build:
+  `ReportingExtension.file(String)` deprecated, "scheduled to be removed in Gradle 10", originating
+  from detekt-gradle-plugin 1.23.8's own registration code (not our script). Build succeeds; this is
+  an upstream compatibility gap to watch, not something to work around here.
+
+**Not done / explicitly out of scope for this step**
+
+- No `docker-compose.yml` / opodsync test server / `docs/dev-environment.md` — separate, already-
+  flagged gaps from the previous session, not part of this task.
+- No Hilt/Room/Retrofit/Stalla/jaudiotagger/WorkManager/Paging — steps 2–8 of the build order, each
+  its own dependency conversation per §3.
+- No GitHub issue/PR templates, no `docs/decisions/` ADRs — nothing architecturally contentious was
+  decided here beyond tool versions (recorded above).
+- Nothing committed to git. All of the above is currently unstaged/untracked working-tree state.

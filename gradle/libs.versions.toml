@@ -1,0 +1,36 @@
+# Version catalog. Only entries this Gradle skeleton actually uses are pinned
+# here — see CLAUDE.md §3 ("pin versions... no floating +") and §9 (new
+# dependencies get proposed, not pre-populated speculatively). Room, Hilt,
+# Retrofit, Stalla, jaudiotagger, WorkManager, Paging, MockK, Turbine, and
+# MockWebServer get added when the module that needs them is actually built.
+[versions]
+agp = "9.3.1"
+kotlin = "2.4.10"
+composeBom = "2026.06.01"
+androidxCoreKtx = "1.17.0"
+androidxActivityCompose = "1.11.0"
+androidxLifecycleRuntimeKtx = "2.9.4"
+junit4 = "4.13.2"
+ktlintGradle = "14.2.0"
+detekt = "1.23.8"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCoreKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycleRuntimeKtx" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
+detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

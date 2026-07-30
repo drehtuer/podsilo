@@ -4,7 +4,6 @@
   // this container needs is either an Ubuntu package, Google's command-line tools, or
   // Anthropic's native Claude Code binary.
   "name": "podsilo",
-
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".",
@@ -18,10 +17,8 @@
       "KVM_GID": "993"
     }
   },
-
   "workspaceFolder": "/workspaces/podsilo",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/podsilo,type=bind,consistency=cached",
-
   // Persist everything expensive to re-download or re-authenticate. The Android SDK
   // is installed by post-create.sh into its volume rather than baked into the image.
   // Paths are literal /home/dev/... — keep them in step with the USERNAME build arg.
@@ -29,7 +26,6 @@
     "source=podsilo-android-sdk,target=/opt/android-sdk,type=volume",
     "source=podsilo-gradle,target=/home/dev/.gradle,type=volume",
     "source=podsilo-android-user,target=/home/dev/.android,type=volume",
-
     // $CLAUDE_CONFIG_DIR — Claude Code's credentials, settings, and session
     // history. With CLAUDE_CONFIG_DIR set (see Dockerfile) `.claude.json` lives
     // inside this directory rather than at $HOME, so one volume covers the lot and
@@ -40,7 +36,6 @@
     // credentials and history file between host Claude Code and container Claude
     // Code, which both write to it. Cost is one `/login` inside the container.
     "source=podsilo-claude-config,target=/home/dev/.claude,type=volume",
-
     // Commit identity for Claude Code (and you) inside the container. Read-only —
     // nothing in here should be rewriting the host's git config.
     // Requires ~/.gitconfig to exist on the host: Docker silently creates a
@@ -48,26 +43,26 @@
     // if you have no host git config.
     "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly"
   ],
-
   // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
   // Windows 11 + `nestedVirtualization=true` in .wslconfig + Docker Engine
   // installed inside the WSL2 distro (not Docker Desktop).
   // If `ls -l /dev/kvm` fails on the host, DELETE this line — otherwise the
   // container will not start at all. Tier 1 and Tier 3 do not need it.
-  "runArgs": ["--device=/dev/kvm"],
-
+  "runArgs": [
+    "--device=/dev/kvm"
+  ],
   "remoteUser": "dev",
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-
   "customizations": {
     "vscode": {
       "extensions": [
-        // Installed into the container so the extension drives the container's
-        // `claude` binary and sees the container's toolchain, not the host's.
-        "anthropic.claude-code",
         "fwcd.kotlin",
         "vscjava.vscode-gradle",
-        "editorconfig.editorconfig"
+        "editorconfig.editorconfig",
+        "EditorConfig.EditorConfig",
+        "github.vscode-github-actions",
+        "GitHub.vscode-pull-request-github",
+        "Anthropic.claude-code"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",

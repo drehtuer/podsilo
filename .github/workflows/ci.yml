@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Tier 1 CI: lint, static analysis, JVM unit tests, and an Android build — all
+# without an emulator (see CLAUDE.md §4/§7). Instrumented tests (Tier 2) are
+# deliberately not run here; §4 asks for Tier 1 + Tier 3 as the supported path.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: ktlint
+        run: ./gradlew ktlintCheck
+
+      - name: detekt
+        run: ./gradlew detekt
+
+      - name: Unit tests (Tier 1)
+        run: ./gradlew test
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug

@@ -6,8 +6,9 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: early.** This repository currently holds the project brief and agent instructions
-> (`.claude/CLAUDE.md`). There is no working app yet.
+> **Status: early.** The Gradle/Android project skeleton exists (all modules from the architecture
+> below, a CI workflow, and a hello-world screen proving the toolchain builds), but none of the
+> actual features — feed sync, downloads, triage — are implemented yet.
 
 ## The idea
 

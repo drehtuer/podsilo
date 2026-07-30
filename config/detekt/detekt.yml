@@ -1,0 +1,7 @@
+# Minimal override on top of detekt's default ruleset (buildUponDefaultConfig
+# = true in the root build.gradle.kts). Only deviation: @Composable functions
+# are conventionally PascalCase (they read as a UI element, not a verb) — the
+# same exemption is applied for ktlint in .editorconfig.
+naming:
+  FunctionNaming:
+    ignoreAnnotated: ["Composable"]
