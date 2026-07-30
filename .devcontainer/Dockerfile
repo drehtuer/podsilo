@@ -121,12 +121,34 @@ RUN curl -fsSL -o /tmp/cmdline-tools.zip \
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_USER_HOME=/home/${USERNAME}/.android \
-    GRADLE_USER_HOME=/home/${USERNAME}/.gradle
-RUN mkdir -p "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" \
- && chown -R "${USER_UID}:${USER_GID}" "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}"
+    GRADLE_USER_HOME=/home/${USERNAME}/.gradle \
+    CLAUDE_CONFIG_DIR=/home/${USERNAME}/.claude
+RUN mkdir -p "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" "${CLAUDE_CONFIG_DIR}" \
+ && chown -R "${USER_UID}:${USER_GID}" \
+      "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" "${CLAUDE_CONFIG_DIR}"
 
-ENV PATH=${ANDROID_CMDLINE_TOOLS}/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}
+ENV PATH=/home/${USERNAME}/.local/bin:${ANDROID_CMDLINE_TOOLS}/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}
 
 # Gradle runs via ./gradlew only — no system Gradle is installed on purpose.
 USER ${USERNAME}
+
+# --- Claude Code ---------------------------------------------------------------
+# Anthropic's native installer: a checksum-verified static binary. No Node.js, no
+# npm, no third-party apt repository — which is why it is preferred here over
+# `npm i -g @anthropic-ai/claude-code` (Ubuntu 24.04 only ships Node 18).
+#
+# Everything lands under $HOME, and deliberately in two separate places:
+#   ~/.local/share/claude/versions/<v>  binary (+ ~/.local/bin/claude symlink)
+#   ~/.local/state/claude, ~/.cache/claude
+#   $CLAUDE_CONFIG_DIR (~/.claude)      credentials, settings, project history
+# Only the last one is volume-mounted, so a login survives an image rebuild while
+# the mount can never shadow the installed binary.
+#
+# Runs as the dev user on purpose: the installer refuses sudo and installs into
+# whichever HOME it sees. Set to `latest`, or a pinned `2.1.220`-style version, to
+# change what a rebuild picks up; Claude Code self-updates at runtime regardless.
+ARG CLAUDE_CODE_VERSION=stable
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_VERSION}" \
+ && claude --version
+
 WORKDIR /workspaces/podsilo

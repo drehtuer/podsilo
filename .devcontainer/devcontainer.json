@@ -1,7 +1,8 @@
 {
-  // Podsilo dev container — plain Ubuntu 24.04 + JDK 17 + Android SDK.
+  // Podsilo dev container — plain Ubuntu 24.04 + JDK 17 + Android SDK + Claude Code.
   // No devcontainer "features" and no prebuilt vendor image on purpose: everything
-  // this container needs is either an Ubuntu package or Google's command-line tools.
+  // this container needs is either an Ubuntu package, Google's command-line tools, or
+  // Anthropic's native Claude Code binary.
   "name": "podsilo",
 
   "build": {
@@ -21,12 +22,31 @@
   "workspaceFolder": "/workspaces/podsilo",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/podsilo,type=bind,consistency=cached",
 
-  // Persist everything expensive to re-download. The Android SDK is installed by
-  // post-create.sh into this volume rather than baked into the image.
+  // Persist everything expensive to re-download or re-authenticate. The Android SDK
+  // is installed by post-create.sh into its volume rather than baked into the image.
+  // Paths are literal /home/dev/... — keep them in step with the USERNAME build arg.
   "mounts": [
     "source=podsilo-android-sdk,target=/opt/android-sdk,type=volume",
     "source=podsilo-gradle,target=/home/dev/.gradle,type=volume",
-    "source=podsilo-android-user,target=/home/dev/.android,type=volume"
+    "source=podsilo-android-user,target=/home/dev/.android,type=volume",
+
+    // $CLAUDE_CONFIG_DIR — Claude Code's credentials, settings, and session
+    // history. With CLAUDE_CONFIG_DIR set (see Dockerfile) `.claude.json` lives
+    // inside this directory rather than at $HOME, so one volume covers the lot and
+    // `/login` survives an image rebuild. The Claude Code *binary* lives under
+    // ~/.local, so this mount cannot shadow it.
+    //
+    // Deliberately NOT a bind mount of the host's ~/.claude: that would share one
+    // credentials and history file between host Claude Code and container Claude
+    // Code, which both write to it. Cost is one `/login` inside the container.
+    "source=podsilo-claude-config,target=/home/dev/.claude,type=volume",
+
+    // Commit identity for Claude Code (and you) inside the container. Read-only —
+    // nothing in here should be rewriting the host's git config.
+    // Requires ~/.gitconfig to exist on the host: Docker silently creates a
+    // *directory* for a missing bind source, which git then ignores. Drop this line
+    // if you have no host git config.
+    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly"
   ],
 
   // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
@@ -42,6 +62,9 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        // Installed into the container so the extension drives the container's
+        // `claude` binary and sees the container's toolchain, not the host's.
+        "anthropic.claude-code",
         "fwcd.kotlin",
         "vscjava.vscode-gradle",
         "editorconfig.editorconfig"

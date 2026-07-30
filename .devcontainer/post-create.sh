@@ -70,6 +70,22 @@ else
   echo "  Tier 1 (./gradlew test) and Tier 3 (emulator on the Windows host) are unaffected."
 fi
 
+# --- Claude Code ----------------------------------------------------------------
+log "Claude Code"
+if command -v claude >/dev/null; then
+  claude --version
+  echo "config dir: ${CLAUDE_CONFIG_DIR:-$HOME/.claude} (named volume — survives a rebuild)"
+  if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "ANTHROPIC_API_KEY is set in the environment."
+  elif [[ -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json" ]]; then
+    echo "Credentials present — no login needed."
+  else
+    warn "Not logged in yet. Run 'claude' and then '/login' once; it persists in the volume."
+  fi
+else
+  warn "claude not on PATH — the image build step may have failed."
+fi
+
 # --- Gradle warm-up -------------------------------------------------------------
 if [[ -x ./gradlew ]]; then
   log "Gradle wrapper warm-up"

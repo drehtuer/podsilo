@@ -77,3 +77,68 @@ on special images or pinned exotic versions.
 - Probing the container (`apt-cache policy`, `ldd`, `curl -I` against Google's download URLs) before
   writing the Dockerfile caught the package renames and the missing-library set cheaply. Worth
   repeating: verify package names against the actual base image instead of trusting recalled ones.
+
+---
+
+## 2026-07-30 (later) — Claude Code inside the dev container
+
+**Attempted:** run Claude Code in the container rather than on the WSL2 host, so the agent sees the
+container's JDK, Android SDK, and adb.
+
+**What was built**
+
+- `Dockerfile`: Anthropic's native installer (`https://claude.ai/install.sh`), run **as the `dev`
+  user** after the `USER` switch. Chosen over `npm i -g @anthropic-ai/claude-code` because it needs no
+  Node at all — Ubuntu 24.04 only ships Node 18, so npm would have meant adding the NodeSource apt
+  repo and breaking the "generic container" constraint. Pinnable via `CLAUDE_CODE_VERSION`
+  (`stable` default, accepts `latest` or an exact version).
+- `CLAUDE_CONFIG_DIR=/home/dev/.claude`, backed by a named volume, so `/login` survives a rebuild.
+- `devcontainer.json`: the `anthropic.claude-code` extension is installed **into** the container, and
+  the host's `~/.gitconfig` is bind-mounted read-only so commits made in the container carry the right
+  identity.
+
+**What the installer actually does** (read the script before piping it to bash; then verified)
+
+- Binary: `~/.local/share/claude/versions/<v>` with a `~/.local/bin/claude` symlink. State and cache:
+  `~/.local/state/claude`, `~/.cache/claude`. Config and credentials: `~/.claude` + `~/.claude.json`.
+- It does **not** touch `.bashrc`, and warns that `~/.local/bin` is not on `PATH` — the Dockerfile sets
+  `PATH` itself.
+- That split is what makes the volume design work: the binary is under `~/.local`, so a mount at
+  `~/.claude` cannot shadow it. Had the binary lived in `~/.claude`, mounting a volume there would have
+  silently broken `claude` after the first rebuild.
+- **Verified, not assumed:** with `CLAUDE_CONFIG_DIR` set, `.claude.json` is created *inside* that
+  directory (`/home/dev/.claude/.claude.json`) instead of at `$HOME`. That is the whole reason a single
+  volume is enough to persist credentials as well as history.
+
+**Verified on this host**
+
+- Image builds; `claude --version` → 2.1.212 inside the container (`stable`; `latest` was 2.1.220).
+- `claude -p "hi"` on a fresh container returns *"Not logged in · Please run /login"* — the binary runs,
+  it just has no credentials yet.
+- A file written to `/home/dev/.claude` in one container is visible in the next: the volume persists.
+- `git config --get user.name`/`user.email` resolve through the read-only `.gitconfig` mount, and git
+  operations on the bind-mounted workspace work with no `safe.directory` complaint (container UID
+  matches the host owner).
+- `post-create.sh` now reports the Claude version, the config dir, and whether a login is needed.
+
+**Not verified**
+
+- The interactive `/login` OAuth flow. Headless containers get the paste-a-URL variant; not exercised.
+- Whether the VS Code extension attaches cleanly in-container — the extension list is declarative and
+  untested from here.
+
+**Deliberately not done**
+
+- No bind mount of the host's `~/.claude`. It would skip the one-time login, but host and container
+  Claude Code would then share one credentials/history file and both write to it. One `/login` is the
+  cheaper trade.
+- No Node.js and no `gh` CLI in the image. Neither is needed to run Claude Code; `gh` will be worth
+  adding when there is actually a GitHub remote and CI (CLAUDE.md §7).
+- No network sandboxing / firewall init script, and `--dangerously-skip-permissions` is not wired in.
+  Both are the author's call, not something to enable silently.
+
+**Observed mid-session:** the author had already built and run the real dev container in VS Code, which
+left `podsilo-android-sdk` partially populated (~819 MB: `emulator` + `system-images`, but no
+`platform-tools`, `build-tools`, or `platforms`), so that run did not finish. Left the volume alone —
+re-running `post-create.sh` is idempotent and completes it. Note that image predates Claude Code, so a
+**Rebuild Container** is required to pick it up.
