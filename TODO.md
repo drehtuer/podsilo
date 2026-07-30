@@ -9,21 +9,32 @@ work.
 Repo state as of writing: all modules are scaffolded but empty (CLAUDE.md §10 step 1 — dev
 container + Gradle skeleton — is done; nothing else is built).
 
+**Update (2026-07-30): Tier 1 is complete.** `:core:model`, `:core:naming`, and `:core:sync` are
+implemented and tested — 114 tests total, `./gradlew ktlintCheck detekt test` green across the
+whole repo. Two schema/behaviour decisions surfaced during implementation and were resolved with
+the user before finalizing `:core:sync` (see `docs/decisions/`):
+`0001-episode-ledger-row-denormalized-fields.md` (added `feedUrl`/`enclosureUrl`/`durationSeconds`
+to `EpisodeLedgerRow`) and `0002-skip-as-play-encoding.md` (AntennaPod's convention, researched
+live). Two further implementation-detail decisions were resolved without needing to ask:
+`0003-gpodder-action-timestamp-as-utc.md` and
+`0004-naming-date-timezone-and-missing-date-fallback.md`. `docs/architecture.md` §4/§5/§6/§12 were
+updated to match what was actually built.
+
 ## Tier 1 — No dependencies (pure Kotlin/JDK stdlib, plain JUnit, milliseconds)
 
-- [ ] **`:core:model`** — domain data classes (`Feed`, `Episode`, `EpisodeLedgerRow`,
+- [x] **`:core:model`** — domain data classes (`Feed`, `Episode`, `EpisodeLedgerRow`,
   `SyncState`), `LedgerState` enum, `SyncOutcome` sealed type, DTOs (`SubscriptionDelta`,
   `EpisodeAction`, `EpisodeActionPage`, `ResolvedName`), and the port interfaces
   (`FeedRepository`, `EpisodeRepository`, `EpisodeLedgerRepository`, `SyncStateRepository`,
   `GpodderClient`, `NamingTemplateEngine`) per architecture.md §5. Zero deps beyond
   `kotlinx-coroutines-core`. Everything downstream depends on this — build first regardless of
   tier.
-- [ ] **`:core:naming`** — template resolution, sanitisation, UTF-8-byte-safe truncation,
+- [x] **`:core:naming`** — template resolution, sanitisation, UTF-8-byte-safe truncation,
   collision suffixing, optional transliteration/regex title-cleanup rules (architecture.md §11,
   CLAUDE.md §6). Only JDK stdlib (`java.text.Normalizer`, string ops). Highest-value-per-effort
   test target per CLAUDE.md §7 — fully table-driven. **Resolve open decision #5** (fixed timezone
   for `pubDate`) here and write the ADR.
-- [ ] **`:core:sync`** — `SyncOrchestrator` reconciliation logic: guid-vs-enclosure
+- [x] **`:core:sync`** — `SyncOrchestrator` reconciliation logic: guid-vs-enclosure
   identification, remote-action→ledger-state mapping, outbound ledger-row→`EpisodeAction`
   mapping (architecture.md §6 sequence, §9 state machine). Depends only on `:core:model`
   interfaces — test with hand-written in-memory fakes of the four repositories + `GpodderClient`,
