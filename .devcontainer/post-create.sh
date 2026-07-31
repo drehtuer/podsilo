@@ -31,6 +31,29 @@ warn() { printf '\n\033[1;33m!!  %s\033[0m\n' "$*"; }
 # volume), so it can never infer the root — always pass --sdk_root explicitly.
 sdkm() { sdkmanager --sdk_root="${ANDROID_HOME}" "$@"; }
 
+# IPv6-only network? The JVM tries IPv4 first and does not fall back the way curl's
+# happy-eyeballs does, so sdkmanager sits on IPv4 connect timeouts for tens of
+# minutes and then reports "Failed to download any source lists! / IO exception
+# while downloading manifest" — on a host where plain `curl https://dl.google.com`
+# returns 200. Steer it to IPv6 instead of letting that look like a broken mirror.
+#
+# This probes reachability rather than checking for an IPv4 default route: on this
+# WSL2 host the route can be present while IPv4 is entirely dead (the access point
+# offers IPv6 only), and a route check happily reports "IPv4 fine" and hangs.
+probe_url="https://dl.google.com/android/repository/repository2-3.xml"
+if ! curl -4 -s -o /dev/null --connect-timeout 5 --max-time 15 "${probe_url}"; then
+  if curl -6 -s -o /dev/null --connect-timeout 5 --max-time 15 "${probe_url}"; then
+    warn "IPv4 cannot reach dl.google.com, IPv6 can — treating this network as IPv6-only."
+    echo "  Pointing the JVM at IPv6 so sdkmanager does not stall on dead IPv4 routes."
+    echo "  Gradle will need the same once the project exists:"
+    echo "    export _JAVA_OPTIONS=-Djava.net.preferIPv6Addresses=true"
+    export _JAVA_OPTIONS="${_JAVA_OPTIONS:+${_JAVA_OPTIONS} }-Djava.net.preferIPv6Addresses=true"
+  else
+    warn "Neither IPv4 nor IPv6 reaches dl.google.com — the SDK install below will fail."
+    echo "  Check the host's connectivity before blaming this script."
+  fi
+fi
+
 log "Toolchain"
 java -version
 echo "ANDROID_HOME=${ANDROID_HOME}"
@@ -90,13 +113,26 @@ if command -v claude >/dev/null; then
     warn "Not logged in yet. Run 'claude' and then '/login' once; it persists in the volume."
   fi
 else
-  warn "claude not on PATH — the image build step may have failed."
+  warn "claude not on PATH — image built with CLAUDE_CODE_VERSION=skip, or the install failed."
+  echo "  Install it here once the host has IPv4 (downloads.claude.ai has no IPv6):"
+  echo "    curl -fsSL https://claude.ai/install.sh | bash"
 fi
 
 # --- Gradle warm-up -------------------------------------------------------------
+# Non-fatal on purpose. A failed warm-up must not fail the whole postCreateCommand
+# and leave VS Code reporting a broken container — everything above it has already
+# succeeded, and the wrapper can be retried by hand.
 if [[ -x ./gradlew ]]; then
   log "Gradle wrapper warm-up"
-  ./gradlew --version
+  if ! ./gradlew --version; then
+    warn "Gradle wrapper download failed — the container is otherwise fine."
+    echo "  On an IPv6-only network this is expected and not fixable from here:"
+    echo "  services.gradle.org redirects to downloads.gradle-dn.com, which has no"
+    echo "  AAAA record, so the distribution zip is unreachable over IPv6."
+    echo "  Maven Central and dl.google.com are dual-stack, so once the wrapper's"
+    echo "  distribution is cached in ~/.gradle, builds work again. Re-run ./gradlew"
+    echo "  from a network with IPv4."
+  fi
 else
   warn "No ./gradlew yet — skipping Gradle warm-up (expected until the Gradle skeleton lands)."
 fi

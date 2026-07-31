@@ -20,6 +20,11 @@ ARG USERNAME=dev
 ARG USER_UID=1000
 ARG USER_GID=1000
 ARG KVM_GID=993
+# Must equal `getent group docker | cut -d: -f3` on the WSL2 host, so the
+# bind-mounted /var/run/docker.sock is readable by the container user.
+# 109 on this host — NOT the 999 that Ubuntu's docker.io package picks inside the
+# image, which is exactly why the user setup below groupmods it.
+ARG DOCKER_GID=109
 
 # Android command-line tools build number. Bump deliberately; keep it in sync
 # with the platform-tools/adb version documented for Tier 3 (adb over TCP to a
@@ -89,6 +94,21 @@ RUN apt-get update \
       libfreetype6 \
  && rm -rf /var/lib/apt/lists/*
 
+# --- Docker CLI (docker-outside-of-docker) -------------------------------------
+# For the disposable opodsync test sync server (CLAUDE.md §4). devcontainer.json
+# bind-mounts the HOST's /var/run/docker.sock, so containers started from in here
+# are SIBLINGS on the host's daemon, not children — no daemon runs in this image.
+#
+# `docker.io` is Ubuntu's combined daemon+CLI package (there is no separate
+# docker-cli in noble). The daemon it ships is simply never started; only the
+# client binary is used. Both packages come from Ubuntu's own archive, keeping
+# this image free of third-party apt repositories as the header promises.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      docker.io \
+      docker-compose-v2 \
+ && rm -rf /var/lib/apt/lists/*
+
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 # --- Non-root user -------------------------------------------------------------
@@ -102,7 +122,18 @@ RUN if getent passwd "${USER_UID}" >/dev/null; then \
  && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}" \
  && chmod 0440 "/etc/sudoers.d/${USERNAME}" \
  && if ! getent group kvm >/dev/null; then groupadd -g "${KVM_GID}" kvm; fi \
- && usermod -aG kvm "${USERNAME}"
+ && usermod -aG kvm "${USERNAME}" \
+ # The docker.io package already created a `docker` group with an arbitrary GID.
+ # It must match the GID owning the host's /var/run/docker.sock or the bind-mounted
+ # socket is unreadable — hence groupmod, not groupadd. Falls back to adding a
+ # secondary group if that GID is already taken by something else in the image.
+ && if getent group "${DOCKER_GID}" >/dev/null; then \
+      usermod -aG "$(getent group "${DOCKER_GID}" | cut -d: -f1)" "${USERNAME}"; \
+    elif getent group docker >/dev/null; then \
+      groupmod -g "${DOCKER_GID}" docker && usermod -aG docker "${USERNAME}"; \
+    else \
+      groupadd -g "${DOCKER_GID}" docker && usermod -aG docker "${USERNAME}"; \
+    fi
 
 # --- Android command-line tools ------------------------------------------------
 # Installed under /opt (part of the image) and kept separate from $ANDROID_HOME
@@ -145,10 +176,23 @@ USER ${USERNAME}
 # the mount can never shadow the installed binary.
 #
 # Runs as the dev user on purpose: the installer refuses sudo and installs into
-# whichever HOME it sees. Set to `latest`, or a pinned `2.1.220`-style version, to
-# change what a rebuild picks up; Claude Code self-updates at runtime regardless.
+# whichever HOME it sees. Set to `latest`, a pinned `2.1.220`-style version, or
+# `skip` to build without Claude Code; it self-updates at runtime regardless.
 ARG CLAUDE_CODE_VERSION=stable
-RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_VERSION}" \
- && claude --version
+RUN if [ "${CLAUDE_CODE_VERSION}" = "skip" ]; then \
+      echo "Skipping Claude Code (CLAUDE_CODE_VERSION=skip)."; \
+    else \
+      { curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_VERSION}" \
+        && claude --version; } \
+      || { echo; \
+           echo "Claude Code install failed."; \
+           echo "If that was a connection timeout to downloads.claude.ai: it is an"; \
+           echo "IPv4-only host (no real AAAA record), so it is unreachable from a"; \
+           echo "network with no IPv4 default route — which the rest of this build"; \
+           echo "survives because dl.google.com and archive.ubuntu.com are dual-stack."; \
+           echo "Restore IPv4, or rebuild with --build-arg CLAUDE_CODE_VERSION=skip and"; \
+           echo "install it later with: curl -fsSL https://claude.ai/install.sh | bash"; \
+           exit 1; }; \
+    fi
 
 WORKDIR /workspaces/podsilo

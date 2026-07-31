@@ -98,6 +98,10 @@ neither CLAUDE.md nor the API docs record; see `docs/decisions/0008` and `0009`.
   - ⚠️ CLAUDE.md §11's "ISO-8601 **without** offset" for the per-action timestamp is **stale** —
     both servers now emit an offset (`+00:00`) or `Z`. Parsing is lenient across all three forms;
     ADR 0003 amended.
+  - ✅ **Verified live (2026-07-31)** against `opodsync` 0.5.3 in
+    `.devcontainer/docker-compose.yml`: `OpodsyncIntegrationTest` runs green (3 tests, 0 skipped),
+    turning ADR 0009's source-read contract into a tested one. `nextcloud-gpodder` remains
+    source-read only.
 - [x] **Feed HTTP fetch layer** (inside `:core:feed`, on top of Tier 2's parsing) — `FeedFetcher`
   with conditional GET (`ETag`/`If-None-Match`, `Last-Modified`/`If-Modified-Since`), 304 →
   `NotModified`, redirects followed, and 4xx/5xx/timeout/unreachable-host all returned as
@@ -118,10 +122,29 @@ class rather than the fetcher's.
 
 ### 4a. Robolectric-testable, no real device
 
-- [ ] **`:core:database`** — Room entities/DAOs/migrations, in-memory DB tests; implements the
-  four repository ports, entity↔domain mapping at the boundary (architecture.md §4).
-- [ ] **`:core:datastore`** — DataStore Preferences + Keystore-backed encryption for the
-  Nextcloud app password.
+**Update (2026-07-31): Tier 4a is complete.** `:core:database` and `:core:datastore` are
+implemented and tested — 27 new tests (20 Room + 7 DataStore), all four modules
+(`:core:model` / `:core:sync` / `:core:database` / `:core:datastore`) green on `test` +
+`ktlintCheck` + `detekt`. Room + KSP2 (2.3.10, the decoupled scheme — no `2.4.10-x` build exists) +
+DataStore-Preferences added to the version catalog, all pre-approved by CLAUDE.md §3. Two model-port
+additions surfaced and were made: a `SettingsRepository` port (+ `NamingSettings`/`NextcloudAccount`/
+`NextcloudCredentials`/`TitleCleanupRuleSetting` types) that `:core:datastore` implements, and an
+`observeEpisodes(filter): Flow<List<EpisodeListItem>>` method on `EpisodeLedgerRepository` — the
+row-typed `observe(filter)` genuinely can't express "New" (a new episode has no ledger row), so the
+UI list needs an `Episode`-plus-nullable-ledger type; the Room impl resolves it (incl. the
+`firstSeenAt` backlog cutoff) in SQL. New ADR: `docs/decisions/0010` (app-password cipher behind an
+interface so the Keystore stays out of the JVM test path).
+
+- [x] **`:core:database`** — Room entities/DAOs/migrations, in-memory DB tests; implements the
+  four repository ports, entity↔domain mapping at the boundary (architecture.md §4). Ledger table
+  has **no** FK to episodes (verified in the exported `schemas/…/1.json`), so a feed removal
+  cascade-deletes episodes but keeps the ledger — `SubscriptionMirroringTest` proves a re-subscribe
+  doesn't re-download. Hilt `@Binds` wiring deferred to `:app` (Tier 4c); the repos are plain
+  constructor-injectable classes.
+- [x] **`:core:datastore`** — DataStore Preferences + Keystore-backed encryption for the
+  Nextcloud app password (`KeystoreAppPasswordCipher`, behind `AppPasswordCipher` — see
+  `docs/decisions/0010`). The DataStore serialisation is JVM-testable with a fake cipher (no
+  Robolectric); the real Keystore round-trip needs an instrumented test (Tier 4b), stated plainly.
 
 ### 4b. Needs instrumented tests / real emulator (SAF, WorkManager, ContentResolver)
 

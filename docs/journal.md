@@ -137,7 +137,7 @@ container's JDK, Android SDK, and adb.
 - No network sandboxing / firewall init script, and `--dangerously-skip-permissions` is not wired in.
   Both are the author's call, not something to enable silently.
 
-**Observed mid-session:** the author had already built and run the real dev container in VS Code, which
+**Observed later:** the author had already built and run the real dev container in VS Code, which
 left `podsilo-android-sdk` partially populated (~819 MB: `emulator` + `system-images`, but no
 `platform-tools`, `build-tools`, or `platforms`), so that run did not finish. Left the volume alone —
 re-running `post-create.sh` is idempotent and completes it. Note that image predates Claude Code, so a
@@ -506,3 +506,295 @@ Tier 2: 29, Tier 3: +42 net, including the amended/expanded timestamp cases).
 - ktlint and detekt continue to disagree about wrapping/indentation in a few spots (same friction
   as Tier 1). Worked around by restructuring the code rather than suppressing either — but
   `ktlintFormat` still does not guarantee `detekt` passes, and each round-trip costs a cycle.
+
+---
+
+## 2026-07-31 — Dev container build failure: an IPv6-only access point
+
+**Symptom:** "Building the devcontainer failed." Reproduced immediately: the first `RUN apt-get
+update` could not reach `archive.ubuntu.com`, so no package installed.
+
+**First diagnosis was wrong — recorded here because that is the point of this journal.** The evidence
+at the time (`networkingMode=Mirrored` in `.wslconfig`, distro rebooted an hour earlier, bridged
+container reaching its gateway but nothing beyond, host networking fixing the build) pointed at the
+known WSL2 mirrored-networking-versus-Docker-bridge problem, and it was reported that way. It was
+wrong. Timestamps disproved it: bridged builds had succeeded **under mirrored mode** earlier the same
+day. What actually changed was the network.
+
+**Real root cause:** the access point provides **IPv6 only**. `ip -4 route show default` was empty,
+`curl -4 https://dl.google.com` failed while `curl -6` returned 200, and `PING.EXE` **from Windows
+itself** could not reach the LAN gateway or 1.1.1.1 over IPv4. Not WSL, not Docker, not the
+Dockerfile. Docker's default bridge is IPv4-only, so bridged containers had no path out at all;
+`--network=host` "fixed" the build only because it hands the container the working IPv6 route.
+
+Later the author switched AP again and an IPv4 default route reappeared — but still with no IPv4
+connectivity. That distinction cost a 20-minute hang and produced the most useful lesson here:
+**probe reachability, never infer it from a routing table.**
+
+**What each dependency needs**
+
+| Host | IPv6 | Consequence on an IPv6-only network |
+|---|---|---|
+| `archive.ubuntu.com`, `dl.google.com`, `repo.maven.apache.org`, `services.gradle.org` | yes | fine |
+| `downloads.claude.ai` | **no** (`::ffff:…` is a synthesised mapping, not a AAAA) | Claude Code cannot install |
+| `downloads.gradle-dn.com` (redirect target of `services.gradle.org`) | **no** | `./gradlew` cannot bootstrap |
+
+**Fixes made**
+
+- `devcontainer.json`: `--network=host` in both `build.options` and `runArgs`, with the *correct*
+  cause in the comment. The author chose this over reverting to `networkingMode=NAT`.
+- `post-create.sh`: the JVM tries IPv4 first and does not fall back the way curl's happy-eyeballs
+  does, so `sdkmanager` stalls on dead IPv4 routes for tens of minutes and then blames the mirror.
+  A `curl -4` / `curl -6` probe now sets `_JAVA_OPTIONS=-Djava.net.preferIPv6Addresses=true` when
+  IPv4 is unreachable but IPv6 works. With that in place the Android SDK installs normally.
+- `post-create.sh`: the Gradle warm-up is no longer fatal. Under `set -euo pipefail` a failed
+  `./gradlew --version` aborted the whole `postCreateCommand`, so VS Code reported a broken container
+  when everything else had succeeded. It now warns and explains.
+- `Dockerfile`: `CLAUDE_CODE_VERSION=skip` escape hatch, and a failure message naming the IPv4-only
+  host instead of leaving a bare `curl: (28)`.
+
+**Also fixed, from the author's in-progress docker-outside-of-docker work**
+
+- `DOCKER_GID` was `999`; the host's docker group is **109** (`/var/run/docker.sock` is
+  `root:docker` gid 109). With 999 the socket would have been unreadable.
+- The Dockerfile comment referred to a bind-mounted `/var/run/docker.sock` that `devcontainer.json`
+  did not actually mount. Added it. `docker ps` from inside the container now reaches the host daemon.
+- `SDK_PACKAGES` was changed to `platforms;android-37.0` / `build-tools;37.0.0` — checked against
+  `sdkmanager --list`: both are real package names. No change needed.
+
+**Verified**
+
+- Image builds with `--network=host` and `CLAUDE_CODE_VERSION=skip`; `docker ps` works from inside
+  (uid 1000, groups `109(docker)`, `993(kvm)`); `post-create.sh` exits **0**, installs
+  `platform-tools` (37.0.1) over IPv6, and degrades gracefully on both blocked downloads.
+
+**Not verified, because this network cannot:** the Claude Code install step, and the Gradle wrapper
+bootstrap. Both need IPv4. Nothing in the repo can work around that — rebuild from a dual-stack
+network, then drop `--build-arg CLAUDE_CODE_VERSION=skip`.
+
+**Process lesson:** the first root-cause claim was confident, coherent, and wrong, and it drove a
+config decision (host networking) before being checked against timestamps. A cheap "when did it last
+work?" question would have killed the mirrored-mode theory immediately. Host networking happens to be
+a reasonable choice anyway, which is luck, not method.
+
+---
+
+## 2026-07-31 — Tier 4a: `:core:database` + `:core:datastore`
+
+Implemented Tier 4a: the Room database module and the DataStore settings module. All four modules I
+touched (`:core:model`, `:core:sync`, `:core:database`, `:core:datastore`) are green on `test` +
+`ktlintCheck` + `detekt`; 27 new tests (20 Room, 7 DataStore).
+
+**Built**
+
+- `:core:database` — four Room entities matching architecture.md §4, four DAOs, `PodsiloDatabase`
+  (v1, schema exported to `core/database/schemas/`), and the four repository ports implemented with
+  entity↔domain mapping at the boundary. Robolectric in-memory-DB tests, including the cross-cutting
+  `SubscriptionMirroringTest` (CLAUDE.md §7 item 7).
+- `:core:datastore` — `SettingsRepository` over DataStore Preferences, app password encrypted through
+  `AppPasswordCipher` (Keystore-backed in production, faked in tests — ADR 0010).
+
+**Two model-port additions (flagged, not silently done)**
+
+- A `SettingsRepository` port + its value types (`NamingSettings`, `NextcloudAccount`,
+  `NextcloudCredentials`, `TitleCleanupRuleSetting`). Architecture.md §2 already said `:core:datastore`
+  "implements `SettingsRepository`" but the port didn't exist yet.
+- `observeEpisodes(filter): Flow<List<EpisodeListItem>>` on `EpisodeLedgerRepository`. Writing the
+  DAO made a latent contradiction concrete: the existing `observe(filter)` returns
+  `List<EpisodeLedgerRow>`, but "New" is the *absence* of a ledger row, so it cannot be an
+  `EpisodeLedgerRow`. The row-typed method stays (returns empty for `NEW`, which is honest); the UI
+  list is a new `EpisodeListItem(episode, ledger?)`, resolved — backlog cutoff and all — in one SQL
+  join. The pre-existing sync fake's own comment had already deferred this "to Room's job (Tier 4)",
+  so the addition was anticipated rather than a surprise.
+
+**Design notes worth keeping**
+
+- `FeedDao.replaceAll` uses `@Upsert`, not `@Insert(REPLACE)`. REPLACE is delete-then-insert, which
+  fires the episodes' `ON DELETE CASCADE` and would wipe an existing feed's cached episodes on every
+  subscription refresh. This is a classic Room footgun; the schema export confirms the intended FK
+  layout (episodes→feeds cascade; ledger has no FK).
+- Keystore behind an interface (ADR 0010) keeps the settings serialisation JVM-testable. The real
+  `KeystoreAppPasswordCipher` is **not** unit-tested — Robolectric has no AndroidKeyStore provider —
+  and needs an instrumented test (Tier 4b). Said plainly rather than pretended.
+
+**What fought back**
+
+- **KSP for Kotlin 2.4.10.** The old `<kotlin>-<ksp>` version scheme has no 2.4.10 build; KSP2's
+  decoupled 2.3.x line (2.3.10) does the job. Room's annotation processing compiled fine under it.
+- **Robolectric can't fetch `android-all` in this sandbox.** `curl` reaches Maven Central, but the
+  Gradle test worker's own `MavenArtifactFetcher` gets `ConnectException` — even with the sandbox
+  disabled and `--no-daemon`, so it isn't daemon-reuse. Worked around it by pre-fetching
+  `android-all-instrumented-14-robolectric-10818077-i7.jar` (SDK 34, pinned via `robolectric.properties`)
+  with curl and running Robolectric in offline mode through a throwaway `--init-script` (never
+  committed). The 151 MB jar got reclaimed from disk mid-session and had to be re-downloaded — worth
+  noting the workaround is fragile here but a non-issue on a normal network, where Robolectric just
+  downloads it. This is why `:core:database`'s tests are proven green but only via that local scaffold.
+- **ktlint vs. detekt-formatting disagree**, because the ktlint Gradle plugin (14.x) and
+  detekt-formatting 1.23.8 bundle different ktlint versions with different indentation/wrapping
+  opinions. Several format iterations (chain-continuation, assignment-wrapping, `ReturnCount ≤ 2`,
+  `LongParameterList`, an EOL-comment-after-KDoc rule) before both were satisfied. Lesson for next
+  time: write to the stricter/older (detekt) ktlint from the start, and prefer extracting locals over
+  clever multiline wrapping.
+
+**Not verified**
+
+- The full-repo `test` was **not** run to green. `:core:feed`'s Robolectric tests need a *different*
+  `android-all` SDK jar (its default SDK) that I didn't pre-fetch, and `:core:gpodder` has an
+  untracked, pre-existing `OpodsyncIntegrationTest.kt` (needs a live opodsync server, and trips
+  ktlint) that isn't part of this task. Neither is affected by my changes — feed/gpodder don't touch
+  the ledger port or the new settings port — but I'm not claiming they pass. Scope verified: the four
+  modules I changed.
+- Deferred to Tier 4b/4c and stated in architecture.md/TODO: `KeystoreAppPasswordCipher` on-device
+  test, all Hilt `@Binds` wiring, the workers, and the SAF folder-grant flow.
+
+---
+
+## 2026-07-31 (later) — opodsync test server: from "never run" to green integration test
+
+**Attempted:** get the disposable `opodsync` server (CLAUDE.md §4) actually running. The previous
+session had written `.devcontainer/docker-compose.yml`, `opodsync.Dockerfile`, and
+`opodsync-entrypoint.sh`, but every one of them carried an "⚠️ NOT YET RUN / UNVERIFIED" header —
+the host had no IPv4 route at the time and the build died at `git clone`. IPv4 is back on this
+network, so the whole thing could finally be executed.
+
+**It did not work, and not for the reason the headers predicted.** The network was never the only
+problem; it was just the first one, and it had hidden four separate bugs, each of which would have
+failed on any host:
+
+1. **`ARG OPODSYNC_REF=1.5.3` pins a tag that has never existed.** opodsync's version line is
+   `0.x` — `git ls-remote --tags` tops out at **0.5.3**. A plausible-looking version number was
+   written down without being checked against the remote. This is the cheapest possible mistake to
+   avoid and it blocked everything behind it.
+2. **The generated `config.local.php` was in the wrong place and in the wrong namespace.** The
+   entrypoint wrote `/var/www/html/config.local.php` at global scope. `server/_inc.php` reads
+   `(getenv('DATA_ROOT') ?: ROOT.'/data') . '/config.local.php'` and checks for constants under
+   `OPodSync\…`. So the file was never read, and had it been, every constant in it would have been
+   ignored. Both failures are **silent** — the server boots fine on defaults.
+3. **`AllowOverride None`.** Debian's `apache2.conf` ships it for `/var/www/`, so opodsync's
+   `.htaccess` is inert in `php:8.3-apache`. That file is load-bearing twice over:
+   `FallbackResource /index.php` is what routes the virtual `/index.php/apps/gpoddersync/...`
+   paths into the front controller, and `SetEnvIf Authorization` is what makes the Basic auth
+   header reach PHP. Without an `AllowOverride All` conf, every API call 404s and auth never
+   arrives. Nothing warns you.
+4. **The volume was mounted at the wrong path** (`/var/www/data`), which is neither opodsync's
+   `DATA_ROOT` nor where it looks for its config. The SQLite DB would have been written outside the
+   volume and lost on every `down`, quietly defeating the point of a persistent volume.
+
+Also removed: `docker-php-ext-install pdo pdo_sqlite` plus `libsqlite3-dev`. `php:8.3-apache`
+already has `sqlite3`, `pdo_sqlite`, and `json` compiled in (`php -m`), which is opodsync's entire
+stated requirement — and it uses the procedural `\SQLite3` class, not PDO, so the extension being
+installed wasn't even the relevant one.
+
+**User seeding now actually happens.** The old entrypoint printed "create the test user at
+/register.php" and left it to a human, which makes the server non-hermetic. It now calls opodsync's
+own `GPodder::subscribe()` from PHP-CLI as `www-data`, which does the `password_hash()` and the
+username validation — using upstream's code rather than reimplementing its hashing (CLAUDE.md §3).
+Idempotent: a restart hits "Username already exists" and carries on.
+
+**Verified on this host — this is the first time any of it has run**
+
+- `docker compose build opodsync && docker compose up -d opodsync` → container **healthy**, logs
+  show `opodsync: created user 'podsilo'`.
+- `GET /index.php/apps/gpoddersync/subscriptions` → `{add:[], remove:[], update_urls:[],
+  timestamp:1785516110}`; unauthenticated → **401**.
+- `POST /episode_action/create` with a bare JSON array of a `DOWNLOAD` and a `PLAY` → 200
+  `{timestamp, update_urls}`; both come back from `GET /episode_action?since=0` with **lowercase**
+  action names and a **trailing `Z`** timestamp.
+- `PODSILO_OPODSYNC_URL=http://localhost:8080 ./gradlew :core:gpodder:test --tests
+  '*OpodsyncIntegrationTest*'` → **BUILD SUCCESSFUL, 3 tests, 0 skipped, 0 failures** (checked the
+  JUnit XML rather than trusting "BUILD SUCCESSFUL", since these tests self-skip via `assumeTrue`
+  and a skipped run also reports success).
+
+That last check is the whole point of the exercise: ADR 0009's wire contract was previously
+*read* from two servers' source. It is now *tested* against one of them.
+
+**One documented claim turned out to be too strong.** ADR 0009 said opodsync "inner-joins episode
+actions against subscriptions, so actions for unsubscribed feeds disappear from its `GET`". On
+0.5.3 they came back anyway. Podsilo tolerates either, so no code changes — but the ADR is
+corrected rather than left as a confident statement that a live server contradicts.
+
+**Unchanged and still true:** opodsync is not evidence about Nextcloud. It stores `DOWNLOAD`;
+`nextcloud-gpodder` discards it (ADR 0008). A green run here says nothing about cross-client
+download dedup on the author's real server, and `OpodsyncIntegrationTest` asserts that difference
+explicitly so it stays visible.
+
+**Process lesson.** Every one of these four bugs was written *behind* a real blocker (no IPv4) and
+labelled as unverified-because-of-the-blocker. The label was accurate about the state and
+misleading about the cause: it invited the reading "this will work once the network is back",
+when in fact nothing had ever been exercised. Marking work "unverified" is honest; predicting that
+it will pass once unblocked is not, and the two are easy to blur. Cheapest correction available
+here was `git ls-remote` — one command, would have caught bug 1 before it was ever committed.
+
+**Not done**
+
+- The full-Nextcloud `--profile nextcloud` opt-in service is **deliberately not built** (author's
+  call, confirmed 2026-07-31): opodsync alone, because a full Nextcloud is far more setup overhead
+  for occasional verification. This matches CLAUDE.md §4's own preference order, which names
+  opodsync the default and Nextcloud merely an opt-in. Consequence to keep in view: ADR 0008's
+  finding (`nextcloud-gpodder` discards `DOWNLOAD` and returns 200) is now permanently
+  source-read-only, and opodsync will keep "proving" the opposite behaviour. The mitigation is a
+  test *name* rather than a test — `OpodsyncIntegrationTest`'s "opodsync accepts DOWNLOAD --
+  unlike nextcloud-gpodder, which silently drops it". The invariant that actually matters (never
+  download twice) is local to the ledger and never depended on the server (CLAUDE.md §11).
+- The compose file is still standalone, not merged into `devcontainer.json` via
+  `dockerComposeFile`. Left deliberately — see the file's own header comment.
+- `docs/dev-environment.md` still doesn't exist (long-standing §4 gap, unrelated to this session).
+
+---
+
+## 2026-07-31 (later still) — `docs/dev-environment.md`, and the first fully-green full-repo build
+
+**Attempted:** write the `docs/dev-environment.md` deliverable CLAUDE.md §4 has asked for since the
+first session, now that the opodsync half is actually verified rather than aspirational.
+
+**The document's central claim had to be earned first.** §4 says it "must let someone go from clean
+checkout to green `./gradlew test`... Verify that yourself before claiming it works." The Tier 4a
+entry above explicitly did *not* claim a full-repo green run (`:core:feed`'s Robolectric jar,
+`:core:gpodder`'s untracked integration test). So the doc could not be written honestly without
+first running it.
+
+**A near-miss worth recording.** The first full run was launched as a background command piped to
+`tail`. The harness reported **exit code 0** — and the build had actually **FAILED**. The pipe meant
+the reported status was `tail`'s, not Gradle's. Only reading the output caught `BUILD FAILED`. Had
+the tail happened to end on a benign line, this session would have "verified" a red build. Lesson:
+when a command's exit code is the thing being claimed, do not pipe it; or check `${PIPESTATUS[0]}`.
+
+The real failure was the one Tier 4a predicted: `OpodsyncIntegrationTest` tripping ktlint (15
+violations). Fixing it reproduced the project's recurring ktlint-vs-detekt fight for the fourth
+tier running — `ktlintFormat` produced deeply-indented named arguments that then failed detekt's
+`Indentation` rule. Resolved by following the lesson Tier 4a had already written down (extract a
+local rather than wrap cleverly), which worked first try. The prior entry's advice paid off; it just
+had to be re-read.
+
+**After that: `./gradlew ktlintCheck detekt test` green across the whole repo, exit 0** — 215 tests
+discovered, 3 skipped, 212 executed. Per module: naming 75, sync 43, feed 38, gpodder 23, database
+20, datastore 7, download 5, model 4. The 3 skips are the opodsync integration tests correctly
+self-skipping without `PODSILO_OPODSYNC_URL`, which also re-proves that opt-in path. This is the
+first time the full repo has been green in one command; Tier 4a could only claim four modules.
+Robolectric's `android-all` download worked normally this time — that whole workaround was a
+symptom of the IPv6-only network, not a lasting problem.
+
+**A Tier 2 discovery, made while gathering facts for the doc.** An AVD `podsilo-test` exists in
+`~/.android/avd` — no journal entry mentions creating it. `avdmanager list avd` refuses to load it:
+*"Missing system image for Google APIs x86_64"*. But the image **is** installed
+(`system-images;android-35;google_apis;x86_64`, confirmed via `--list_installed`), and the AVD's
+`config.ini` carries placeholder values (`avd.name = <build>`). So it looks like a half-created AVD,
+not a missing dependency. Not investigated — out of scope for a docs task — but documented in §6
+with a clean-slate recreate command, because a silently broken AVD is exactly the kind of thing that
+wastes an hour later.
+
+**What the doc says that previous docs did not**
+
+It opens with a status table separating *verified* from *never run*, because that distinction was
+scattered across five journal entries and easy to lose. Blunt version: Tier 1 is supported; **Tier 2
+has never booted an emulator and Tier 3 has never been attempted at all** (there is no `scripts/`
+directory, so §4's requested `adb-connect-host.sh` doesn't exist). Also recorded honestly: the green
+run happened in an already-warm container, not from a virgin clone plus from-scratch image build, so
+"verified" is narrower than the §4 wording implies. Saying so beats letting the table imply more.
+
+**Not done**
+
+- The Tier 2 AVD is left broken. Recreating it is one command; *booting* it and running
+  `connectedAndroidTest` is the actually-unproven part and would be its own task.
+- `scripts/adb-connect-host.sh` still doesn't exist.
+- No `--profile nextcloud`; decided out of scope earlier this session (see the entry above).

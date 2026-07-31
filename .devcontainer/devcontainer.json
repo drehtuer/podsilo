@@ -7,6 +7,10 @@
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".",
+    // Host networking during build — see the runArgs comment below. Without it every
+    // `RUN apt-get`/`curl` step fails with "Could not connect ... connection timed
+    // out" while the WSL2 host itself has perfectly good internet.
+    "options": ["--network=host"],
     "args": {
       // Match the WSL2 host user so bind-mounted files are not root-owned.
       // Override here if `id -u` / `id -g` on the host are not 1000.
@@ -14,7 +18,12 @@
       "USER_GID": "1000",
       // Must equal `getent group kvm | cut -d: -f3` on the WSL2 host, otherwise
       // the container user cannot open /dev/kvm for the Tier 2 emulator.
-      "KVM_GID": "993"
+      "KVM_GID": "993",
+      // Must equal `getent group docker | cut -d: -f3` on the WSL2 host, otherwise
+      // the bind-mounted docker socket below is unreadable and `docker ps` fails
+      // with a permission error. On this host that is 109 (Ubuntu's docker.io
+      // package assigns 999 in the image, which is why the Dockerfile groupmods it).
+      "DOCKER_GID": "109"
     }
   },
   "workspaceFolder": "/workspaces/podsilo",
@@ -41,14 +50,47 @@
     // Requires ~/.gitconfig to exist on the host: Docker silently creates a
     // *directory* for a missing bind source, which git then ignores. Drop this line
     // if you have no host git config.
-    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly"
+    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly",
+    // docker-outside-of-docker: the host's daemon socket, so the docker CLI in the
+    // image drives the HOST daemon and any container it starts (opodsync, emulator)
+    // is a sibling rather than a child. Needs DOCKER_GID above to match this
+    // socket's group, or it is unreadable to the dev user.
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
-  // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
-  // Windows 11 + `nestedVirtualization=true` in .wslconfig + Docker Engine
-  // installed inside the WSL2 distro (not Docker Desktop).
-  // If `ls -l /dev/kvm` fails on the host, DELETE this line — otherwise the
-  // container will not start at all. Tier 1 and Tier 3 do not need it.
   "runArgs": [
+    // --network=host, because this host's network is currently IPv6-only.
+    //
+    // `ip -4 route show default` on the WSL2 host is EMPTY — there is no IPv4
+    // default route, only IPv6 (confirmed 2026-07-31: `curl -4 https://dl.google.com`
+    // fails, `curl -6` returns 200, and even the LAN gateway is unreachable over
+    // IPv4). Docker's default bridge is IPv4-only, so a bridged container reaches its
+    // own gateway (172.17.0.1) and absolutely nothing beyond it: every apt-get and
+    // curl in the image build times out. Host networking puts the container in the
+    // WSL2 network namespace, where the working IPv6 route lives.
+    //
+    // This is NOT caused by `networkingMode=Mirrored` in .wslconfig — bridged builds
+    // worked fine under mirrored mode earlier the same day, before the host moved to
+    // an IPv6-only access point.
+    //
+    // Useful side effect for Tier 3 — under mirrored networking the container's
+    // `localhost` is the Windows host, so a Windows-side
+    // `adb -a -P 5037 nodaemon server` is reachable at tcp:localhost:5037 with no
+    // host-IP lookup.
+    //
+    // Consequences to remember:
+    //   - No network isolation and no devcontainer port forwarding; anything the
+    //     container listens on binds straight onto the host.
+    //   - No container-to-container DNS for this container.
+    // Once the host has an IPv4 default route again, plain bridge networking works
+    // and this line can go.
+    "--network=host",
+
+    // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
+    // Windows 11 + Docker Engine installed inside the WSL2 distro (not Docker
+    // Desktop). Windows 11 enables nested virtualisation by default; add
+    // `nestedVirtualization=true` to .wslconfig if /dev/kvm goes missing.
+    // If `ls -l /dev/kvm` fails on the host, DELETE this line — otherwise the
+    // container will not start at all. Tier 1 and Tier 3 do not need it.
     "--device=/dev/kvm"
   ],
   "remoteUser": "dev",

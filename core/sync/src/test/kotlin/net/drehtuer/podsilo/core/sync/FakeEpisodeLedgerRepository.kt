@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
+import net.drehtuer.podsilo.core.model.port.EpisodeListItem
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 
 /**
@@ -21,6 +22,9 @@ class FakeEpisodeLedgerRepository(
     val allRows: List<EpisodeLedgerRow> get() = state.value.values.toList()
 
     override fun observe(filter: LedgerFilter): Flow<List<EpisodeLedgerRow>> = state.map { it.values.toList() }
+
+    // SyncOrchestrator never reads the UI-facing episode list; the New/backlog join is Room's job.
+    override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
     override suspend fun upsert(row: EpisodeLedgerRow) {
         state.value = state.value + (row.episodeKey to row)

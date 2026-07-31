@@ -281,6 +281,18 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 | `lastEpisodeActionSyncTs` | `Long` | No | Verbatim from the GPodder `episode_action` response's top-level `timestamp` | **Unix seconds**, sent back as the next `since`. Never computed from local device time — see CLAUDE.md §11's clock-skew gotcha. |
 | `deviceId` | `String` | No | Generated once (e.g. `UUID.randomUUID()`) on first run, persisted forever | Lets us recognise our own echoed-back actions in the remote action stream. |
 
+**Built so far (Tier 4a):** `:core:database` implements this schema in Room (`PodsiloDatabase`,
+version 1, schema exported under `core/database/schemas/`) and the four repository ports, with
+entity↔domain mapping at the module boundary. The episodes→feeds foreign key cascades (feed removal
+prunes episodes); the ledger has **no** foreign key (verified in the exported schema), so it
+survives — `SubscriptionMirroringTest` proves a re-subscribe doesn't re-download. `FeedDao.replaceAll`
+uses `@Upsert` (not `@Insert(REPLACE)`, whose delete-then-insert would fire the episodes' cascade
+and wipe an existing feed's cache on every refresh). Tests are Robolectric in-memory-DB (headless, no
+emulator — CLAUDE.md §4). `:core:datastore` implements `SettingsRepository` over DataStore
+Preferences, app password encrypted via `AppPasswordCipher` (`docs/decisions/0010`). **Not yet
+built:** `FeedRefreshWorker`, `DownloadWorker`, `:app`'s `SyncWorker`, and all Hilt `@Binds` wiring
+(Tier 4b/4c) — the repositories are plain constructor-injectable classes awaiting that graph.
+
 ---
 
 ## 5. Domain model & repository ports
@@ -816,8 +828,8 @@ short ADR in `docs/decisions/` once resolved.
    not an append-only log, so without `since`, `add` is the **complete current set** and is
    **disjoint** from `remove` by construction. CLAUDE.md §5's `set = add − remove` is correct as
    specified; `SyncOrchestrator.pullSubscriptions()` needed no change. Verified by reading both
-   servers' source — **still to re-verify against a live `opodsync` container** once CLAUDE.md §4's
-   compose profile exists.
+   servers' source **and confirmed against a live `opodsync` 0.5.3 container** (2026-07-31) —
+   `.devcontainer/docker-compose.yml` now works and `OpodsyncIntegrationTest` passes against it.
 3. **Resolved** — `:core:gpodder` is now `kotlin("jvm")`, not `com.android.library`. See
    `docs/decisions/0007-core-gpodder-is-a-jvm-module.md`: nothing in the module touches an Android
    API, so a JVM module compiles that property in rather than leaving it to review, and its
@@ -859,6 +871,17 @@ short ADR in `docs/decisions/` once resolved.
    sentinel, bare-array POST body, auth headers, `since` boundary inclusivity, and where the two
    reference servers disagree). See `docs/decisions/0009-gpodder-api-wire-contract.md`; handled at
    the DTO boundary in `:core:gpodder` so no caller sees the differences.
+10. **New, resolved (Tier 4a)** — App-password encryption is abstracted behind an `AppPasswordCipher`
+    interface (production: `KeystoreAppPasswordCipher`, AES-256/GCM in the Android Keystore; tests: a
+    fake), so `:core:datastore`'s store/serialise logic is JVM-testable while the Keystore stays out
+    of the Robolectric path. See `docs/decisions/0010-app-password-cipher-behind-interface.md`. The
+    real Keystore round-trip is verified on-device only (Tier 4b) — stated as a known gap, not tested.
+11. **New, resolved (Tier 4a)** — `EpisodeLedgerRepository` needed an `observeEpisodes(filter):
+    Flow<List<EpisodeListItem>>` method in addition to the row-typed `observe(filter)`. "New" is the
+    *absence* of a ledger row (§9), so it can't be an `EpisodeLedgerRow`; the UI list is
+    `EpisodeListItem(episode, ledger?)`, and the Room impl resolves the filter — including the
+    `pubDate >= Feed.firstSeenAt` backlog cutoff — in one SQL join (`EpisodeLedgerDao.observeNewEpisodes`).
+    `:core:sync` is unaffected (it only reads the ledger via `getUnsynced`).
 
 ---
 
@@ -871,7 +894,7 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 | # | CLAUDE.md §10 step | Relevant section(s) here |
 |---|---|---|
 | 1 | Dev container + Gradle skeleton | *(done — see `docs/journal.md`)* |
-| 2 | `:core:model` + `:core:database` | [§4](#4-database-schema), [§5](#5-domain-model--repository-ports) |
+| 2 | `:core:model` + `:core:database` (+ `:core:datastore`) *(done — Tier 4a)* | [§4](#4-database-schema), [§5](#5-domain-model--repository-ports) |
 | 3 | `:core:feed` | [§7](#7-external-interface-podcast-rssatom-feeds) |
 | 4 | `:core:naming` | [§5](#5-domain-model--repository-ports) (`NamingTemplateEngine`), [§11](#11-naming--tagging-pipeline) |
 | 5 | `:core:download` | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows) (download flow), [§11](#11-naming--tagging-pipeline) |
