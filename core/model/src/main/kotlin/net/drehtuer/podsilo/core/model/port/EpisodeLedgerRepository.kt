@@ -3,6 +3,7 @@
 package net.drehtuer.podsilo.core.model.port
 
 import kotlinx.coroutines.flow.Flow
+import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 
 /**
@@ -12,12 +13,22 @@ import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
  */
 interface EpisodeLedgerRepository {
     /**
-     * [filter]'s `NEW` state has no corresponding [EpisodeLedgerRow] by definition (CLAUDE.md
-     * §9 — "new" is the absence of a row) — resolving it requires joining against
-     * [EpisodeRepository] and `Feed.firstSeenAt`. That join is the implementation's job (it needs
-     * the Room DAOs to do it in one query); this port only describes what the UI asks for.
+     * Ledger rows whose [EpisodeLedgerRow.state] matches [filter]. Note [LedgerFilterState.NEW]
+     * has **no** corresponding row by definition (CLAUDE.md §9 — "new" is the *absence* of a row),
+     * so this method returns an empty list for `NEW`; the episode-backed New/backlog listing the UI
+     * actually renders is [observeEpisodes], which joins against [EpisodeRepository] and
+     * `Feed.firstSeenAt`. [feedUrl] narrows to a single feed when set.
      */
     fun observe(filter: LedgerFilter): Flow<List<EpisodeLedgerRow>>
+
+    /**
+     * The UI-facing episode list: each [Episode] paired with its [EpisodeLedgerRow] if one exists
+     * (`null` == genuinely new, no action anywhere). Resolving [filter] — especially
+     * [LedgerFilterState.NEW] with its `pubDate >= Feed.firstSeenAt` backlog cutoff (CLAUDE.md §5)
+     * — is a join the Room implementation does in SQL, which is why it lives here and not in
+     * [EpisodeRepository]. This is the one method that can express "new" (a row-typed query can't).
+     */
+    fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>>
 
     suspend fun upsert(row: EpisodeLedgerRow)
 
@@ -26,6 +37,15 @@ interface EpisodeLedgerRepository {
 
     suspend fun markSynced(episodeKeys: List<String>)
 }
+
+/**
+ * One row of the triage list: the parsed [episode] plus its [ledger] state, or `null` [ledger]
+ * when the episode has no action anywhere and is therefore "new" (CLAUDE.md §9).
+ */
+data class EpisodeListItem(
+    val episode: Episode,
+    val ledger: EpisodeLedgerRow?,
+)
 
 /** The states a [LedgerFilter] can select on — distinct from [net.drehtuer.podsilo.core.model.LedgerState]. */
 enum class LedgerFilterState { NEW, DOWNLOADED, SKIPPED, ALL }
