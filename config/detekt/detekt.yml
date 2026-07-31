@@ -1,7 +1,36 @@
-# Minimal override on top of detekt's default ruleset (buildUponDefaultConfig
-# = true in the root build.gradle.kts). Only deviation: @Composable functions
-# are conventionally PascalCase (they read as a UI element, not a verb) — the
-# same exemption is applied for ktlint in .editorconfig.
+# Overrides on top of detekt's default ruleset (buildUponDefaultConfig = true in the root
+# build.gradle.kts).
 naming:
+  # @Composable functions are conventionally PascalCase (they read as a UI element, not a verb) —
+  # the same exemption is applied for ktlint in .editorconfig.
   FunctionNaming:
     ignoreAnnotated: ["Composable"]
+
+style:
+  ReturnCount:
+    # Guard clauses are the whole shape of this codebase's error handling: CLAUDE.md §8 mandates
+    # modelling expected failures as return types rather than exceptions, which naturally produces
+    # "check, return the failure value, carry on" sequences. detekt ships this flag for exactly that.
+    excludeGuardClauses: true
+
+# The `formatting` ruleset *is* ktlint, bundled by detekt-formatting 1.23.8 — an older ktlint than
+# the one the ktlint Gradle plugin (14.x) runs. Where the two versions disagree they disagree
+# irreconcilably: ktlint 14 formats an annotated constructor (`class W @AssistedInject constructor`,
+# i.e. every Hilt worker) with the whole class body indented one level, which the bundled ktlint
+# then reports as wrong indentation — 358 findings on code `ktlintFormat` had just produced.
+#
+# So: ktlintCheck is the single authority on formatting, and detekt's duplicate copies of those
+# rules are off. Everything detekt uniquely contributes (complexity, correctness, naming, its own
+# MaxLineLength) stays on. See docs/dev-environment.md §8.6 — this friction recurred in every tier
+# before it was settled here.
+formatting:
+  Indentation:
+    active: false
+  ParameterListWrapping:
+    active: false
+  ArgumentListWrapping:
+    active: false
+  Wrapping:
+    active: false
+  MaximumLineLength:
+    active: false

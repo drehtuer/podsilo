@@ -42,8 +42,11 @@ class DefaultNamingTemplateEngine(
         episode: Episode,
         folderTemplate: String,
         fileTemplate: String,
+        contentType: String?,
     ): ResolvedName {
-        val extension = resolveExtensionFromUrl(episode.enclosureUrl)
+        // Resolved first, and inside the engine, because the file component's byte budget has to
+        // account for the extension it will actually be given -- see resolveComponent's reservedBytes.
+        val extension = resolveExtension(contentType, episode.enclosureUrl)
         val folder =
             resolveComponent(
                 template = folderTemplate,

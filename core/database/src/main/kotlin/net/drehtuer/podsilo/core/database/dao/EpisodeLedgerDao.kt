@@ -23,6 +23,9 @@ interface EpisodeLedgerDao {
     @Query("SELECT * FROM episode_ledger")
     suspend fun getAll(): List<EpisodeLedgerEntity>
 
+    @Query("SELECT * FROM episode_ledger WHERE episodeKey = :episodeKey")
+    suspend fun get(episodeKey: String): EpisodeLedgerEntity?
+
     /** The outbox drain query (CLAUDE.md §5). */
     @Query("SELECT * FROM episode_ledger WHERE syncedToServer = 0")
     suspend fun getUnsynced(): List<EpisodeLedgerEntity>

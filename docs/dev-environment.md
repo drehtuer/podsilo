@@ -32,7 +32,7 @@ below differ enormously in how well-proven they are.
 | Dev container builds and starts | ✅ Verified | Repeatedly, incl. 2026-07-31 |
 | Android SDK provisioning (`post-create.sh`) | ✅ Verified | Idempotent, installs into the named volume |
 | Portability across hosts with different UID/GID | ✅ Verified | 2026-07-31: second machine, uid 1002 / docker gid 108 — see [§4](#4-host-uidgid-portability) |
-| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-07-31, on both machines: 215 tests, 3 skipped, exit 0 |
+| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-07-31, after Tier 4b: 269 tests, 3 skipped, exit 0 |
 | `./gradlew assembleDebug` | ✅ Verified | 29 MB debug APK |
 | opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green (3 tests, 0 skipped) |
 | `docker` from inside the container | ✅ Verified | Host daemon, group aligned at runtime by `post-create.sh` |
@@ -42,6 +42,8 @@ below differ enormously in how well-proven they are.
 | **Tier 2 — `connectedAndroidTest`** | ❌ **Never run** | Follows from the above |
 | **Tier 3 — adb over TCP to a Windows emulator** | ❌ **Never run** | No `scripts/adb-connect-host.sh` exists |
 | `KeystoreAppPasswordCipher` round-trip | ❌ Never run | Needs a real device/emulator (ADR 0010) |
+| `SafDownloadTarget` (the actual SAF write) | ❌ Never run | Needs a real `DocumentsProvider` (ADR 0011) |
+| The app actually running on a device | ❌ Never run | Tier 4b builds an APK; nothing has installed or launched it |
 
 **In short: Tier 1 is the supported path today.** It is also where CLAUDE.md §4 says the majority of
 tests must live, so this is not as limiting as it sounds — but do not assume Tiers 2 and 3 work
@@ -211,15 +213,16 @@ bash .devcontainer/post-create.sh
 
 | Module | Tests |
 |---|---|
-| `:core:naming` | 75 |
+| `:core:naming` | 81 |
+| `:core:feed` | 44 |
 | `:core:sync` | 43 |
-| `:core:feed` | 38 |
+| `:core:download` | 39 |
+| `:core:database` | 25 |
 | `:core:gpodder` | 23 (3 of them skipped — see below) |
-| `:core:database` | 20 |
 | `:core:datastore` | 7 |
-| `:core:download` | 5 |
 | `:core:model` | 4 |
-| **Total** | **215 discovered, 3 skipped, 212 executed** |
+| `:app` | 3 |
+| **Total** | **269 discovered, 3 skipped, 266 executed** |
 
 The 3 skips are `OpodsyncIntegrationTest`, which self-skips via JUnit's `assumeTrue` unless
 `PODSILO_OPODSYNC_URL` is set. That is deliberate: CLAUDE.md §7 requires Tier 1 to be offline and
@@ -246,11 +249,19 @@ No emulator, no network. Room via in-memory DB, HTTP via MockWebServer, Android 
 Robolectric. This is where CLAUDE.md §7 says the majority of tests must live, and where all 212
 currently-executing tests are.
 
-Two modules need **Robolectric** even though they look like plain JVM work:
+Four modules need **Robolectric**:
 
 - `:core:feed` — rssparser is a Kotlin Multiplatform library whose *Android* target resolves
   `org.xmlpull.v1.XmlPullParserFactory` at runtime (ADR 0005).
 - `:core:database` — Room, obviously.
+- `:core:download` and `:app` — WorkManager's `TestListenableWorkerBuilder` and the
+  `ContentResolver` behind the SAF grant check both need an Android `Context`.
+
+Each of those carries a `src/test/resources/robolectric.properties` pinning `sdk=34`: Robolectric
+4.15.1 supports up to SDK 35, and the project's `compileSdk`/`targetSdk` is 37, which it refuses to
+instrument. Without the pin the tests fail at *runner construction* with
+`targetSdkVersion=37 > maxSdkVersion=35`, which reads like a build misconfiguration rather than a
+tooling version gap.
 
 Robolectric downloads an `android-all` jar on first use. That is still Tier 1 by CLAUDE.md §4's own
 definition (headless, no emulator), just not dependency-free.
@@ -448,14 +459,29 @@ for each.
 
 ### 8.6 ktlint and detekt disagree with each other
 
-Recurring friction, hit in every tier so far. The ktlint Gradle plugin (14.x) and
-`detekt-formatting` 1.23.8 bundle **different ktlint versions with different wrapping and
-indentation opinions**, so `./gradlew ktlintFormat` can produce code that then fails `detekt`, and
-vice versa.
+**Settled in Tier 4b — this should no longer bite.** Kept because the reasoning matters if anyone
+reconsiders the config.
 
-Practical rule, learned the hard way: **write to the stricter/older (detekt) ktlint from the start,
-and prefer extracting a local variable over clever multiline wrapping.** A deeply nested named
-argument is the usual trigger; hoisting it into a `val` satisfies both tools at once.
+The ktlint Gradle plugin (14.x) and `detekt-formatting` 1.23.8 bundle **different ktlint versions
+with different wrapping and indentation opinions**, so `./gradlew ktlintFormat` could produce code
+that then failed `detekt`. For three tiers the workaround was to restructure the code by hand. That
+stopped being possible with Hilt workers: ktlint 14 formats an annotated constructor
+(`class W @AssistedInject constructor`) with the whole class body indented one level, which the
+bundled older ktlint reports as wrong indentation — 358 findings on code `ktlintFormat` had just
+produced, and no code shape satisfies both.
+
+The settlement, in two places:
+
+- `config/detekt/detekt.yml` turns off detekt's duplicate copies of the formatting rules
+  (`Indentation`, `ParameterListWrapping`, `ArgumentListWrapping`, `Wrapping`,
+  `MaximumLineLength`). **`ktlintCheck` is the single authority on formatting.** Everything detekt
+  uniquely contributes — complexity, correctness, naming, its own `MaxLineLength` — stays on.
+- `.editorconfig` sets `max_line_length = 120`, matching detekt's `MaxLineLength` default. Without
+  it ktlint had no line limit at all and would happily join a wrapped expression into a
+  130-character line that detekt then rejected.
+
+Still true, and still good advice: prefer extracting a local variable over clever multiline
+wrapping.
 
 ### 8.7 Robolectric can't download `android-all`
 

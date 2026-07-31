@@ -15,6 +15,9 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE feedUrl = :feedUrl ORDER BY pubDate DESC")
     fun observeForFeed(feedUrl: String): Flow<List<EpisodeEntity>>
 
+    @Query("SELECT * FROM episodes WHERE episodeKey = :episodeKey")
+    suspend fun get(episodeKey: String): EpisodeEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(episodes: List<EpisodeEntity>)
 

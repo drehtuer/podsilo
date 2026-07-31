@@ -30,6 +30,13 @@ interface EpisodeLedgerRepository {
      */
     fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>>
 
+    /**
+     * The single durable "has this already been handled?" lookup (CLAUDE.md §11). `DownloadWorker`
+     * reads it to reuse `writtenFileName` on a retry and to bail out when a remote action reached a
+     * terminal state while the download was queued — never a file-existence check.
+     */
+    suspend fun get(episodeKey: String): EpisodeLedgerRow?
+
     suspend fun upsert(row: EpisodeLedgerRow)
 
     /** Rows where `syncedToServer = false` — the outbox drain query. */

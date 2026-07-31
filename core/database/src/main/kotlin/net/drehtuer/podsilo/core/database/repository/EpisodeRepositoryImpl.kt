@@ -17,6 +17,8 @@ class EpisodeRepositoryImpl(
     override fun observeForFeed(feedUrl: String): Flow<List<Episode>> =
         episodeDao.observeForFeed(feedUrl).map { rows -> rows.map { it.toDomain() } }
 
+    override suspend fun get(episodeKey: String): Episode? = episodeDao.get(episodeKey)?.toDomain()
+
     override suspend fun replaceForFeed(
         feedUrl: String,
         episodes: List<Episode>,

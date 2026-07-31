@@ -10,6 +10,11 @@ indent_size = 4
 
 [*.{kt,kts}]
 ktlint_code_style = ktlint_official
+# Matches detekt's MaxLineLength default. Without it ktlint has no line limit and `ktlintFormat`
+# happily joins a wrapped expression into a 130-character line that detekt then rejects — the two
+# tools have to agree on this number or every format run creates work. See config/detekt/detekt.yml
+# for the other half of that settlement.
+max_line_length = 120
 ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
 # @Composable functions are conventionally PascalCase (they read as a UI

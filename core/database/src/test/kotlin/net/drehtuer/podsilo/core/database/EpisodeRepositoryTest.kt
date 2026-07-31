@@ -7,11 +7,26 @@ import kotlinx.coroutines.test.runTest
 import net.drehtuer.podsilo.core.database.repository.EpisodeRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.FeedRepositoryImpl
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class EpisodeRepositoryTest : RoomTestBase() {
     private val feeds by lazy { FeedRepositoryImpl(db.feedDao()) }
     private val episodes by lazy { EpisodeRepositoryImpl(db.episodeDao()) }
+
+    @Test
+    fun `get returns one episode by key, or null once the cache row is gone`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("a")))
+            episodes.replaceForFeed("a", listOf(episode("a1", "a", title = "Folge 1")))
+
+            assertEquals("Folge 1", episodes.get("a1")?.title)
+            assertNull(episodes.get("missing"))
+
+            // The cache is disposable: a queued download whose feed was unsubscribed sees null here.
+            feeds.replaceAll(emptyList())
+            assertNull(episodes.get("a1"))
+        }
 
     @Test
     fun `replaceForFeed wipes and rebuilds the cache for that feed only`() =

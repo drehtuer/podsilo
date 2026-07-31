@@ -13,6 +13,13 @@ import net.drehtuer.podsilo.core.model.Episode
 interface EpisodeRepository {
     fun observeForFeed(feedUrl: String): Flow<List<Episode>>
 
+    /**
+     * One episode by key, for `DownloadWorker` (which is handed only an `episodeKey` in its input
+     * data). `null` when the row has been pruned — the cache is disposable, so a queued download
+     * whose feed was unsubscribed mid-flight is an expected outcome, not an error.
+     */
+    suspend fun get(episodeKey: String): Episode?
+
     suspend fun replaceForFeed(
         feedUrl: String,
         episodes: List<Episode>,
