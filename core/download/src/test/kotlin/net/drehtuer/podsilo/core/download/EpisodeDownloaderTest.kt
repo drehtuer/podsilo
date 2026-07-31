@@ -1,0 +1,250 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package net.drehtuer.podsilo.core.download
+
+import kotlinx.coroutines.runBlocking
+import net.drehtuer.podsilo.core.model.Episode
+import net.drehtuer.podsilo.core.model.Feed
+import net.drehtuer.podsilo.core.model.port.NamingSettings
+import net.drehtuer.podsilo.core.model.port.TitleCleanupRuleSetting
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okio.Buffer
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+import java.time.ZoneId
+
+/**
+ * The cache -> verify -> name -> tag -> deliver -> clean-up pipeline (`docs/architecture.md` §11),
+ * end to end, with MockWebServer for the network and [FakeDownloadTarget] for the SAF write
+ * (`docs/decisions/0011`). No Android, no emulator.
+ */
+class EpisodeDownloaderTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
+    private lateinit var server: MockWebServer
+    private lateinit var cacheDir: File
+    private lateinit var target: FakeDownloadTarget
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+        cacheDir = temporaryFolder.newFolder("cache")
+        target = FakeDownloadTarget(temporaryFolder.newFolder("tree"))
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun downloader() =
+        EpisodeDownloader(
+            enclosureDownloader = EnclosureDownloader(),
+            audioTagWriter = AudioTagWriter(),
+            downloadTarget = target,
+            cacheDir = cacheDir,
+            zoneId = ZoneId.of("Europe/Berlin"),
+        )
+
+    private fun feed() =
+        Feed(
+            url = "https://example.org/feed.xml",
+            title = "Der Podcast",
+            imageUrl = null,
+            firstSeenAt = 0,
+            lastRefreshedAt = null,
+            httpEtag = null,
+            httpLastModified = null,
+        )
+
+    private fun episode(
+        title: String = "Warum Hamburg immer regnet",
+        path: String = "/ep1.mp3",
+        // 2026-07-14T09:00:00Z
+        pubDate: Long? = 1_784_019_600_000,
+    ) = Episode(
+        episodeKey = "guid-1",
+        feedUrl = "https://example.org/feed.xml",
+        guid = "guid-1",
+        enclosureUrl = server.url(path).toString(),
+        title = title,
+        description = "Show notes",
+        pubDate = pubDate,
+        durationMs = null,
+    )
+
+    /** A real (tiny, silent) MP3 so the tag writer has a container it can actually parse. */
+    private fun mp3Body(): Buffer {
+        val bytes = checkNotNull(javaClass.getResourceAsStream("/audio/silence.mp3")).readBytes()
+        return Buffer().write(bytes)
+    }
+
+    private fun enqueueMp3(contentType: String = "audio/mpeg") {
+        server.enqueue(MockResponse().setResponseCode(200).setHeader("Content-Type", contentType).setBody(mp3Body()))
+    }
+
+    @Test
+    fun `delivers into the templated folder and file name, then cleans the cache`() =
+        runBlocking {
+            enqueueMp3()
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            val delivered = outcome as DownloadOutcome.Delivered
+            assertEquals("20260714_Warum Hamburg immer regnet.mp3", delivered.fileName)
+            assertTrue(target.delivered("Der Podcast", delivered.fileName).isFile)
+            assertEquals(listOf("Der Podcast/20260714_Warum Hamburg immer regnet.mp3"), target.deliveries)
+            assertEquals(
+                "the cache must not keep a copy of a delivered episode",
+                emptyList<String>(),
+                cacheDir.listFiles().orEmpty().map { it.name },
+            )
+        }
+
+    @Test
+    fun `the response Content-Type beats the url extension`() =
+        runBlocking {
+            // URL says .mp3, the server says MP4 audio — CLAUDE.md §6 says believe the server.
+            enqueueMp3(contentType = "audio/mp4")
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            assertTrue((outcome as DownloadOutcome.Delivered).fileName.endsWith(".m4a"))
+        }
+
+    @Test
+    fun `a name already taken in the folder is suffixed, keeping the extension last`() =
+        runBlocking {
+            val folder = File(temporaryFolder.root, "tree/Der Podcast").apply { mkdirs() }
+            File(folder, "20260714_Warum Hamburg immer regnet.mp3").writeText("an earlier, different episode")
+            enqueueMp3()
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            assertEquals(
+                "20260714_Warum Hamburg immer regnet (2).mp3",
+                (outcome as DownloadOutcome.Delivered).fileName,
+            )
+        }
+
+    @Test
+    fun `a retry reuses the recorded file name instead of creating a second copy`() =
+        runBlocking {
+            val folder = File(temporaryFolder.root, "tree/Der Podcast").apply { mkdirs() }
+            val existing = File(folder, "20260714_Warum Hamburg immer regnet.mp3")
+            existing.writeText("this episode's own earlier attempt")
+            enqueueMp3()
+
+            val outcome =
+                downloader().download(
+                    feed = feed(),
+                    episode = episode(),
+                    naming = NamingSettings(),
+                    previousFileName = "20260714_Warum Hamburg immer regnet.mp3",
+                )
+
+            assertEquals("20260714_Warum Hamburg immer regnet.mp3", (outcome as DownloadOutcome.Delivered).fileName)
+            assertEquals(1, folder.listFiles().orEmpty().size)
+            assertFalse("the retry must overwrite its own file", existing.readText().startsWith("this episode's"))
+        }
+
+    @Test
+    fun `title cleanup rules reach both the file name and the tags`() =
+        runBlocking {
+            enqueueMp3()
+            val naming =
+                NamingSettings(
+                    titleCleanupRules = listOf(TitleCleanupRuleSetting("""^Ep\.? ?\d+ *[-–—:] *""", "")),
+                )
+
+            val outcome =
+                downloader().download(feed(), episode(title = "Ep. 142 - Warum Hamburg immer regnet"), naming)
+
+            val delivered = outcome as DownloadOutcome.Delivered
+            assertEquals("20260714_Warum Hamburg immer regnet.mp3", delivered.fileName)
+            assertEquals(TagWriteOutcome.Success, delivered.tagOutcome)
+        }
+
+    @Test
+    fun `an invalid cleanup rule fails the download visibly rather than being ignored`() =
+        runBlocking {
+            val naming = NamingSettings(titleCleanupRules = listOf(TitleCleanupRuleSetting("[unclosed", "")))
+
+            val outcome = downloader().download(feed(), episode(), naming)
+
+            val failed = outcome as DownloadOutcome.Failed
+            assertFalse(failed.retryable)
+            assertTrue(failed.reason.contains("invalid rule"))
+        }
+
+    @Test
+    fun `a file the tagger cannot read is still delivered and still counts as downloaded`() =
+        runBlocking {
+            // CLAUDE.md §6: never lose a successful download because a tag write failed.
+            server.enqueue(MockResponse().setResponseCode(200).setBody("not actually audio"))
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            val delivered = outcome as DownloadOutcome.Delivered
+            assertTrue(delivered.tagOutcome is TagWriteOutcome.Failure)
+            assertTrue(target.delivered("Der Podcast", delivered.fileName).isFile)
+        }
+
+    @Test
+    fun `a 404 fails without retrying`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            assertFalse((outcome as DownloadOutcome.Failed).retryable)
+        }
+
+    @Test
+    fun `a 503 fails retryably and keeps nothing in the user's folder`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(503))
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            assertTrue((outcome as DownloadOutcome.Failed).retryable)
+            assertEquals(emptyList<String>(), target.deliveries)
+        }
+
+    @Test
+    fun `a revoked folder grant fails without retrying, and no partial file is left behind`() =
+        runBlocking {
+            enqueueMp3()
+            target.unavailable = DownloadFolderUnavailableException("permission revoked")
+
+            val outcome = downloader().download(feed(), episode(), NamingSettings())
+
+            val failed = outcome as DownloadOutcome.Failed
+            assertFalse(failed.retryable)
+            assertEquals("permission revoked", failed.reason)
+            assertEquals(emptyList<String>(), cacheDir.listFiles().orEmpty().map { it.name })
+        }
+
+    @Test
+    fun `an episode with no pubDate still gets a sortable name rather than a bare underscore`() =
+        runBlocking {
+            enqueueMp3()
+
+            val outcome = downloader().download(feed(), episode(pubDate = null), NamingSettings())
+
+            assertEquals(
+                "00000000_Warum Hamburg immer regnet.mp3",
+                (outcome as DownloadOutcome.Delivered).fileName,
+            )
+        }
+}

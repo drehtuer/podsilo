@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package net.drehtuer.podsilo.core.download
+
+import java.io.File
+
+/**
+ * The final step of the download pipeline: getting a finished, tagged cache file into the user's
+ * chosen folder (`docs/architecture.md` §8/§11).
+ *
+ * This is a deliberate seam, not a "in case we swap SAF later" wrapper — CLAUDE.md §3 forbids the
+ * latter. SAF is the only implementation there will ever be ([SafDownloadTarget]), but a
+ * `DocumentFile` write needs a real `DocumentsProvider`, which exists on a device and not in a JVM
+ * unit test. Without this interface the entire pipeline — naming, collision suffixing, tagging,
+ * retry reuse of `writtenFileName`, cache cleanup — would be testable only on an emulator, and this
+ * project has never successfully booted one (`docs/dev-environment.md` §6). See
+ * `docs/decisions/0011`.
+ */
+interface DownloadTarget {
+    /**
+     * File names (with extension) already present in [folder], for collision suffixing. An absent
+     * folder yields an empty set rather than an error — it will be created on [deliver].
+     *
+     * Explicitly **not** a de-duplication check: whether a previously downloaded episode's file is
+     * still there says nothing about whether it was already handled (CLAUDE.md §11's single most
+     * important invariant). The ledger answers that; this only stops two different episodes
+     * fighting over one name.
+     */
+    suspend fun existingNames(folder: String): Result<Set<String>>
+
+    /**
+     * Copies [source] into [folder] under exactly [fileName], overwriting a file of that name if
+     * one exists — a retry reuses the name the ledger recorded, and must replace its own partial
+     * predecessor rather than create `… (2)`.
+     */
+    suspend fun deliver(
+        folder: String,
+        fileName: String,
+        source: File,
+    ): Result<Unit>
+}
+
+/** Raised when the SAF grant is gone (revoked, card removed, app data cleared) — the user must re-pick the folder. */
+class DownloadFolderUnavailableException(
+    message: String,
+) : Exception(message)

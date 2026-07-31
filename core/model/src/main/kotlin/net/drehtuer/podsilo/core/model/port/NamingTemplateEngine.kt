@@ -11,11 +11,18 @@ import net.drehtuer.podsilo.core.model.Feed
  * contains zero string-sanitisation logic of its own (`docs/architecture.md` §11).
  */
 interface NamingTemplateEngine {
+    /**
+     * @param contentType the downloaded response's `Content-Type`, which takes precedence over the
+     *   enclosure URL when resolving the extension (CLAUDE.md §6 — the URL's extension is not
+     *   trustworthy). `null` where no response exists: the settings live preview, and any caller
+     *   naming an episode before fetching it.
+     */
     fun resolve(
         feed: Feed,
         episode: Episode,
         folderTemplate: String,
         fileTemplate: String,
+        contentType: String? = null,
     ): ResolvedName
 }
 

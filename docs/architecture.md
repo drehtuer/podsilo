@@ -282,16 +282,23 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 | `deviceId` | `String` | No | Generated once (e.g. `UUID.randomUUID()`) on first run, persisted forever | Lets us recognise our own echoed-back actions in the remote action stream. |
 
 **Built so far (Tier 4a):** `:core:database` implements this schema in Room (`PodsiloDatabase`,
-version 1, schema exported under `core/database/schemas/`) and the four repository ports, with
+version 1, schema exported under `core/database/schemas/`) and the four repository ports (extended
+in Tier 4b with the read-side methods the workers need — `FeedRepository.getAll`/`get`/
+`updateRefreshMetadata`, `EpisodeRepository.get`, `EpisodeLedgerRepository.get`), with
 entity↔domain mapping at the module boundary. The episodes→feeds foreign key cascades (feed removal
 prunes episodes); the ledger has **no** foreign key (verified in the exported schema), so it
 survives — `SubscriptionMirroringTest` proves a re-subscribe doesn't re-download. `FeedDao.replaceAll`
 uses `@Upsert` (not `@Insert(REPLACE)`, whose delete-then-insert would fire the episodes' cascade
 and wipe an existing feed's cache on every refresh). Tests are Robolectric in-memory-DB (headless, no
 emulator — CLAUDE.md §4). `:core:datastore` implements `SettingsRepository` over DataStore
-Preferences, app password encrypted via `AppPasswordCipher` (`docs/decisions/0010`). **Not yet
-built:** `FeedRefreshWorker`, `DownloadWorker`, `:app`'s `SyncWorker`, and all Hilt `@Binds` wiring
-(Tier 4b/4c) — the repositories are plain constructor-injectable classes awaiting that graph.
+Preferences, app password encrypted via `AppPasswordCipher` (`docs/decisions/0010`).
+
+**Built (Tier 4b):** all three workers (`DownloadWorker`, `FeedRefreshWorker`, `:app`'s
+`SyncWorker`) and the Hilt graph that constructs them — `:app`'s `di/` package provides every port
+its adapter, so the repositories stay plain constructor-injectable classes with no DI annotations
+of their own. Hilt arrived a tier earlier than TODO.md scheduled it because a `@HiltWorker` is the
+only way to give a worker its dependencies without hand-rolling the service locator CLAUDE.md §3
+forbids.
 
 ---
 
@@ -623,13 +630,19 @@ Malformed-feed handling (missing GUIDs, duplicate GUIDs, missing enclosures, bad
 encoding, CDATA HTML, no `itunes:duration`) is rssparser's problem to survive and `:core:feed`'s tests
 to cover with fixtures — never a hand-rolled parser fallback (CLAUDE.md §3).
 
-**Built so far (Tier 3):** `FeedFetcher` implements the conditional-GET half of the sequence above
-— sends `If-None-Match`/`If-Modified-Since` from stored validators, maps 304 to
+**Built (Tier 3 + Tier 4b):** the whole sequence. `FeedFetcher` does the conditional GET — sends
+`If-None-Match`/`If-Modified-Since` from stored validators, maps 304 to
 `FeedFetchResult.NotModified`, follows redirects, and returns 4xx/5xx/timeout/unreachable-host as
-`FeedFetchResult` values rather than throwing (CLAUDE.md §8). It returns the response's `ETag`/
-`Last-Modified` for the caller to persist; it holds no state between calls. **Not yet built:**
-`FeedRefreshWorker` and the `FeedRepository`/`EpisodeRepository` writes the diagram shows around it
-— those need WorkManager and Room (Tier 4).
+`FeedFetchResult` values rather than throwing (CLAUDE.md §8). `FeedRefresher` drives the loop and
+performs the `replaceForFeed` + `updateRefreshMetadata` writes; `FeedRefreshWorker` is the thin
+WorkManager wrapper that decides only whether a pass is worth retrying.
+
+Failure policy, since the diagram doesn't show it: one feed failing never aborts the pass. A 4xx is
+permanent (and is *not* an unsubscribe — the subscription list is the server's, CLAUDE.md §1), a
+5xx or network error is transient and asks WorkManager to retry, and XML that rssparser cannot
+parse at all keeps the previously cached episodes rather than wiping them. `FeedRefresher` has no
+ledger, download or GPodder dependency at all, which is what makes "refreshing never downloads"
+structural rather than a matter of care.
 
 ---
 
@@ -802,13 +815,24 @@ belong entirely inside `NamingTemplateEngine` (`:core:naming`) — `:core:downlo
 `resolve()` and uses whatever comes back; it should contain zero string-sanitisation logic of its
 own.
 
-**Built so far (Tier 2):** `AudioTagWriter`/`AudioTagData` in `:core:download` implement step D —
-see `docs/decisions/0006` for why the Adonai/Kaned1as Android fork, not upstream jaudiotagger.
-Writes are per-field best-effort (`TagWriteOutcome.PartialSuccess` lists any `FieldKey` the
-container's tag format wouldn't accept) with a container-level `Failure` outcome for an unreadable
-file — never an exception, matching CLAUDE.md §6's "never lose a successful download because a tag
-write failed." **Not yet built:** steps A/B/E/F/G (the download itself, verification, SAF copy,
-cache cleanup, ledger write) — that's Tier 4b, needs WorkManager and SAF.
+**Built (Tier 2 + Tier 4b):** the whole flowchart. `EnclosureDownloader` does A/B (resumable HTTP
+into the app cache, `Range` continuation, truncated-body detection), `EpisodeDownloader` sequences
+C→F, `AudioTagWriter` is step D (see `docs/decisions/0006` for why the Adonai/Kaned1as Android
+fork), and `DownloadWorker` writes G. Tag writes are per-field best-effort
+(`TagWriteOutcome.PartialSuccess` lists any `FieldKey` the container wouldn't accept) with a
+container-level `Failure` for an unreadable file — never an exception, matching CLAUDE.md §6's
+"never lose a successful download because a tag write failed."
+
+Two things the flowchart doesn't show, both discovered by building it:
+
+- **The cache file is renamed before tagging.** jaudiotagger picks its reader from the *file
+  extension*, so tagging a `.partial` scratch file always fails ("no reader associated with this
+  extension") and every download would have arrived untagged. The download keeps the stable
+  `.partial` name so a resume knows what to look for; step D renames it to the extension the file
+  is about to be delivered under. Caught by a test, not by review.
+- **Step E goes through the `DownloadTarget` port** (`docs/decisions/0011`), not `DocumentFile`
+  directly — a test seam, since a SAF write needs a real `DocumentsProvider`. `SafDownloadTarget`
+  is the only implementation and is itself untested.
 
 ---
 
@@ -834,14 +858,13 @@ short ADR in `docs/decisions/` once resolved.
    `docs/decisions/0007-core-gpodder-is-a-jvm-module.md`: nothing in the module touches an Android
    API, so a JVM module compiles that property in rather than leaving it to review, and its
    MockWebServer tests run on the plain `test` task with no Robolectric.
-4. **Still open (partially validated).** "Trigger a sync pass" vs. "download worker POSTs directly."
-   §10 documents the download flow as *write ledger, then enqueue `SyncWorker`* rather than
-   `DownloadWorker` calling `GpodderClient` itself. `:core:sync`'s own tests confirm the underlying
-   durability property holds at the `SyncOrchestrator` level regardless of who triggers it — see
-   `SyncOrchestratorTest`'s "successful download, then failed POST, then app restart" case (two
-   separate `SyncOrchestrator` instances sharing the same repositories, mimicking a process restart,
-   never double-push). What's *not* yet validated is the `DownloadWorker` → `SyncWorker` enqueue
-   wiring itself, since `:core:download` and `:app`'s `SyncWorker` don't exist yet (Tier 4b).
+4. **Resolved (Tier 4b).** "Trigger a sync pass" vs. "download worker POSTs directly" — settled as
+   §10 documents it: `DownloadWorker` writes the durable ledger row and then asks for a pass through
+   the `SyncTrigger` interface (`:core:download`), which `:app`'s `WorkScheduler` implements by
+   enqueueing an expedited `SyncWorker`. Exactly one piece of code posts episode actions, and
+   `:core:download` has no GPodder dependency at all. `DownloadWorkerTest` asserts the trigger fires
+   once on a delivery and never on a failure; `SyncOrchestratorTest`'s "download, failed POST, app
+   restart" case still covers the durability property behind it.
 5. **Resolved** — Fallback for `pubDate`'s device timezone. See
    `docs/decisions/0004-naming-date-timezone-and-missing-date-fallback.md`: `ZoneId` is injected
    into `DefaultNamingTemplateEngine` at construction (never re-resolved mid-call); the "same
@@ -882,6 +905,21 @@ short ADR in `docs/decisions/` once resolved.
     `EpisodeListItem(episode, ledger?)`, and the Room impl resolves the filter — including the
     `pubDate >= Feed.firstSeenAt` backlog cutoff — in one SQL join (`EpisodeLedgerDao.observeNewEpisodes`).
     `:core:sync` is unaffected (it only reads the ledger via `getUnsynced`).
+12. **New, resolved (Tier 4b)** — the SAF write sits behind a `DownloadTarget` port
+    (`docs/decisions/0011`). A test seam, not a portability layer: a `DocumentFile` write needs a
+    real `DocumentsProvider`, so without it the entire download pipeline would be testable only on
+    an emulator this project has never booted. `SafDownloadTarget` is the sole implementation and is
+    itself unverified except by running the app.
+13. **New, resolved (Tier 4b)** — Hilt moved from Tier 4c into 4b. `@HiltWorker` is how a worker
+    gets its dependencies; the alternative was the hand-written service locator CLAUDE.md §3
+    forbids. Hilt 2.60.1 against AGP 9.3.1 was unproven here and was smoke-tested first — it works.
+14. **New, resolved (Tier 4b)** — the recurring ktlint-vs-detekt formatting fight is settled by
+    configuration rather than by reformatting code every tier: `ktlintCheck` is the sole authority
+    on formatting, detekt's duplicate copies of those rules (`Indentation`, `ParameterListWrapping`,
+    `ArgumentListWrapping`, `Wrapping`, `MaximumLineLength`) are off, and `.editorconfig` now sets
+    `max_line_length = 120` so ktlint stops producing lines detekt's own `MaxLineLength` rejects.
+    An annotated constructor (`class W @AssistedInject constructor`, i.e. every Hilt worker) is
+    formatted incompatibly by the two bundled ktlint versions, so no code shape satisfies both.
 
 ---
 
@@ -895,9 +933,9 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 |---|---|---|
 | 1 | Dev container + Gradle skeleton | *(done — see `docs/journal.md`)* |
 | 2 | `:core:model` + `:core:database` (+ `:core:datastore`) *(done — Tier 4a)* | [§4](#4-database-schema), [§5](#5-domain-model--repository-ports) |
-| 3 | `:core:feed` | [§7](#7-external-interface-podcast-rssatom-feeds) |
+| 3 | `:core:feed` *(done — Tier 2/3 parsing + fetch, Tier 4b refresh worker)* | [§7](#7-external-interface-podcast-rssatom-feeds) |
 | 4 | `:core:naming` | [§5](#5-domain-model--repository-ports) (`NamingTemplateEngine`), [§11](#11-naming--tagging-pipeline) |
-| 5 | `:core:download` | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows) (download flow), [§11](#11-naming--tagging-pipeline) |
+| 5 | `:core:download` *(done — Tier 4b)* | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows) (download flow), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api) (sync-pass sequence), [§9](#9-episode-ledger-state-machine) |
 | 8 | UI (`:feature:settings`, `:feature:episodes`) | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework) (folder grant sequence) |

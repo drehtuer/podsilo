@@ -17,6 +17,30 @@ interface FeedDao {
     @Query("SELECT * FROM feeds")
     suspend fun getAll(): List<FeedEntity>
 
+    @Query("SELECT * FROM feeds WHERE url = :url")
+    suspend fun get(url: String): FeedEntity?
+
+    // Column-scoped UPDATE, not an upsert of a whole row: firstSeenAt must survive untouched (it is
+    // write-once and drives the backlog cutoff), and a feed that has been unsubscribed in the
+    // meantime must not be resurrected by its own in-flight refresh — no row, no update.
+    //
+    // @Suppress: Room binds query parameters positionally and cannot destructure an object, so the
+    // columns have to be listed flat here. The port takes a FeedRefreshMetadata; this is the
+    // one place that unpacks it.
+    @Suppress("LongParameterList")
+    @Query(
+        "UPDATE feeds SET title = :title, imageUrl = :imageUrl, httpEtag = :httpEtag, " +
+            "httpLastModified = :httpLastModified, lastRefreshedAt = :lastRefreshedAt WHERE url = :url",
+    )
+    suspend fun updateRefreshMetadata(
+        url: String,
+        title: String,
+        imageUrl: String?,
+        httpEtag: String?,
+        httpLastModified: String?,
+        lastRefreshedAt: Long,
+    )
+
     // @Upsert (not @Insert(REPLACE)): REPLACE deletes-then-inserts, which would fire the episodes'
     // ON DELETE CASCADE and wipe an existing feed's cached episodes on every subscription refresh.
     // Upsert updates in place, so re-seeing a feed leaves its episodes untouched.

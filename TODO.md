@@ -148,29 +148,54 @@ interface so the Keystore stays out of the JVM test path).
 
 ### 4b. Needs instrumented tests / real emulator (SAF, WorkManager, ContentResolver)
 
-- [ ] **`:core:download`'s `DownloadWorker`** — wires together naming (1) + tags (2) + fetch (3)
-  behind a real SAF `DocumentFile` write (architecture.md §8 pipeline): resume, cancel,
-  disk-full, permission-revoked, 404, redirect, no-range-support.
-- [ ] **`FeedRefreshWorker`** and **`:app`'s `SyncWorker`** (thin `CoroutineWorker` wrapping
-  `SyncOrchestrator` — see architecture.md §2 for why it can't live in `:core:sync`).
-- [ ] **SAF folder-grant flow** — `ACTION_OPEN_DOCUMENT_TREE`, `takePersistableUriPermission`,
-  revoke/re-grant handling — can't be faked, needs a real system picker.
-- [ ] Foreground service notification for active downloads.
+**Update (2026-07-31): Tier 4b is complete.** 54 new tests (269 total, 3 skipped);
+`./gradlew ktlintCheck detekt test assembleDebug` green across the whole repo. It turned out to
+need **less** emulator than this heading assumed: WorkManager's `TestListenableWorkerBuilder` runs
+under Robolectric, and the SAF write went behind a `DownloadTarget` port
+(`docs/decisions/0011`, author-approved) so the pipeline around it is Tier-1 testable. Hilt was
+pulled forward from 4c — a `@HiltWorker` is how a worker gets its dependencies, and the alternative
+was the service locator CLAUDE.md §3 forbids.
+
+- [x] **`:core:download`'s `DownloadWorker`** — `EnclosureDownloader` (resumable `Range` fetch into
+  the app cache: resume, cancel, disk-full, 404, redirect, server-ignores-Range, 416, truncated
+  body), `EpisodeDownloader` (the cache→verify→name→tag→deliver→cleanup pipeline), and the worker
+  itself (ledger transitions, foreground notification, `SyncTrigger`). 39 tests.
+  - ⚠️ **`SafDownloadTarget` is not tested** — a `DocumentFile` write needs a real
+    `DocumentsProvider`. Everything *around* it is; the seam moves the untested surface down to the
+    smallest possible piece rather than eliminating it (ADR 0011).
+- [x] **`FeedRefreshWorker`** (over a new plain `FeedRefresher`) and **`:app`'s `SyncWorker`** (thin
+  `CoroutineWorker` over `SyncOrchestrator`, built per pass by `SyncOrchestratorFactory` because the
+  GPodder client depends on the credentials in force right now).
+- [x] **SAF folder-grant flow** — `DownloadFolderAccess` takes the persistable permission and
+  re-checks it on demand (`NotChosen`/`Granted`/`Revoked`), tested under Robolectric, which does
+  implement persisted URI permissions. **The picker itself** (`ACTION_OPEN_DOCUMENT_TREE` via an
+  `ActivityResultContract`) is a Compose concern and stays in 4c.
+- [x] Foreground service notification for active downloads — `DownloadNotifications` +
+  `setForeground(... FOREGROUND_SERVICE_TYPE_DATA_SYNC)`, progress throttled to 1 Hz. Never
+  displayed on a real device (see the gap above).
+- [x] **Ports extended** for the workers: `FeedRepository.getAll`/`get`/`updateRefreshMetadata`,
+  `EpisodeRepository.get`, `EpisodeLedgerRepository.get`, and a `GpodderClientFactory` port so
+  `SyncWorker` is testable with a fake client.
 
 ### 4c. Compose UI (emulator recommended, per CLAUDE.md's Tier 3 host-emulator path)
 
 - [ ] **`:feature:settings`** — folder picker, credentials, naming template editor with live
   preview (calls the already-tested naming module's `resolve()`).
 - [ ] **`:feature:episodes`** — filterable list, per-row triage, feed-filter chips.
-- [ ] **`:app`** — Hilt `@Binds` wiring every port to its 4a/4b adapter, navigation.
+- [x] **`:app`** — Hilt wiring: **done in 4b** (`di/` provides every port its adapter,
+  `PodsiloApplication` supplies the `HiltWorkerFactory`, `WorkScheduler` owns all enqueueing).
+  **Still to do here:** navigation, and `@AndroidEntryPoint` on `MainActivity` once there are
+  screens to host.
 
 ### Worth doing early despite appearing last
 
 - [x] CLAUDE.md §7 item 6, the no-auto-download invariant test — **done in Tier 3**, in two halves
   (`:core:sync`'s `NoAutoDownloadInvariantTest` + `:core:feed`'s 500-episode parse test), plus the
-  `subscription_change/create` assertion in `:core:gpodder`'s MockWebServer test. **Still to do
-  once Tier 4b exists:** the "downloads exactly zero *files*" assertion, which needs a real
-  `DownloadWorker` to observe.
+  `subscription_change/create` assertion in `:core:gpodder`'s MockWebServer test. **Tier 4b closes
+  the "zero *files*" half**: `FeedRefreshWorkerTest`'s 500-episode refresh writes episode rows and
+  nothing else (the refresher has no ledger/download/GPodder dependency at all), and
+  `DownloadWorkerTest` proves the only path to a file is an explicit per-episode enqueue that also
+  refuses to act on an already-terminal ledger row.
 
 ## Open question
 

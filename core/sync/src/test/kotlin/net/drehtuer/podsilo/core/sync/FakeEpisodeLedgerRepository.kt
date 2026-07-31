@@ -26,6 +26,8 @@ class FakeEpisodeLedgerRepository(
     // SyncOrchestrator never reads the UI-facing episode list; the New/backlog join is Room's job.
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
+    override suspend fun get(episodeKey: String): EpisodeLedgerRow? = state.value[episodeKey]
+
     override suspend fun upsert(row: EpisodeLedgerRow) {
         state.value = state.value + (row.episodeKey to row)
     }

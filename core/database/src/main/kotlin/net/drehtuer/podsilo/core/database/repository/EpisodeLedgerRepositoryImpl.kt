@@ -44,6 +44,8 @@ class EpisodeLedgerRepositoryImpl(
         return rows.map { list -> list.map { it.toDomain() } }
     }
 
+    override suspend fun get(episodeKey: String): EpisodeLedgerRow? = ledgerDao.get(episodeKey)?.toDomain()
+
     override suspend fun upsert(row: EpisodeLedgerRow) {
         ledgerDao.upsert(row.toEntity())
     }

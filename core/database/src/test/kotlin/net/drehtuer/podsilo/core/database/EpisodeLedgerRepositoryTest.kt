@@ -21,6 +21,22 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
     private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao()) }
 
     @Test
+    fun `get is the durable already-handled lookup and outlives the episode row`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("f")))
+            episodes.replaceForFeed("f", listOf(episode("a", "f")))
+            ledger.upsert(ledgerRow("a", "f", LedgerState.DOWNLOADED))
+
+            assertEquals(LedgerState.DOWNLOADED, ledger.get("a")?.state)
+            assertNull(ledger.get("never-touched"))
+
+            // The feed goes away: the episode cache is pruned, the ledger answer must not change.
+            feeds.replaceAll(emptyList())
+            assertNull(episodes.get("a"))
+            assertEquals(LedgerState.DOWNLOADED, ledger.get("a")?.state)
+        }
+
+    @Test
     fun `upsert then getUnsynced returns only rows awaiting the server`() =
         runTest {
             ledger.upsert(ledgerRow("a", "f", LedgerState.DOWNLOADED, syncedToServer = false))

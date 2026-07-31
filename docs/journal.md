@@ -931,3 +931,101 @@ Measuring the daemon heap first (512 MB, from the JVM itself) turned a plausible
 diagnosis, and turned up the four-invocations-one-daemon detail that explains why CI is harsher than
 a local build. Cheap check, and it is the difference between "raised the memory and it went away"
 and knowing what was actually wrong.
+
+---
+
+## 2026-07-31 (later) — Tier 4b: the three workers, the download pipeline, and the DI graph
+
+**Attempted:** all of `TODO.md`'s Tier 4b — `DownloadWorker`, `FeedRefreshWorker`, `:app`'s
+`SyncWorker`, the SAF folder-grant flow, and the foreground-service notification.
+
+**Two decisions went to the author before any code**, because both cut against a CLAUDE.md rule:
+
+1. **Hilt now, a tier early.** `TODO.md` schedules DI for 4c, but a worker has to get its
+   dependencies from somewhere and the alternative — a hand-written `WorkerFactory` doing lookups —
+   is the "own service locator" §3 forbids. Approved. Risk flagged up front: Hilt 2.60.1 against
+   AGP 9.3.1 was unproven here. Smoke-tested it as the *first* thing built (empty
+   `@HiltAndroidApp` + `assembleDebug`) rather than discovering it eight files in. It works.
+2. **A `DownloadTarget` port in front of the SAF write.** §3 warns against wrapping a library "in
+   case we swap it later"; this is not that, and saying so plainly mattered. A `DocumentFile`
+   write needs a real `DocumentsProvider`, so without a seam the entire pipeline — collision
+   suffixing, extension resolution, retry name reuse, tag-failure handling, cache cleanup, the
+   retryable/not classification — would be testable only on Tier 2, which has never booted on this
+   host. Approved; written up as `docs/decisions/0011` with the honest cost stated: the seam moves
+   the untested surface down to `SafDownloadTarget`, it doesn't remove it.
+
+**Tier 4b needed far less emulator than its own heading claims.** WorkManager's
+`TestListenableWorkerBuilder` runs fine under Robolectric with a hand-rolled `WorkerFactory` that
+constructs the worker from fakes, and Robolectric *does* implement persisted URI permissions — so
+`DownloadFolderAccess`'s grant/revoke logic is genuinely tested, not just described. The heading in
+`TODO.md` has been corrected rather than left to mislead the next reader.
+
+**A real bug the tests caught, which review would not have.** jaudiotagger picks its reader from
+the **file extension**. The download cache file is named `<hash>.partial` for resume stability, so
+`AudioFileIO.read` reported "no reader associated with this extension:partial" and *every* download
+would have arrived untagged — a silent, user-visible-in-the-player failure that still reports
+success. Fix: rename the cache file to its resolved extension between download and tagging. The
+test that caught it (`title cleanup rules reach both the file name and the tags`) was written for a
+different reason entirely.
+
+**A test expectation that was wrong, not the code.** Several pipeline tests asserted hyphenated
+file names (`20260714_Warum-Hamburg-immer-regnet.mp3`) because CLAUDE.md §6's example shows one.
+The sanitiser built in Tier 1 preserves spaces and always has, with its own passing tests. Fixed
+the new expectations rather than "fixing" tested behaviour to match an example in prose.
+
+**What was built**
+
+- `:core:download` — `EnclosureDownloader` (resumable `Range` fetch into the app cache; handles
+  servers that *ignore* `Range` by restarting rather than appending to a stale prefix, 416 by
+  discarding and restarting once, and a body shorter than its own `Content-Length` as a retryable
+  truncation), `EpisodeDownloader` (the §11 pipeline), `DownloadTarget`/`SafDownloadTarget`,
+  `DownloadWorker`, `DownloadNotifications`, `DownloadFolderAccess`, `SyncTrigger`. 39 tests.
+- `:core:feed` — `FeedRefresher` (the loop and the writes) + `FeedRefreshWorker` (retry policy
+  only). One feed failing never aborts the pass; a 4xx is permanent and explicitly *not* an
+  unsubscribe; unparseable XML keeps the cached episodes.
+- `:app` — `PodsiloApplication` (`HiltWorkerFactory` + `Configuration.Provider`, with WorkManager's
+  `androidx.startup` initializer removed in the manifest), `SyncWorker`, `SyncOrchestratorFactory`,
+  `WorkScheduler` (every enqueue in the app goes through it, and it is the `SyncTrigger`), five
+  Hilt modules, and the manifest permissions — including `INTERNET`, which the app had never
+  declared because until now nothing in it made a request.
+- Ports gained the read-side methods the workers need, plus a `GpodderClientFactory` port so
+  `SyncWorker` is testable with a fake client instead of a live Retrofit instance.
+
+**The ktlint-vs-detekt fight is over, by configuration.** Every previous tier restructured code to
+satisfy both tools; this tier that stopped being possible. ktlint 14 formats an annotated
+constructor — `class W @AssistedInject constructor`, i.e. every Hilt worker — with the class body
+indented one level, and detekt-formatting's older bundled ktlint calls that wrong indentation: 358
+findings on code `ktlintFormat` had just produced, with no shape satisfying both. Settled by making
+`ktlintCheck` the sole formatting authority (detekt's duplicate `Indentation`/`Wrapping`/
+`*ListWrapping`/`MaximumLineLength` rules off) and adding `max_line_length = 120` to
+`.editorconfig`, which ktlint had never had — that omission is why `ktlintFormat` kept joining
+lines into 130-character ones detekt then rejected. Both halves are documented where the next
+person will look (`config/detekt/detekt.yml`, `docs/dev-environment.md` §8.6).
+
+The genuine detekt findings underneath the noise were worth fixing rather than suppressing, and
+most made the code better: `FeedRefresher` split out of its worker, `SyncOrchestratorFactory` out
+of `SyncWorker`, `FeedRefreshMetadata` replacing a six-parameter port method, the copy loop split
+out of the stream-closing scopes, `DataModule` split into four focused Hilt modules. Three
+suppressions remain, each with its reason in the code: a worker's constructor *is* its dependency
+list, Room binds query parameters flat, and one three-exit pipeline function.
+
+**Verified on this host**
+
+`./gradlew ktlintCheck detekt test assembleDebug` — **exit 0**, whole repo. **269 tests, 3
+skipped** (the opodsync integration tests, correctly self-skipping without `PODSILO_OPODSYNC_URL`).
+Per module: naming 81, feed 44, sync 43, download 39, database 25, gpodder 23, datastore 7, model 4,
+app 3. Counts read from the JUnit XML, not the console.
+
+**Not done / known gaps — stated rather than implied**
+
+- **`SafDownloadTarget` has never run.** Nor has `KeystoreAppPasswordCipher` (ADR 0010). Nor has
+  the foreground notification ever been displayed. **The app has never been installed or launched**
+  — Tier 4b produces an APK and 269 green tests, and neither of those is the same as "it works on a
+  phone". The first device run will find things; that is expected, not a surprise to be explained
+  away later.
+- The `DownloadWorker` → `SyncWorker` enqueue is asserted at the `SyncTrigger` boundary (fires once
+  on delivery, never on failure). That the resulting `SyncWorker` actually runs is WorkManager's
+  contract, untested here.
+- Cancellation mid-download is tested at the `EnclosureDownloader` level (the partial file survives)
+  but not through the worker, where the `NonCancellable` ledger write back to `QUEUED` lives.
+- No `:feature:*` UI yet, so nothing enqueues a download except a test. That is Tier 4c.

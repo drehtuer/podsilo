@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.drehtuer.podsilo.core.database.repository.EpisodeRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.FeedRepositoryImpl
+import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class FeedRepositoryTest : RoomTestBase() {
@@ -66,6 +68,55 @@ class FeedRepositoryTest : RoomTestBase() {
             feeds.replaceAll(emptyList())
 
             assertEquals(emptyList<String>(), episodes.observeForFeed("a").first().map { it.episodeKey })
+        }
+
+    @Test
+    fun `getAll and get are one-shot snapshots of the same rows`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("a"), feed("b")))
+
+            assertEquals(setOf("a", "b"), feeds.getAll().map { it.url }.toSet())
+            assertEquals("a", feeds.get("a")?.url)
+            assertNull(feeds.get("nope"))
+        }
+
+    @Test
+    fun `updateRefreshMetadata writes fetch results without touching firstSeenAt`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("a", title = "a", firstSeenAt = 111)))
+
+            feeds.updateRefreshMetadata(
+                feedUrl = "a",
+                metadata =
+                    FeedRefreshMetadata(
+                        title = "Der Podcast",
+                        imageUrl = "https://example.org/cover.jpg",
+                        httpEtag = "\"etag-1\"",
+                        httpLastModified = "Wed, 15 Jul 2026 09:00:00 GMT",
+                        refreshedAt = 999,
+                    ),
+            )
+
+            val stored = checkNotNull(feeds.get("a"))
+            assertEquals("Der Podcast", stored.title)
+            assertEquals("https://example.org/cover.jpg", stored.imageUrl)
+            assertEquals("\"etag-1\"", stored.httpEtag)
+            assertEquals("Wed, 15 Jul 2026 09:00:00 GMT", stored.httpLastModified)
+            assertEquals(999L, stored.lastRefreshedAt)
+            // Write-once: it drives the backlog cutoff, so a refresh must never move it (CLAUDE.md §5).
+            assertEquals(111L, stored.firstSeenAt)
+        }
+
+    @Test
+    fun `updateRefreshMetadata for an unsubscribed feed does not resurrect it`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("a")))
+            feeds.replaceAll(emptyList())
+
+            // An in-flight refresh finishing after the feed was dropped from the server list.
+            feeds.updateRefreshMetadata("a", FeedRefreshMetadata("Der Podcast", null, null, null, 999))
+
+            assertEquals(emptyList<String>(), feeds.getAll().map { it.url })
         }
 
     @Test
