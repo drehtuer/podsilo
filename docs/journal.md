@@ -798,3 +798,136 @@ run happened in an already-warm container, not from a virgin clone plus from-scr
   `connectedAndroidTest` is the actually-unproven part and would be its own task.
 - `scripts/adb-connect-host.sh` still doesn't exist.
 - No `--profile nextcloud`; decided out of scope earlier this session (see the entry above).
+
+---
+
+## 2026-07-31 (later still) — Moving to a second machine: three host-ID bugs and a missing `gh`
+
+**Symptom:** on a new PC, `post-create.sh` scrolled a licence, printed *"Skipping following
+packages as the license is not accepted"* for all five SDK packages, and died at
+`adb: command not found`. Also: no `gh` binary in the container.
+
+**The licence message was a lie, and that is the interesting part.** Nothing was wrong with the
+licences. `$ANDROID_HOME` (a named volume, initialised from the image's ownership) was owned by
+`1000:1000` while the container user was `1002:1002`, so `sdkmanager --licenses` could not create
+`/opt/android-sdk/licenses`. It does not report that. It prints **"All SDK package licenses
+accepted"** and exits **0** having written nothing. The install that follows then re-prompts,
+reads EOF from a closed stdin, takes the `N` default, and skips every package. Three layers of
+misdirection between cause and symptom, and the script's own `yes | sdkm --licenses >/dev/null ||
+true` deleted the only remaining evidence.
+
+**Why the UID differed at all:** the devcontainer CLI rewrites the container user's UID/GID at
+container start (`updateRemoteUserUID`, default on) to match the host user, and chowns `$HOME` but
+not the named volumes. Confirmed rather than assumed — the running image's name carries the CLI's
+`-uid` suffix. The old machine's host uid was 1000, so the build arg matched *by luck*, not design.
+
+Two more of the same class fell out once looked for: `/var/run/docker.sock` is group **108** on this
+host against `DOCKER_GID=109` in the image (so `docker ps` → permission denied, and no opodsync),
+and `/dev/kvm` is 993 (which happened to still match).
+
+**Fix: repair at runtime, don't re-pin build args.** The author's steer mid-session — *"ideally the
+container should be able to run on any PC which may have different uid/gid settings"* — was already
+the direction, and it rules out the tempting one-line fix of editing `1000`→`1002`, which just
+relocates the breakage to the next machine. `post-create.sh` now, before touching sdkmanager:
+
+- re-chowns `$ANDROID_HOME`, `~/.android`, `~/.gradle`, `~/.claude`, `~/.config/gh` to the *current*
+  uid:gid when they differ (it has passwordless sudo);
+- aligns the `kvm`/`docker` groups to whatever GID owns those nodes — reusing an existing group if
+  that GID is taken, otherwise `groupmod`-ing the image's placeholder. Deliberately **never**
+  `chgrp`s the socket itself: it is a bind mount, so that would change it **on the host**;
+- verifies `$ANDROID_HOME/licenses/*` actually exists after the accept step, instead of trusting an
+  exit code that is known to lie;
+- replaces the bare `adb version` (which under `set -e` aborted with a true but useless
+  "command not found") with a check that names the install that failed.
+
+The build args stay as documented best-effort defaults, with comments in all three files saying not
+to edit them for a new host.
+
+**`gh`:** added to the Dockerfile as the upstream **2.97.0** release tarball rather than
+`apt-get install gh`. Ubuntu noble does package it, but at 2.45.0 (Feb 2024) — well over a year
+stale for a tool that talks to a moving API. A pinned static binary over HTTPS is also the pattern
+the Dockerfile already uses twice (Google's cmdline-tools, Claude Code), so it keeps the "no
+third-party apt repositories" property the file's header promises. Added a `podsilo-gh-config`
+volume for `~/.config/gh` so `gh auth login` survives a rebuild, same rationale as the Claude Code
+volume.
+
+**What bit me while writing the fix:** `grp="$(getent group "${node_gid}" | cut -d: -f1)"` aborted
+the script under `set -euo pipefail`. `getent` exits **2** when the GID has no group, and `pipefail`
+propagates that past `cut`'s 0 — so the guard died on precisely the case it existed to handle.
+Caught by running it (`bash -x`), not by reading it.
+
+**Verified on this host — all run, not inferred**
+
+- `post-create.sh` exits **0** from the broken starting state; all five SDK packages install;
+  `/opt/android-sdk/licenses` has 7 files; `adb version` → 37.0.1.
+- `docker ps` works (via `sg docker` in the same shell; a new terminal gets it normally).
+- `./gradlew ktlintCheck detekt test` → **BUILD SUCCESSFUL, exit 0**. Test counts read from the
+  JUnit XML rather than the console: naming 75, sync 43, feed 38, gpodder 23 (3 skipped), database
+  20, datastore 7, download 5, model 4 = **215 discovered, 3 skipped**. Identical to the previous
+  machine's baseline.
+- opodsync: built, came up healthy, served `GET /subscriptions` with auth and **401** without, and
+  `OpodsyncIntegrationTest` ran **3 tests, 0 skipped, 0 failures**. Torn down afterwards
+  (`docker compose down -v`), so the machine is left as found.
+- `gh --version` → 2.97.0, installed with the exact command the Dockerfile now runs.
+
+**Not verified**
+
+- **The image itself has not been rebuilt.** `gh` was installed into the *running* container with
+  the Dockerfile's own commands, which proves the URL, the archive layout, and the install path —
+  but not the layer in context. The `podsilo-gh-config` volume and the `GH_CONFIG_DIR` mkdir/chown
+  only take effect on a rebuild; until then `post-create.sh` correctly reports `gh` as present and
+  the config dir is a plain directory rather than a volume.
+- Tiers 2 and 3 remain untouched and unproven; the half-created `podsilo-test` AVD noted in the
+  previous entry was not investigated.
+
+**Process note.** The IPv6-only network from the earlier entry is gone, and the current machine is
+the exact mirror image — `curl -4` returns 302, `curl -6` fails outright. Every comment that
+confidently explained *why* `--network=host` was needed was now wrong in a way that would mislead
+the next reader into thinking it is load-bearing for connectivity. Rewrote them to say what is
+actually true: kept for opodsync's `localhost:8080` and Tier 3's adb, not for reachability. A stale
+*rationale* is worse than no comment, because it survives the condition that produced it and still
+reads as authoritative.
+
+---
+
+## 2026-07-31 (last) — CI: `D8: java.lang.OutOfMemoryError` on `assembleDebug`
+
+**Symptom:** the `Assemble debug APK` step failed on GitHub Actions with
+`ERROR: D8: java.lang.OutOfMemoryError: Java heap space`. Everything before it (ktlint, detekt,
+215 unit tests) was green.
+
+**Root cause:** the repo had **no `gradle.properties` at all** — checked properly rather than
+assumed (not on disk, not gitignored, not in `$GRADLE_USER_HOME`). Gradle's daemon therefore ran on
+its documented default of **512 MB**, confirmed by reading `Runtime.maxMemory()` from an init
+script rather than inferring it. That is far too small for AGP + Kotlin + Compose dexing.
+
+CI makes it worse in a way that is easy to miss: `ci.yml` runs **four separate `./gradlew`
+invocations** that all reuse **one** daemon, so by the time D8 runs, that 512 MB already holds the
+Kotlin compiler, ktlint, detekt and the test infrastructure.
+
+The skeleton was hand-built (2026-07-30 entry) rather than generated by Android Studio, which is
+exactly why the file was missing — and the reason every generated Android project ships one is
+precisely this failure.
+
+**I could not reproduce it locally, and that is worth recording.** The full cold CI sequence
+(`clean`, daemon stopped, then all four invocations in order) passes here on the same 512 MB heap.
+512 MB is *marginal*, not reliably fatal: this box has 30 GB and 16 cores, GitHub's `ubuntu-latest`
+has 16 GB and 4. So the fix is justified by removing the margin, not by a red-to-green local
+reproduction — resisting the temptation to claim otherwise, since a passing local build was the
+thing that let this ship in the first place.
+
+**Fix:** added `gradle.properties` with `org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g
+-Dfile.encoding=UTF-8` and `kotlin.daemon.jvmargs=-Xmx2g`. Metaspace because Gradle's 384m default
+is tight once two static-analysis tools have loaded; `file.encoding` pinned because CLAUDE.md §6's
+naming tests assert on umlauts/CJK/NFC and a non-UTF-8 runner locale would fail them in a way that
+reads as a logic bug rather than an environment one. The Kotlin daemon is capped separately because
+left unset it *inherits* `org.gradle.jvmargs` — another 4 GB on top of the Gradle daemon's.
+
+**Verified:** daemon heap now reports 4096 MB (was 512); the full cold four-invocation sequence is
+green end to end, producing the 29 MB debug APK; 215 tests, 3 skipped, 0 failures — unchanged.
+
+**Process note.** The first instinct was to reach for the standard Android Studio value and move on.
+Measuring the daemon heap first (512 MB, from the JVM itself) turned a plausible guess into a
+diagnosis, and turned up the four-invocations-one-daemon detail that explains why CI is harsher than
+a local build. Cheap check, and it is the difference between "raised the memory and it went away"
+and knowing what was actually wrong.

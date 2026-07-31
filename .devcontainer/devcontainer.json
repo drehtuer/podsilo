@@ -11,18 +11,22 @@
     // `RUN apt-get`/`curl` step fails with "Could not connect ... connection timed
     // out" while the WSL2 host itself has perfectly good internet.
     "options": ["--network=host"],
+    // These four are BEST-EFFORT DEFAULTS — you should not need to change them on
+    // a new machine, and changing them is not sufficient on its own anyway.
+    //
+    // The devcontainer CLI rewrites the container user's UID/GID at start to match
+    // the host user (updateRemoteUserUID) but only chowns $HOME, so the named
+    // volumes below keep the image's ownership. And /dev/kvm and the docker socket
+    // arrive carrying the host's GIDs, whatever those are.
+    //
+    // post-create.sh therefore repairs all of it at runtime, where the real IDs
+    // are actually knowable: it re-chowns the persisted directories to the current
+    // user and aligns the kvm/docker groups to whatever owns those nodes. That is
+    // what makes this container portable across hosts with different IDs.
     "args": {
-      // Match the WSL2 host user so bind-mounted files are not root-owned.
-      // Override here if `id -u` / `id -g` on the host are not 1000.
       "USER_UID": "1000",
       "USER_GID": "1000",
-      // Must equal `getent group kvm | cut -d: -f3` on the WSL2 host, otherwise
-      // the container user cannot open /dev/kvm for the Tier 2 emulator.
       "KVM_GID": "993",
-      // Must equal `getent group docker | cut -d: -f3` on the WSL2 host, otherwise
-      // the bind-mounted docker socket below is unreadable and `docker ps` fails
-      // with a permission error. On this host that is 109 (Ubuntu's docker.io
-      // package assigns 999 in the image, which is why the Dockerfile groupmods it).
       "DOCKER_GID": "109"
     }
   },
@@ -45,6 +49,9 @@
     // credentials and history file between host Claude Code and container Claude
     // Code, which both write to it. Cost is one `/login` inside the container.
     "source=podsilo-claude-config,target=/home/dev/.claude,type=volume",
+    // $GH_CONFIG_DIR — `gh auth login`'s token and config, so authenticating to
+    // GitHub also survives an image rebuild. Same rationale as the Claude volume.
+    "source=podsilo-gh-config,target=/home/dev/.config/gh,type=volume",
     // Commit identity for Claude Code (and you) inside the container. Read-only —
     // nothing in here should be rewriting the host's git config.
     // Requires ~/.gitconfig to exist on the host: Docker silently creates a
@@ -58,31 +65,30 @@
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "runArgs": [
-    // --network=host, because this host's network is currently IPv6-only.
+    // --network=host.
     //
-    // `ip -4 route show default` on the WSL2 host is EMPTY — there is no IPv4
-    // default route, only IPv6 (confirmed 2026-07-31: `curl -4 https://dl.google.com`
-    // fails, `curl -6` returns 200, and even the LAN gateway is unreachable over
-    // IPv4). Docker's default bridge is IPv4-only, so a bridged container reaches its
-    // own gateway (172.17.0.1) and absolutely nothing beyond it: every apt-get and
-    // curl in the image build times out. Host networking puts the container in the
-    // WSL2 network namespace, where the working IPv6 route lives.
+    // ORIGINALLY added because the host was on an IPv6-only access point and
+    // Docker's default bridge is IPv4-only, so bridged containers had no route out
+    // at all and every apt-get/curl in the build timed out. That is no longer the
+    // reason: on the current machine (2026-07-31) the situation is reversed —
+    // `curl -4 https://dl.google.com` returns 302 and `curl -6` fails outright.
     //
-    // This is NOT caused by `networkingMode=Mirrored` in .wslconfig — bridged builds
-    // worked fine under mirrored mode earlier the same day, before the host moved to
-    // an IPv6-only access point.
-    //
-    // Useful side effect for Tier 3 — under mirrored networking the container's
-    // `localhost` is the Windows host, so a Windows-side
-    // `adb -a -P 5037 nodaemon server` is reachable at tcp:localhost:5037 with no
-    // host-IP lookup.
+    // It is KEPT because it is independently useful, not because it is still
+    // load-bearing for connectivity:
+    //   - The opodsync test server (docker-compose.yml) comes up as a sibling
+    //     container on the host daemon and is reachable at http://localhost:8080
+    //     from in here with no host-IP lookup. docs/dev-environment.md §7 documents
+    //     that address.
+    //   - For Tier 3, under WSL2 mirrored networking the container's `localhost` is
+    //     the Windows host, so a Windows-side `adb -a -P 5037 nodaemon server` is
+    //     reachable at tcp:localhost:5037, again with no host-IP lookup.
     //
     // Consequences to remember:
     //   - No network isolation and no devcontainer port forwarding; anything the
     //     container listens on binds straight onto the host.
     //   - No container-to-container DNS for this container.
-    // Once the host has an IPv4 default route again, plain bridge networking works
-    // and this line can go.
+    // Plain bridge networking should work now; dropping this line means re-checking
+    // both bullets above.
     "--network=host",
 
     // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
