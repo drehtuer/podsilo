@@ -28,7 +28,9 @@ dependencies {
     implementation(project(":core:model"))
     implementation(libs.rssparser)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.okhttp)
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
+    testImplementation(libs.okhttp.mockwebserver)
 }

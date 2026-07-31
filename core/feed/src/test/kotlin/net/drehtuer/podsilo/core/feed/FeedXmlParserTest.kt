@@ -3,6 +3,9 @@
 package net.drehtuer.podsilo.core.feed
 
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -106,4 +109,68 @@ class FeedXmlParserTest {
 
         assertNull(result.episodes.single().durationMs)
     }
+
+    @Test
+    fun `a 500-episode feed parses to 500 episodes and nothing else -- no side effects to have`() =
+        runBlocking {
+            // The parsing half of CLAUDE.md §7 item 6's no-auto-download invariant. :core:feed has no
+            // ledger, no GpodderClient and no downloader to reach for, so a huge backlog is structurally
+            // incapable of triggering a download or an episode action here — this locks that in and
+            // proves the parser scales to a realistic worst-case feed. The sync half lives in
+            // :core:sync's NoAutoDownloadInvariantTest.
+            val episodeCount = 500
+            val items =
+                (1..episodeCount).joinToString("\n") { index ->
+                    """
+            |  <item>
+            |    <title>Episode $index</title>
+            |    <guid isPermaLink="false">guid-$index</guid>
+            |    <pubDate>Tue, 14 Jul 2026 09:00:00 +0000</pubDate>
+            |    <enclosure url="https://example.com/episodes/ep$index.mp3" length="1000" type="audio/mpeg"/>
+            |  </item>
+                    """.trimMargin()
+                }
+            val bigFeed =
+                """
+            |<?xml version="1.0" encoding="UTF-8"?>
+            |<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+            |  <channel>
+            |    <title>A Very Long Running Podcast</title>
+            |$items
+            |  </channel>
+            |</rss>
+                """.trimMargin().toByteArray()
+
+            val result = parser.parse(feedUrl, bigFeed)
+
+            assertEquals(episodeCount, result.episodes.size)
+            assertEquals("guid-1", result.episodes.first().episodeKey)
+            assertEquals("guid-$episodeCount", result.episodes.last().episodeKey)
+        }
+
+    @Test
+    fun `bytes fetched over HTTP feed straight into the parser -- the two layers compose`() =
+        runBlocking {
+            // Lives here rather than in FeedFetcherTest because it drives rssparser, which needs the
+            // Robolectric runner (docs/decisions/0005). Proves FeedFetcher hands back bytes the parser
+            // accepts unmodified — no intermediate decoding step is missing between the two layers.
+            val server = MockWebServer()
+            server.start()
+            try {
+                server.enqueue(
+                    MockResponse()
+                        .setResponseCode(200)
+                        .setBody(Buffer().write(fixtureBytes("valid_minimal.xml"))),
+                )
+                val url = server.url("/feed.xml").toString()
+
+                val fetched = FeedFetcher().fetch(url) as FeedFetchResult.Fetched
+                val parsed = FeedXmlParser().parse(url, fetched.bytes)
+
+                assertEquals("Der Podcast", parsed.metadata.title)
+                assertEquals(2, parsed.episodes.size)
+            } finally {
+                server.shutdown()
+            }
+        }
 }

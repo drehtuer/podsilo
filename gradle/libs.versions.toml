@@ -7,6 +7,10 @@
 # rssparser (not Stalla — see docs/decisions/0005) and jaudiotagger (the
 # Adonai/Kaned1as Android fork via JitPack, not the stale upstream — see
 # docs/decisions/0006) are pinned here for :core:feed and :core:download.
+#
+# okhttp is pinned explicitly at 5.x even though retrofit 3.0.0 declares 4.12.0
+# transitively — Gradle resolves to the higher version, and pinning it here
+# makes that resolution deliberate and visible rather than accidental.
 [versions]
 agp = "9.3.1"
 kotlin = "2.4.10"
@@ -15,6 +19,9 @@ androidxCoreKtx = "1.17.0"
 androidxActivityCompose = "1.11.0"
 androidxLifecycleRuntimeKtx = "2.9.4"
 kotlinxCoroutines = "1.11.0"
+kotlinxSerialization = "1.11.0"
+retrofit = "3.0.0"
+okhttp = "5.4.0"
 junit4 = "4.13.2"
 robolectric = "4.15.1"
 rssparser = "6.1.8"
@@ -27,6 +34,11 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivityCompose" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycleRuntimeKtx" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
@@ -44,5 +56,6 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

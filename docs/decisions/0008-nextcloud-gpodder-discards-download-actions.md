@@ -1,0 +1,96 @@
+# 0008 — `nextcloud-gpodder` discards `DOWNLOAD` actions; we emit them anyway
+
+## Status
+
+Accepted. Partially invalidates CLAUDE.md §1 requirement 9 as *achievable*, not as *intended* —
+read this before changing anything about mark-on-download.
+
+## Context
+
+CLAUDE.md §1 requirement 9 ("Mark-on-download", flagged as "a core requirement, not a
+nice-to-have") and §5's mark-on-download semantics both assume that emitting a `DOWNLOAD` episode
+action makes the download visible to the author's other gpodder clients, so an episode downloaded
+in Podsilo stops appearing as new in AntennaPod.
+
+While implementing `:core:gpodder`, the reference server's source was read to pin down exact
+request/response shapes (CLAUDE.md §5: "infer from implementations, not assumptions"). That turned
+up a behaviour no documentation mentions.
+
+## What the server actually does
+
+`thrillfall/nextcloud-gpodder`, `lib/Controller/EpisodeActionController.php` at `master`:
+
+```php
+public function create(): JSONResponse {
+    $episodeActionsArray = $this->filterEpisodesFromRequestParams($this->request->getParams());
+    $episodeActionsArray = $this->filterOnlyPlays($episodeActionsArray);
+    $this->episodeActionSaver->saveEpisodeActions($episodeActionsArray, $this->userId);
+
+    return new JSONResponse(["timestamp" => time()]);
+}
+
+public function filterOnlyPlays(array $episodesFromRequestParams): array {
+    return array_filter(
+        $episodesFromRequestParams,
+        fn($ep) => isset($ep['action']) && strtolower($ep['action']) === 'play'
+    );
+}
+```
+
+Every posted action whose type is not `play` is silently dropped, and the endpoint still returns
+**HTTP 200 with a fresh timestamp**. The CHANGELOG confirms this was deliberate:
+`3.13.3 — #168 ignore actions DELETE and DOWNLOAD`.
+
+So against a current Nextcloud:
+
+- Podsilo POSTs `DOWNLOAD` → 200 OK → `syncedToServer = true` → **the server stored nothing**.
+- `GET /episode_action` will never return that action, to Podsilo or to any other client.
+- `DELETE` is dropped identically. `PLAY` — and therefore Podsilo's skip-as-`PLAY` encoding
+  (`docs/decisions/0002`) — works normally.
+
+`kd2org/opodsync` does **not** filter, and stores `DOWNLOAD` fine. That's a trap for our own
+testing: the disposable opodsync container CLAUDE.md §4 specifies for integration tests will happily
+prove a code path that a real Nextcloud silently discards.
+
+## Decision
+
+**Keep emitting `DOWNLOAD` unchanged, and document the limitation.** Put to the author as an
+explicit choice rather than absorbed silently, since it makes a stated core requirement only
+partly achievable; the author chose this option.
+
+Rationale:
+
+- `DOWNLOAD` is the honest signal for "this device fetched this episode", exactly as CLAUDE.md §5
+  argues. It costs one field in a request body that is being sent anyway.
+- It is correct against `opodsync`, against Nextcloud instances older than 3.13.3, and against any
+  future version that stops filtering. Suppressing it would have to be undone later.
+- The alternative that *would* work cross-client — emitting `PLAY` on download — is explicitly
+  forbidden by CLAUDE.md §5: it asserts something untrue (the author hasn't listened) and can
+  trigger auto-delete in other clients. Not worth silently trading correctness for reach.
+
+## Consequences — what this actually costs
+
+**Still true (unaffected):**
+
+- Podsilo never re-downloads an episode it already handled. `EpisodeLedger` is the dedup authority
+  and is local (CLAUDE.md §11's "single most important invariant"), so this is untouched.
+- Skip syncs both ways. A skip in Podsilo hides the episode in AntennaPod, and vice versa.
+- Inbound `PLAY`/`DELETE`/`DOWNLOAD` from other clients are still honoured when they *do* appear
+  in the log (`HANDLED_REMOTELY`), so nothing about reconciliation changes.
+
+**No longer true against a current Nextcloud:**
+
+- Downloading an episode in Podsilo does **not** hide it in the author's other clients.
+- CLAUDE.md §5's "Together with skip-as-`PLAY`, this is what prevents an episode reappearing later,
+  here or on another client" holds for *here*, but not for *another client*, for downloads
+  specifically.
+
+**For future work:**
+
+- Do not treat a successful `POST /episode_action/create` as proof the action is stored. It isn't,
+  and there is no way to tell from the response.
+- Any future integration test asserting cross-client download visibility must run against a real
+  Nextcloud, not `opodsync`, or it will pass misleadingly.
+- If cross-client download hiding ever becomes important enough, the options are: patch/fork the
+  Nextcloud app, or revisit the forbidden `PLAY`-on-download trade-off with the author — not
+  something to decide unilaterally.
