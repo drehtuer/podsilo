@@ -828,8 +828,8 @@ short ADR in `docs/decisions/` once resolved.
    not an append-only log, so without `since`, `add` is the **complete current set** and is
    **disjoint** from `remove` by construction. CLAUDE.md §5's `set = add − remove` is correct as
    specified; `SyncOrchestrator.pullSubscriptions()` needed no change. Verified by reading both
-   servers' source — **still to re-verify against a live `opodsync` container** once CLAUDE.md §4's
-   compose profile exists.
+   servers' source **and confirmed against a live `opodsync` 0.5.3 container** (2026-07-31) —
+   `.devcontainer/docker-compose.yml` now works and `OpodsyncIntegrationTest` passes against it.
 3. **Resolved** — `:core:gpodder` is now `kotlin("jvm")`, not `com.android.library`. See
    `docs/decisions/0007-core-gpodder-is-a-jvm-module.md`: nothing in the module touches an Android
    API, so a JVM module compiles that property in rather than leaving it to review, and its

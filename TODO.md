@@ -98,6 +98,10 @@ neither CLAUDE.md nor the API docs record; see `docs/decisions/0008` and `0009`.
   - ⚠️ CLAUDE.md §11's "ISO-8601 **without** offset" for the per-action timestamp is **stale** —
     both servers now emit an offset (`+00:00`) or `Z`. Parsing is lenient across all three forms;
     ADR 0003 amended.
+  - ✅ **Verified live (2026-07-31)** against `opodsync` 0.5.3 in
+    `.devcontainer/docker-compose.yml`: `OpodsyncIntegrationTest` runs green (3 tests, 0 skipped),
+    turning ADR 0009's source-read contract into a tested one. `nextcloud-gpodder` remains
+    source-read only.
 - [x] **Feed HTTP fetch layer** (inside `:core:feed`, on top of Tier 2's parsing) — `FeedFetcher`
   with conditional GET (`ETag`/`If-None-Match`, `Last-Modified`/`If-Modified-Since`), 304 →
   `NotModified`, redirects followed, and 4xx/5xx/timeout/unreachable-host all returned as

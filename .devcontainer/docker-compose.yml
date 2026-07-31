@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Disposable GPodder sync server for integration testing (CLAUDE.md §4: "Do not
+# test sync against the author's real Nextcloud").
+#
+# ✅ VERIFIED (2026-07-31): builds, boots, seeds its test user, and serves the
+# gpoddersync API; :core:gpodder's OpodsyncIntegrationTest passes against it.
+#
+# This is deliberately a STANDALONE compose file, not wired into devcontainer.json
+# via `dockerComposeFile`. Converting the dev container to a compose project is the
+# arrangement CLAUDE.md §4 describes, but doing it blind risks breaking a working
+# dev environment for no testable gain.
+#
+#   Run it from inside the dev container (docker-outside-of-docker: the CLI here
+#   drives the HOST daemon, so opodsync comes up as a sibling container):
+#
+#     cd .devcontainer && docker compose up -d opodsync
+#
+#   Because devcontainer.json runs this container with --network=host, it shares
+#   the host's network namespace, so the published port below is reachable at
+#   http://localhost:8080 from in here — no host-IP lookup needed. Under ordinary
+#   bridge networking it would be http://<host-ip>:8080 instead.
+#
+#   To reset to a clean server:  docker compose down -v
+#
+# opodsync itself is AGPL-3.0. That is fine here and does NOT conflict with
+# CLAUDE.md §2's "never add anything AGPL": that rule governs *dependencies linked
+# into the app*. This is a separate server process we run for tests, never link
+# against and never distribute — no AGPL obligation reaches Podsilo. CLAUDE.md §4
+# names opodsync explicitly as the preferred test server.
+
+services:
+  opodsync:
+    build:
+      context: .
+      dockerfile: opodsync.Dockerfile
+      # Same reason devcontainer.json passes --network=host: when this host has no
+      # IPv4 default route, Docker's IPv4-only default bridge leaves the build with
+      # no path out and every apt-get/git-clone times out. Harmless when IPv4 works.
+      network: host
+    container_name: podsilo-opodsync
+    ports:
+      # Host 8080 -> Apache 80. Change the host side if 8080 is taken.
+      - "${OPODSYNC_PORT:-8080}:80"
+    environment:
+      # Consumed by opodsync-entrypoint.sh to seed a first user via opodsync's own
+      # GPodder::subscribe(), so tests get credentials with no manual registration.
+      OPODSYNC_USER: "${OPODSYNC_USER:-podsilo}"
+      OPODSYNC_PASSWORD: "${OPODSYNC_PASSWORD:-podsilo-test-password}"
+      OPODSYNC_PORT: "${OPODSYNC_PORT:-8080}"
+    volumes:
+      # Must be <webroot>/data: opodsync derives DATA_ROOT — the SQLite file, the
+      # cache, AND config.local.php — from the webroot (server/_inc.php), and its
+      # .htaccess 404s /data/* so nothing here is web-reachable. Delete the volume
+      # to reset to a clean server; that is the point of "disposable" (CLAUDE.md §4).
+      - opodsync-data:/var/www/html/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  opodsync-data:

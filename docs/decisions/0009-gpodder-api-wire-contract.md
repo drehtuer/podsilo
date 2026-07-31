@@ -77,8 +77,26 @@ timestamps would catch. `GpodderTimestampsTest` has a dedicated regression case 
 - **`nextcloud-gpodder` silently discards `DOWNLOAD`/`DELETE` on POST.** Big enough for its own
   ADR: see `docs/decisions/0008`.
 
-## Still unverified
+## Verification status
 
-Everything above is from reading source, not from running against a live server. CLAUDE.md §4's
-disposable `opodsync` compose profile doesn't exist yet — when it does, re-verify, and remember
-that opodsync is **not** proof of Nextcloud's behaviour (see 0008).
+**Verified against a live `opodsync` 0.5.3 (2026-07-31)** — `.devcontainer/docker-compose.yml`
+now builds and boots, and `:core:gpodder`'s `OpodsyncIntegrationTest` passes against it (3 tests,
+0 skipped). Confirmed live, not just from source:
+
+- `GET /subscriptions` with no `since` returns `{add, remove, update_urls, timestamp}`, with `add`
+  and `remove` disjoint and `timestamp` in Unix seconds — the basis of open decision #2.
+- `POST /episode_action/create` takes a bare JSON array and returns `{timestamp, update_urls}`.
+- Action names come back **lowercase** (`"download"`, `"play"`) regardless of the casing posted.
+- Per-action `timestamp` comes back with a trailing **`Z`** (`2026-07-31T16:00:00Z`), confirming
+  this ADR's amendment to CLAUDE.md §11's "no offset" claim.
+- `DOWNLOAD` **is** stored and echoed back — the difference from `nextcloud-gpodder` that 0008 is
+  about.
+- Auth is plain HTTP Basic; an unauthenticated request gets `401`.
+
+One bullet above is now known to be **narrower than stated**: the "inner-joins against
+subscriptions" note. Posting actions for a feed the user is not subscribed to and reading them
+straight back returned them anyway on 0.5.3. Podsilo tolerates either behaviour, so nothing
+changes — but do not rely on the exclusion happening.
+
+Still unverified, and unverifiable here: everything about **`nextcloud-gpodder`**, which remains
+source-read only. opodsync is **not** proof of Nextcloud's behaviour (see 0008).
