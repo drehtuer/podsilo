@@ -1,0 +1,1001 @@
+# Podsilo UI/UX design
+
+Design reference for the Compose UI (`:feature:episodes`, `:feature:settings`, `:app` navigation).
+No implementation — this document decides *what the screens are, what they show, and what every
+gesture does*, so that Tier 4c can be built without re-litigating UX mid-code.
+
+Companion documents: [`docs/architecture.md`](architecture.md) (modules, schema, sync semantics) and
+[`TODO.md`](../TODO.md) (build order). Where this document adds a screen or a rule that the
+architecture implies but does not state, it is marked **[gap]** and listed again in
+[§12](#12-coverage-check-against-the-architecture). Two decisions here **change** the architecture
+and need an ADR before implementation — both are collected in
+[§13](#13-decisions-that-need-an-adr).
+
+**Vocabulary:** the user-facing word for the "I don't want this file" decision is **Mark as played**
+(never "Skip"). The ledger state behind it is still `SKIPPED` and the emitted GPodder action is still
+`PLAY` (architecture §6) — internal names are unchanged, only the UI wording.
+
+## Table of contents
+
+1. [Design principles](#1-design-principles)
+2. [Screen inventory](#2-screen-inventory)
+3. [Navigation map](#3-navigation-map)
+4. [S1 — Podcast list (home)](#4-s1--podcast-list-home)
+5. [S2 — Episode list](#5-s2--episode-list)
+6. [S3 — Episode detail sheet](#6-s3--episode-detail-sheet)
+7. [S4 — Settings](#7-s4--settings)
+8. [S5 — Nextcloud connection dialog](#8-s5--nextcloud-connection-dialog)
+9. [S6 — Naming template editor](#9-s6--naming-template-editor)
+10. [S7 — Activity (downloads & sync)](#10-s7--activity-downloads--sync)
+11. [S8 — Error log](#11-s8--error-log)
+12. [Cross-cutting: gestures, filters, badges, theme, errors, notifications, a11y](#12-cross-cutting-rules)
+13. [Coverage check against the architecture](#13-coverage-check-against-the-architecture)
+14. [Decisions that need an ADR](#14-decisions-that-need-an-adr)
+15. [Adaptations to the code as built (Tier 4b)](#15-adaptations-to-the-code-as-built-tier-4b)
+
+---
+
+## 1. Design principles
+
+1. **Triage is the product.** Every screen exists to answer "which episodes do I still have to
+   decide about?" and to let a decision be made in one gesture. Nothing else gets prime screen real
+   estate.
+2. **Obvious over clever.** Plain Material 3 components, standard app bars, standard pull-to-refresh,
+   standard swipe-to-action. No custom navigation metaphors, no gesture the user has to discover.
+3. **Every gesture has a visible equivalent.** Swipes are an accelerator, never the only path — each
+   swipe action also exists as an overflow item on the row and as a button in the detail sheet.
+4. **Nothing happens automatically — but bulk actions the user asks for are allowed.** There are no
+   auto-download *rules*, no background triage, and no state change inferred from a scroll or a tap on
+   the row body (which opens detail only). A user who explicitly taps *Download all* or selects rows
+   and acts on them is not automation: it is one deliberate decision applied to many episodes, always
+   behind a confirmation naming the count. See §14.3 — this narrows a README statement and needs an
+   ADR.
+5. **The default view is the small one.** Filters default to "still to decide" everywhere, because a
+   podcast catcher's backlog is otherwise unbounded.
+6. **Decisions commit immediately, and are reversible by acting again.** There is no undo snackbar
+   (§12.3): a wrong decision is fixed by downloading the episode again, not by racing a timer.
+7. **State is truthful and local-first.** The UI renders the Room ledger; network activity is shown
+   as *activity*, never as a blocking modal. Failures are surfaced but never destructive, and every
+   failure is also written to the error log (S8).
+8. **Read-only subscriptions.** No add-feed, rename-feed or delete-feed affordance anywhere,
+   confirming README's "not a feed manager". The empty state says where feeds come from instead of
+   offering a button.
+
+---
+
+## 2. Screen inventory
+
+| ID | Screen | Type | Requested / added |
+|---|---|---|---|
+| S1 | Podcast list | full screen, **home / start destination** | requested |
+| S2 | Episode list (one feed) | full screen | requested |
+| S3 | Episode detail | modal bottom sheet | **[gap]** — `Episode.description` is raw HTML/CDATA; a list row cannot render it. Reachable for **every** episode, including greyed-out ones |
+| S4 | Settings | full screen | requested |
+| S5 | Nextcloud connection | dialog over S4 | requested |
+| S6 | Naming template editor | full screen, pushed from S4 | **[gap]** — required by TODO 4c / architecture §11 |
+| S7 | Activity — downloads & sync | full screen, pushed from S1 | **[gap]** — `QUEUED`/`DOWNLOADING`/`ERROR` and outbox depth need somewhere to live |
+| S8 | Error log | full screen, pushed from S4 or S7 | requested |
+
+Deliberately **not** screens: a player, a queue editor, a feed-add form, a file browser, an episode
+search screen, a login *account* screen (one Nextcloud instance only).
+
+---
+
+## 3. Navigation map
+
+Single-activity, one Compose `NavHost`. **S1 is the start destination** and the only screen at the
+bottom of the backstack.
+
+```mermaid
+flowchart TD
+    S1["S1 Podcast list<br/>(home)"]
+    S2["S2 Episode list"]
+    S3["S3 Episode detail<br/>(bottom sheet)"]
+    S4["S4 Settings"]
+    S5["S5 Nextcloud connection<br/>(dialog)"]
+    S6["S6 Naming template editor"]
+    S7["S7 Activity"]
+    S8["S8 Error log"]
+    SAF["Android folder picker<br/>(system, ACTION_OPEN_DOCUMENT_TREE)"]
+    Browser["Browser / custom tab<br/>(Nextcloud Login Flow v2)"]
+
+    S1 -- "tap podcast" --> S2
+    S1 -- "gear icon" --> S4
+    S1 -- "activity icon (badge)" --> S7
+    S2 -- "tap episode row" --> S3
+    S2 -- "activity icon" --> S7
+    S4 -- "Connect / Change instance" --> S5
+    S4 -- "File naming" --> S6
+    S4 -- "Download folder" --> SAF
+    S4 -- "Error log" --> S8
+    S7 -- "Error log" --> S8
+    S5 -- "sign in & grant" --> Browser
+    Browser -. "app password polled back" .-> S5
+    S5 -. "success: back to S4, sync starts" .-> S4
+    SAF -. "treeUri granted" .-> S4
+    S7 -- "tap row" --> S2
+    S8 -- "tap entry" --> S2
+```
+
+Back behaviour: system back pops one level; back from S2 returns to S1 with its scroll position and
+filter intact; the S5 dialog can only be dismissed by Cancel or a successful authorization (no
+tap-outside dismiss while an auth request is in flight).
+
+---
+
+## 4. S1 — Podcast list (home)
+
+The launcher screen. One row per subscribed feed, ordered by **most recent episode publication date,
+descending** (feeds never fetched sort last, then title A–Z).
+
+**Ordering is frozen between refreshes.** The sort is computed once per explicit pull-to-refresh (and
+on cold start) and then held for the life of the screen — a background sync or a triage decision
+updates badges and rows *in place* but never reorders the list. Rows must not move under the user's
+finger.
+
+```mermaid
+block-beta
+  columns 1
+  bar["Podsilo                                  [activity•]  [gear]"]
+  seg["( With new episodes )  ( All podcasts )"]
+  hint["↓ pull to refresh from Nextcloud"]
+  block:r1
+    columns 4
+    a1["[art]"] a2["Der Podcast\nlast refreshed 10 min ago"] a3["12"] a4["›"]
+  end
+  block:r2
+    columns 4
+    b1["[art]"] b2["Lage der Nation\n2 downloading  ◐"] b3["3"] b4["›"]
+  end
+  block:r3
+    columns 4
+    c1["[art]"] c2["https://example.com/feed.xml\nnever refreshed"] c3["–"] c4["›"]
+  end
+  foot["18 episodes to decide across 7 podcasts"]
+```
+
+**Row anatomy**
+
+| Element | Source | Rule |
+|---|---|---|
+| Artwork, 56 dp square | `Feed.imageUrl` | placeholder monogram tile when `null` or not yet fetched |
+| Primary line | `Feed.title` | falls back to `Feed.url` until the first successful feed fetch (architecture §4) — never "Unknown podcast" |
+| Secondary line | `Feed.lastRefreshedAt` | relative time; `"never refreshed"` when `null`; while that feed has active downloads it reads `"n downloading"` next to a small **indeterminate/aggregate progress circle** (§12.2) |
+| Count badge | see §12.5 | number of episodes **available to decide**; `–` when the feed has never been fetched; `0` shown only in "All podcasts" mode |
+| Chevron | — | affordance for navigation; whole row is the tap target (≥ 56 dp) |
+
+**Filter (segmented control, top of list)** — `With new episodes` (default) / `All podcasts`.
+The default hides feeds whose count is 0, so the home screen is a worklist. Session-scoped, not
+persisted.
+
+**Pull to refresh** — enqueues an expedited `SyncWorker` (subscriptions pull → outbox push →
+episode-action pull → reconcile, architecture §6) *and* a `FeedRefreshWorker` pass over all feeds.
+The Material 3 pull-to-refresh indicator stays visible for the whole chain; counts and rows update
+live as Room emits. Completion is silent; failure shows a snackbar (§12.8) **and** appends to the
+error log (S8), leaving the previously loaded list on screen — refresh never clears content.
+
+**App bar** — title `Podsilo`; actions: **Activity** (badge dot when any download is running or any
+`ERROR`/unsynced row exists) → S7, and **Settings** (gear) → S4.
+
+**Footer/summary line** — total undecided episodes across all feeds.
+
+**States**
+
+- *No Nextcloud configured* (first run): the list is replaced by a centred empty state — one sentence
+  ("Podsilo follows the podcast subscriptions in your Nextcloud.") plus a single **Connect Nextcloud**
+  button opening S5. No decorative illustration.
+- *Configured, no feeds yet* (first sync running): three shimmer rows, no spinner overlay.
+- *Configured, zero subscriptions*: empty state explaining subscriptions are managed in Nextcloud,
+  with a **Refresh** button. No add-feed affordance.
+- *Filter hides everything*: "Nothing new. All caught up." + a link to switch to *All podcasts*.
+- *Downloads paused* (folder missing/revoked, or storage full — §12.12): persistent inline banner
+  above the list with the reason and the fix (**Choose folder** / **Free up space**). Never a crash,
+  never a silent failure.
+- *Offline*: see §12.11 — a pull-to-refresh with no connectivity fails immediately with an
+  "No network connection" banner; it does not attempt, and does not time out against, any feed.
+
+**First-run checklist** — until the app can actually complete a download, S1 shows a checklist card
+above the list instead of discovering the gap at the first swipe:
+
+```mermaid
+block-beta
+  columns 1
+  t["Finish setting up"]
+  a["✓  1. Connect Nextcloud            cloud.example.org"]
+  b["○  2. Choose a download folder     [ Choose folder ]"]
+  c["○  3. Check file naming (optional)  Der Podcast/20260714_….mp3   ›"]
+```
+
+Rules: steps are shown in order, each with a live ✓/○; step 1 is the S5 dialog, step 2 the SAF
+picker, step 3 opens S6 and is explicitly optional (a default template exists). Step 2's state comes
+straight from the built `DownloadFolderAccess`: `NotChosen` → ○, `Granted` → ✓, `Revoked` → ⚠ with
+**Choose folder again**. The card disappears permanently once steps 1 and 2 are satisfied, and
+returns only if the grant is lost. Podcasts and episodes remain browsable while the checklist is
+incomplete — only the download *action* is blocked, with the row's Download affordance disabled and a
+tap explaining which step is missing.
+
+---
+
+## 5. S2 — Episode list
+
+One feed's episodes, newest first by `pubDate` (episodes with a `null` `pubDate` sort last).
+
+**Sticky month headers and fast-scroll** — rows are grouped under sticky `July 2026` headers, and the
+list has a draggable fast-scroll thumb that shows the month it is passing over. Both matter because
+`All` on a long-running feed is hundreds of rows; `null`-date episodes group under a final
+`Date unknown` header.
+
+```mermaid
+block-beta
+  columns 1
+  bar["‹  Der Podcast                                   [filter]  [activity]"]
+  seg["( To decide )  ( Downloaded )  ( Played / handled )  ( All )"]
+  sel["long-press a row → selection mode · ⋮ → Download all"]
+  block:e1
+    columns 3
+    d1["[ep art]"] d2["Warum Hamburg immer regnet\n14 Jul 2026 · 48 min\nEine Folge über Regen, Wind und…"] d3["⋮"]
+  end
+  block:e2
+    columns 3
+    f1["[ep art]"] f2["Die Elbe von unten\n07 Jul 2026 · 52 min\n▓▓▓▓▓▓░░░░ 62 % · 24/39 MB"] f3["⋮"]
+  end
+  block:e3
+    columns 3
+    g1["[art dim]"] g2["Hafen, Kran, Kaffee   ✓ downloaded\n30 Jun 2026 · 41 min      (greyed out)"] g3["⋮"]
+  end
+  block:e4
+    columns 3
+    h1["[art dim]"] h2["Regenradar   ▸ played\n23 Jun 2026 · 33 min      (greyed out)"] h3["⋮"]
+  end
+  swipe["swipe right → Download        swipe left → Mark as played\n(directions configurable in Settings)"]
+```
+
+**Row anatomy** — episode artwork (episode image if the feed supplies one, else the feed's), title
+(2 lines max), meta line `date · duration` (each part omitted when unknown — duration is
+"notoriously unreliable", never faked), description snippet (2 lines, HTML stripped for the snippet),
+status badge/progress, overflow `⋮`.
+
+**Greyed-out rows** — any episode with a terminal ledger state (`DOWNLOADED`, `SKIPPED`,
+`HANDLED_REMOTELY`) renders at reduced emphasis: artwork at ~60 % opacity, title and meta in the
+`onSurfaceVariant` role, no accent colour. Greying is **presentation only** — the row stays fully
+interactive: tapping it still opens S3, and its overflow still offers **Download again** (§12.3).
+Contrast in both themes stays ≥ 4.5:1 for the title — "greyed out" means de-emphasised, not
+unreadable (§12.7).
+
+**Tap** on the row body opens **S3**. It never triages — a mis-tap must not queue a download.
+
+**Swipes** — right → **Download**, left → **Mark as played**, both re-mappable in Settings (§12.1).
+
+**Overflow `⋮`** mirrors the swipes and adds context items: *Download* / *Download again*,
+*Mark as played*, *Retry* (ERROR only), *Cancel download* (QUEUED/DOWNLOADING only), *Copy episode
+link*, *Open in browser*.
+
+**Batch triage** — long-pressing a row enters **selection mode**: the app bar becomes
+`n selected` with **Download**, **Mark as played** and **Select all** (scoped to the current filter),
+and tapping rows toggles them. Acting applies the same per-episode writes in one pass, behind a
+confirmation naming the count ("Download 12 episodes?"). Back or ✕ leaves selection mode. This is the
+answer to "12 new episodes, no undo, 12 swipes".
+
+**Download all** — an app-bar `⋮` item on S2, reading **Download all (12)**: queues every episode
+currently in the `To decide` filter — i.e. every episode with no ledger row, so anything already
+marked as played, downloaded or handled elsewhere is untouched by definition. Confirmation dialog
+names the count and, when durations are known, an approximate total size. Disabled (with the reason)
+while downloads are paused. It is deliberately in the overflow, not a prominent button, and it exists
+only per-podcast — there is no global "download everything" anywhere.
+
+**No count cap.** A bulk download is never refused or warned about for being *large* — only for not
+*fitting*. The confirmation dialog gains a warning line **only** when the estimated total exceeds the
+free space in the download folder's volume:
+
+> ⚠ Estimated 4.2 GB — only 1.1 GB free on SD card. Some downloads will fail.
+
+The action stays enabled (the estimate is derived from `itunes:duration`, which architecture §4 calls
+notoriously unreliable — it must never block a decision). When durations are unknown for some or all
+episodes the size is not estimated and no warning is shown. Free space is read once, when the dialog
+opens.
+
+**Filter** — chips: `To decide` (default) / `Downloaded` / `Played / handled` / `All`. Mapping to
+`LedgerFilter` (architecture §5/§12 item 11):
+
+| Chip | Ledger predicate |
+|---|---|
+| To decide (default) | no ledger row |
+| Downloaded | `state = DOWNLOADED` |
+| Played / handled | `state = SKIPPED` or `HANDLED_REMOTELY` — the name covers both the user's own "mark as played" and episodes handled on another client, which the user never touched |
+| All | everything, including `QUEUED`/`DOWNLOADING`/`ERROR` |
+
+The per-feed filter choice is remembered per feed for the session and resets to `To decide` on cold
+start.
+
+**No backlog cutoff in the query.** Old episodes are *not* filtered by `pubDate` at read time; the
+"hide old episodes" feature works by **writing** `SKIPPED` rows, so old episodes leave `To decide`
+and appear under `Played` like any other handled episode (§12.6, and the ADR in §14). This keeps the
+list query to a single predicate and makes the state visible and reversible.
+
+**Also pull-to-refresh** here, scoped to this feed (conditional GET; a 304 shows "Already up to
+date").
+
+**States**
+
+- Never fetched: shimmer rows + the URL as title in the app bar.
+- Feed fetch failed: inline banner with the reason in plain words ("Feed server did not respond") +
+  **Try again**; the entry is written to S8; previously parsed episodes stay listed.
+- Filter empty: "Nothing to decide in this podcast." + link to *All*.
+- Episode has no enclosure (architecture §7): row rendered but dimmed, badge **no audio**, download
+  disabled, overflow only offers *Open in browser*.
+
+---
+
+## 6. S3 — Episode detail sheet
+
+A modal bottom sheet — a read step inside triage, dismissable with one downward flick. Reachable for
+**every** episode regardless of state, including greyed-out ones (explicit requirement).
+
+```mermaid
+block-beta
+  columns 1
+  h["[ep art]  Warum Hamburg immer regnet\n           Der Podcast · 14 Jul 2026 · 48 min"]
+  s["status: to decide   /   ✓ downloaded → Der Podcast/20260630_….mp3   /   ▸ played"]
+  d["description (sanitised HTML, scrollable,\nlinks tappable, images stripped)"]
+  a["[ Download ]   [ Mark as played ]        ⋮"]
+```
+
+Renders `Episode.description` — stored raw, **sanitised at render time, never at write time**
+(architecture §4). Allowed: paragraphs, line breaks, bold/italic, lists, links. Stripped: scripts,
+styles, iframes, remote images, tracking pixels.
+
+The status line is state-aware: for `DOWNLOADED` it shows `writtenFileName` and the target folder;
+for `DOWNLOADING` it shows the same progress bar as the row; for `ERROR` it shows `lastError` and
+the attempt count with a link to S8.
+
+Action bar, by state:
+
+| State | Buttons |
+|---|---|
+| no row | **Download** · **Mark as played** |
+| `QUEUED` / `DOWNLOADING` | **Cancel download** (progress shown above) |
+| `DOWNLOADED` | **Download again** · **Mark as played** |
+| `SKIPPED` / `HANDLED_REMOTELY` | **Download** (i.e. "download anyway") |
+| `ERROR` | **Retry** · **Mark as played** |
+
+Deciding closes the sheet and animates the row into its new state.
+
+---
+
+## 7. S4 — Settings
+
+A plain scrolling list of grouped rows. Reached only from S1's gear icon.
+
+```mermaid
+block-beta
+  columns 1
+  bar["‹  Settings"]
+  g1["NEXTCLOUD"]
+  r1["Instance\nhttps://cloud.example.org        (or empty)"]
+  r2["Account\nuser · connected 31 Jul 2026"]
+  r3["[ Change Nextcloud instance ]"]
+  r4["Last sync   10 min ago · 3 actions pending      ›"]
+  g2["DOWNLOADS"]
+  r5["Download folder\nSD card / Podcasts                 ›"]
+  r6["File naming\nDer Podcast/20260714_Warum-…mp3    ›"]
+  r7["Download over mobile data          [ off ]"]
+  g3["TRIAGE"]
+  r8["Swipe right    ( Download ▾ )"]
+  r9["Swipe left     ( Mark as played ▾ )"]
+  r10["Mark old episodes as played\nOlder than ( 3 months ▾ )      [ Preview & apply ]"]
+  r11["Mark ALL episodes as played\nEvery undecided episode in every podcast  [ Preview & apply ]"]
+  g4["APPEARANCE"]
+  r12["Theme    ( Light )  ( Dark )  ( System )"]
+  g5["TROUBLESHOOTING"]
+  r13["Error log            3 entries today    ›"]
+  g6["ABOUT"]
+  r14["Version 0.1.0 · GPL-3.0-or-later\nOpen source licences               ›"]
+```
+
+**Nextcloud group**
+
+- **Instance** — the connected base URL from `SettingsRepository`. When nothing is set the value area
+  is **empty** (no placeholder text); the row is not tappable.
+- **Account** — username and connection date, hidden entirely when not connected. No password is ever
+  shown or entered in the app (Login Flow v2 only, §8). An app-bar `⋮` → **Disconnect** clears the
+  credentials and warns that the *ledger is kept*, so nothing will be re-downloaded after
+  reconnecting.
+- **Change Nextcloud instance** — a button *below* the instance row, opening S5. Reads **Connect
+  Nextcloud** when nothing is configured.
+- **Last sync** **[gap]** — relative timestamp plus outbox depth (`syncedToServer = false` count);
+  tapping opens S7.
+
+**Downloads group**
+
+- **Download folder** **[gap, required]** — launches the system `ACTION_OPEN_DOCUMENT_TREE` picker;
+  shows the resolved tree name. If the permission was revoked the row shows a warning colour and the
+  words **not available** (architecture §8).
+- **File naming** → S6.
+- **Download over mobile data** — switch, **off by default**; off means `DownloadWorker` runs on
+  unmetered networks only. Named as a constraint, not a "rule", so it can't be mistaken for
+  auto-download.
+
+**Triage group** (new)
+
+- **Swipe right** / **Swipe left** — each a dropdown over the same option set: `Download`,
+  `Mark as played`, `Nothing (disable)`. Defaults: right = Download, left = Mark as played. The two
+  cannot hold the same action (picking a taken action swaps them, so the pair is always valid). The
+  values are persisted in DataStore and read by the episode row; the swipe background label and icon
+  always reflect the current mapping, so the UI can never lie about what a swipe does.
+- **Mark old episodes as played** — a duration picker (`1 month` / `3 months` / `6 months` /
+  `1 year` / `off`) plus **Preview & apply**. This is a *write*, not a filter: it upserts `SKIPPED`
+  rows for every currently-known episode older than the cutoff that has no ledger row, exactly as if
+  each had been swiped.
+- **Mark ALL episodes as played** — the same operation with no age limit: every undecided episode in
+  every podcast. A one-shot "start from a clean slate" button, not a persisted rule.
+
+Both share one **preview step** — tapping *Preview & apply* opens a dialog that names the count and
+summarises what will happen before anything is written:
+
+```mermaid
+block-beta
+  columns 1
+  t["Mark 412 episodes as played?"]
+  l1["Der Podcast          128"]
+  l2["Lage der Nation        94"]
+  l3["… 5 more podcasts     190"]
+  n1["They move to 'Played / handled' and can each still\nbe downloaded individually."]
+  n2["Played state is sent to Nextcloud, so your other\nclients (AntennaPod, RePod) see it too."]
+  b["[ Mark as played ]      [ Cancel ]"]
+```
+
+Pushing the resulting `PLAY` actions to Nextcloud is **intended, not a side effect** — sharing triage
+state across clients is the point (README), and the Android device is the user's main player. The
+second note in the preview states it plainly rather than warning against it. Further rules:
+
+  - the actions enter the normal outbox (`syncedToServer = false`) and are pushed in batches by
+    `SyncWorker`, not in one giant POST;
+  - the operation is not undoable in bulk (per the no-undo decision) — the preview is the safeguard;
+  - each episode remains individually downloadable via **Download** in S3 or the row overflow;
+  - when the *older than* value is not `off`, the rule is also applied to newly-parsed episodes after
+    each feed refresh (an episode arriving already older than the cutoff is marked immediately,
+    without a preview — the user consented once by setting the rule). See §14 — this replaces the
+    architecture's read-time `pubDate >= firstSeenAt` backlog cutoff and needs an ADR.
+
+**Appearance group** — **Theme**: 3-option segmented control **Light / Dark / System** (default
+`System`), persisted in DataStore, applied immediately without an activity restart (§12.7).
+
+**Troubleshooting group** — **Error log** row with an entry count → S8.
+
+Settings has no Save button: every control commits on change.
+
+---
+
+## 8. S5 — Nextcloud connection dialog
+
+A modal dialog over S4, using **Nextcloud Login Flow v2** exclusively — the app never sees, asks
+for, or stores a user password; it stores only the app password the flow hands back (encrypted,
+`AppPasswordCipher`, ADR 0010).
+
+```mermaid
+block-beta
+  columns 1
+  t["Connect Nextcloud"]
+  l["Nextcloud address"]
+  f["[ https:// ][ cloud.example.org............ ]"]
+  h["Only the server address — you sign in on your\nNextcloud in the next step."]
+  b["[ Request authorization ]        [ Cancel ]"]
+```
+
+**Input** — one text field with a **non-editable `https://` prefix** rendered inside it. Keyboard
+type URI, autocorrect off, IME action Go = the primary button. Validation on submit only: non-empty
+host, no spaces, optional `:port` and path allowed (Nextcloud in a subdirectory is common); a typed
+`https://` or `http://` is stripped rather than rejected.
+
+**Primary button** — **Request authorization**. The dialog moves to a *busy* state: field read-only,
+button replaced by a spinner labelled **Waiting for authorization in your browser…**, Cancel stays
+enabled and aborts the poll.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant D as S5 dialog
+    participant B as Browser / custom tab
+    participant NC as Nextcloud
+    participant DS as SettingsRepository
+    participant W as SyncWorker
+
+    U->>D: enter host, tap "Request authorization"
+    D->>NC: POST /index.php/login/v2
+    NC-->>D: { login (URL), poll: { token, endpoint } }
+    D->>B: open login URL
+    U->>B: sign in, "Grant access"
+    loop until granted / cancelled / timeout
+        D->>NC: POST poll endpoint (token)
+    end
+    NC-->>D: { server, loginName, appPassword }
+    D->>NC: GET /index.php/apps/gpoddersync/subscriptions (authenticated)
+    alt 200
+        D->>DS: store server URL + loginName + encrypted appPassword
+        D->>W: enqueue expedited SyncWorker (pull all subscriptions)
+        D->>U: dialog closes, S4 shows the instance; S1 fills in
+    else 404 / 401 / network
+        D->>U: stay open, inline error under the field, input restored
+    end
+```
+
+Success is only ever claimed after that authenticated `GET /subscriptions` returns 200 — a completed
+login flow is not proof that gpoddersync is installed. On failure the app password is discarded, not
+stored.
+
+**Inline error messages** (under the field, plain language, never a stack trace; each also written to
+S8):
+
+| Cause | Message |
+|---|---|
+| DNS / unreachable | "Can't reach that address. Check the spelling and your network." |
+| TLS error | "The server's certificate isn't trusted." |
+| No Login Flow v2 endpoint | "This doesn't look like a Nextcloud server." |
+| 404 on the gpoddersync path | "This Nextcloud doesn't have the GPodder Sync app installed." |
+| 401 after authorization | "Authorization was refused. Try again." |
+| Flow abandoned / timed out | "Authorization wasn't completed." |
+
+**Changing an existing instance** — pre-filled with the current host, title reads *Change Nextcloud
+instance*, with a caution line: "Your download history is kept, so episodes you already handled stay
+handled." (True: the ledger has no FK to feeds — architecture §4.)
+
+---
+
+## 9. S6 — Naming template editor
+
+Pushed from S4. Exists because the README calls filenames "the entire user experience of a
+download", and `:core:naming` is already built and testable.
+
+```mermaid
+block-beta
+  columns 1
+  bar["‹  File naming"]
+  f1["Folder template\n[ {podcast} ]"]
+  f2["File template\n[ {date}_{title} ]"]
+  ph["Available: {podcast} {title} {date} {guid} {episodeNumber}\n(tap to insert)"]
+  pv["PREVIEW\nDer Podcast/20260714_Warum-Hamburg-immer-regnet.mp3\nDer Podcast/00000000_Folge-ohne-Datum.mp3"]
+  r["[ Reset to default ]"]
+```
+
+Live preview calls the already-tested `NamingTemplateEngine.resolve()` against a real recent episode
+plus synthetic worst cases (missing date → `00000000` per ADR 0004; over-long title → truncation;
+illegal characters → sanitised). An invalid template shows the reason under the field and cannot be
+applied. Existing files are never renamed — a note says so.
+
+---
+
+## 10. S7 — Activity (downloads & sync)
+
+Kept as a full screen (confirmed). The one place that answers "what is the app doing, and what is
+stuck?".
+
+```mermaid
+block-beta
+  columns 1
+  bar["‹  Activity                                   [ error log ]"]
+  p["⚠ Downloads paused — download folder not available   [ Choose folder ]"]
+  s["Sync: last 10 min ago · 3 actions pending    [ Sync now ]"]
+  g1["DOWNLOADING"]
+  d1["Die Elbe von unten · Der Podcast\n▓▓▓▓▓▓░░░░ 62 % · 24 MB / 39 MB      [ cancel ]"]
+  g2["QUEUED"]
+  d2["Hafen, Kran, Kaffee · Der Podcast    ◔ waiting for Wi-Fi   [ cancel ]"]
+  g3["FAILED"]
+  d3["Regenradar · Lage der Nation\nNo space left on device   attempt 3\n[ retry ]  [ mark as played ]  [ details ]"]
+  g4["RECENTLY DOWNLOADED"]
+  d4["✓ 20260630_Hafen-Kran-Kaffee.mp3\nSD card / Podcasts / Der Podcast"]
+```
+
+Groups: a **paused** banner when the queue is held (§12.12), sync status (last sync, outbox depth,
+**Sync now** — disabled and labelled "No network connection" when offline), downloading (determinate
+progress + bytes), queued (with the reason it is waiting — Wi-Fi, folder missing, resuming after
+restart), failed (`lastError` as a human sentence + `attempts`, with **Retry**, **Mark as played**,
+and **details** → S8), and the last ~20 completed downloads showing `writtenFileName` and the folder
+— the app's only "did it actually land?" affordance.
+
+It is explicitly *not* a file manager: no delete, no open-file, no existence check — matching README
+("Podsilo does not delete it, track it, or care whether it still exists").
+
+Tapping any row jumps to that episode in S2. App-bar action opens S8.
+
+---
+
+## 11. S8 — Error log
+
+A chronological, read-only log of everything that failed, so a single-user self-hosted setup can be
+debugged without a laptop, `adb`, or a bug report.
+
+```mermaid
+block-beta
+  columns 1
+  bar["‹  Error log                        [ copy all ]  [ share ]  [ clear ]"]
+  fl["( All )  ( Sync )  ( Feed )  ( Download )  ( Storage )"]
+  block:x1
+    columns 1
+    e1["31 Jul 21:14 · DOWNLOAD · Lage der Nation\nNo space left on device\nRegenradar · attempt 3 of 3\n  ▸ show technical detail"]
+  end
+  block:x2
+    columns 1
+    e2["31 Jul 20:58 · FEED · Der Podcast          × 14\nFeed server did not respond (timeout after 30 s)\nfirst 30 Jul 04:12 · last 31 Jul 20:58\nhttps://example.com/feed.xml"]
+  end
+  block:x3
+    columns 1
+    e3["31 Jul 20:58 · SYNC\nNextcloud returned 401 — authorization may have been revoked\n[ open settings ]"]
+  end
+  foot["Keeps the last 200 entries · nothing leaves the device"]
+```
+
+**Entry shape** — timestamp (absolute, local), category (`SYNC` · `FEED` · `DOWNLOAD` · `STORAGE` ·
+`AUTH`), the affected feed/episode when known, a **plain-language sentence first**, and a collapsed
+*technical detail* section (HTTP status, exception class, URL, worker name, `attempts`). The plain
+sentence is what the user reads; the detail is what gets pasted into a GitHub issue.
+
+**Sources** — anything that produced a banner, a snackbar, a row `lastError`, or a worker
+`Result.retry()/failure()`: feed fetch failures, sync/auth failures, download failures and
+cancellations-by-error, SAF permission loss, disk-full, tag-write partial failures (informational,
+since a tag failure never blocks a download — architecture §11), and abandoned Login Flow attempts.
+
+**Rules**
+
+- **Repeated identical failures collapse into one entry** with an occurrence count (`× 14`) and
+  *first seen* / *last seen* timestamps, rather than one entry per attempt. Identity = category +
+  affected feed/episode + normalised message. Without this, one feed failing every few hours evicts
+  every genuinely one-off error from the buffer within a day. The technical detail section keeps the
+  **most recent** occurrence's detail.
+- Ring buffer, last 200 **collapsed** entries (or 7 days, whichever is larger); stored in Room,
+  survives restart.
+- **Never** contains the app password, the Basic-auth header, or full URLs with credentials.
+- **Copy all** / **Share** produce plain text. **Clear** asks for confirmation.
+- Tapping an entry that names an episode jumps to it in S2.
+- Successes are not logged — this is a failure log, not a journal. (`RECENTLY DOWNLOADED` in S7
+  covers the success case.)
+- Nothing is uploaded anywhere: no telemetry, per README.
+
+---
+
+## 12. Cross-cutting rules
+
+### 12.1 Swipe gestures
+
+| Gesture | Default action | Ledger write | Sync effect |
+|---|---|---|---|
+| Swipe **right** (left→right) | **Download** | `QUEUED` → `DOWNLOADING` → `DOWNLOADED` | `DOWNLOAD` action posted |
+| Swipe **left** (right→left) | **Mark as played** | `SKIPPED` | `PLAY(started=0, position=total)` |
+
+Both directions are **re-mappable in Settings → Triage** (`Download`, `Mark as played`, `Nothing`);
+the swipe background's icon and word are rendered from the current mapping, never hard-coded. Each
+swipe is single-direction, must pass a ~40 % threshold to commit (no accidental flicks), and commits
+immediately — there is no undo (§12.3). Non-gesture equivalents are mandatory: the row overflow `⋮`
+and the S3 action bar.
+
+Swiping an episode that already has a terminal state performs the same action idempotently:
+swipe-right on a `DOWNLOADED` episode means **Download again** (§12.3); swipe-left on an already
+`SKIPPED` one is a no-op.
+
+### 12.2 Download progress
+
+A download is never a state you have to guess at. Three surfaces, all driven by the same
+`DOWNLOADING` row + WorkManager progress:
+
+| Where | Treatment |
+|---|---|
+| Episode row (S2) | line 3 becomes a **determinate linear progress bar** with `%` and `MB / MB`; indeterminate while `QUEUED` or before the first byte, with the reason ("waiting for Wi-Fi") |
+| Episode detail (S3) | same bar, full width, above the action bar |
+| Podcast row (S1) | small **circular** progress ring around the artwork corner + `"n downloading"` — aggregate for that feed |
+| Activity (S7) | bar + bytes + **cancel** per download |
+| Notification | foreground-service progress notification (§12.9) |
+
+On completion the bar is replaced by the **✓ downloaded** badge (and, in S3, the written filename) —
+the transition is a fade, not a disappearance, so the finish is visible. On failure it becomes the
+**failed** badge with the reason. Circles are used only where a bar doesn't fit (S1 artwork); lists
+use bars.
+
+**Progress updates are throttled to 1 Hz** — matching `DownloadNotifications`' existing throttle, so
+the notification, the row and S7 never disagree, and a fast download doesn't repaint the list 60
+times a second. The bar animates between updates rather than stepping.
+
+**After process death, never show a stale percentage.** WorkManager progress does not survive the
+process. On cold start, any row whose ledger state is `DOWNLOADING` renders as **indeterminate** with
+the word *resuming* until the worker reports its first progress update; if WorkManager has no live
+work for that `episodeKey` at all (killed before it could re-enqueue), the row shows *queued* and the
+work is re-enqueued on first observation. The same rule applies to S7 and to the aggregate ring on S1.
+A percentage is only ever drawn from a progress update received in this process.
+
+### 12.3 No undo — re-download instead
+
+There is **no undo snackbar**. Decisions commit immediately and are corrected by acting again:
+
+- **Download again** is offered on `DOWNLOADED`, `SKIPPED`, `HANDLED_REMOTELY` and `ERROR` episodes
+  (row overflow, S3 action bar, swipe-right). It writes `QUEUED` and enqueues `DownloadWorker` as
+  usual — a user-initiated transition out of a state the architecture calls terminal (§14).
+- **Duplicate-file guard.** Before writing, `EpisodeDownloader` checks whether **this episode's own
+  previously written file** (`writtenFileName`) is still present — which the existing
+  `DownloadTarget.existingNames(folder)` already answers, so no new port method is needed. If it is,
+  the download is **aborted, not overwritten and not suffixed**: the ledger returns to `DOWNLOADED`
+  and the UI reports *"Already in your folder — Der Podcast/20260630_Hafen-Kran-Kaffee.mp3"* as a
+  snackbar (and in the row/detail status line). This is an informational outcome, not an `ERROR`, and
+  is not written to S8. If the file is gone, the download proceeds and produces it again.
+  - **This does not change collision suffixing.** `existingNames` keeps doing what ADR 0011 says it
+    is for — stopping two *different* episodes fighting over one name, with ` (2)`, ` (3)`, … inside
+    `:core:naming`. The guard is a separate, narrower question asked of the same data: *is the name
+    this episode previously wrote still there?*
+  - Note for implementation: this is the *only* place existence is allowed to affect behaviour. It is
+    a pre-flight check at explicit user request — it must **not** become the general "have I
+    downloaded this?" test, which stays the ledger (architecture §4/§11's central invariant, and ADR
+    0011's own KDoc). A first-time download (no `writtenFileName`) performs no existence check at all.
+- **Mark as played** on a `DOWNLOADED` episode is allowed too (it changes only the ledger/sync state;
+  the file on disk is never touched — Podsilo does not delete files).
+- Bulk actions are the exception that keeps a safeguard: selection-mode actions and *Download all*
+  (§5) confirm with a count, and *Mark old / all episodes as played* (§7) shows a full preview,
+  because those are the actions affecting hundreds of rows at once.
+
+### 12.4 Filter defaults
+
+| Screen | Default | Alternatives | Persisted? |
+|---|---|---|---|
+| S1 podcasts | With new episodes | All podcasts | no (session) |
+| S2 episodes | To decide | Downloaded · Played / handled · All | per feed, session |
+| S8 error log | All | Sync · Feed · Download · Storage | no |
+
+### 12.5 What the count badge counts
+
+`Feed.count = episodes with no ledger row` — exactly what the `To decide` filter shows, exactly the
+request's "number of available episodes for download". Notes:
+
+- With the *Mark old episodes as played* rule active, old episodes already carry `SKIPPED` rows, so
+  they never inflate the badge (this is why the read-time `pubDate` cutoff is no longer needed).
+- `QUEUED`/`DOWNLOADING` episodes are **not** counted (already decided); they show as
+  "n downloading" instead.
+- A feed never fetched shows `–`, not `0` — unknown is not zero.
+- Counts come from the same SQL join as the list (architecture §12 item 11), never a second code
+  path, so a badge can never disagree with the list it opens.
+
+### 12.6 Ledger state → row treatment (single source of truth for the UI)
+
+| State | Badge text | Row treatment | Actions offered |
+|---|---|---|---|
+| *no row* ("to decide") | none | full emphasis | Download · Mark as played |
+| `QUEUED` | queued | normal + indeterminate progress, waiting reason | Cancel |
+| `DOWNLOADING` | downloading | determinate progress bar + bytes | Cancel |
+| `DOWNLOADED` | ✓ downloaded | **greyed out**, filename in detail | Download again · Mark as played |
+| `SKIPPED` | ▸ played | **greyed out** | Download |
+| `ERROR` | failed | warning-colour badge, `lastError` on line 3 | Retry · Mark as played · details (S8) |
+| `HANDLED_REMOTELY` | handled elsewhere | **greyed out**, small cloud icon | Download |
+
+All greyed-out rows remain tappable and open S3 (explicit requirement).
+
+### 12.7 Theme: light / dark / system
+
+- Three-way choice, persisted in DataStore, default **System**, applied via the Compose theme at the
+  root without recreating the activity.
+- Material 3 colour roles only — one seed colour, two generated schemes. Dynamic colour (Material
+  You) is **off**, so the app looks the same on every device and both schemes can be verified.
+- Holds in both schemes: body text ≥ 4.5:1, status badges and swipe backgrounds ≥ 3:1; the
+  Download/Mark-as-played swipe colours stay distinguishable in dark mode (do not simply darken
+  them); greyed-out rows use `onSurfaceVariant`, not an opacity that drops the title below 4.5:1;
+  artwork gets a subtle border in dark mode so black-background covers don't bleed into the surface;
+  progress bars use the accent role, never pure white/black.
+- Every status is carried by **text**, never colour alone.
+
+### 12.8 Error surfacing
+
+Four levels, chosen by whether the user can act — and everything in levels 1–3 also lands in S8:
+
+1. **Snackbar** — transient outcome of an action just taken (sync failed, "already in your folder").
+2. **Inline banner** at the top of the affected list — a persistent blocking condition the user must
+   fix: no Nextcloud configured, folder permission revoked, feed unreachable, storage full.
+3. **Row-level** — per-episode `lastError` on the row, in S3, and in S7's failed group.
+4. **Error log (S8)** — the durable record, with technical detail on demand.
+
+Never a modal error dialog, never a raw exception in the primary sentence, never a silent failure. A
+`nextcloud-gpodder` server that discards `DOWNLOAD` actions (ADR 0008) is *not* surfaced as an error —
+it returns 200 and the local ledger is authoritative.
+
+### 12.9 Notifications
+
+- **Foreground service notification** while downloads run: "Downloading 2 episodes", current title,
+  determinate progress, **Cancel all**. Tapping opens S7.
+- **One completion notification** per batch, listing the count; silent by default; tapping opens S7.
+- **Failure notification** only after retries are exhausted; tapping opens S8.
+- No notification for sync, ever.
+
+### 12.11 Offline handling
+
+Connectivity is checked **before** any network work is started, so the user never waits on a timeout
+they could have been told about instantly:
+
+| Situation | Behaviour |
+|---|---|
+| Pull-to-refresh with no connectivity | the indicator returns immediately; banner "No network connection" on S1/S2; **no** feed or sync request is attempted, and nothing is written to S8 (not a failure, a precondition) |
+| **Sync now** (S7) while offline | button disabled with the label "No network connection" |
+| Download requested while offline | accepted and left `QUEUED` with the reason *waiting for network*; WorkManager's network constraint releases it later — a download request is never rejected for being offline |
+| Metered network with *Download over mobile data* off | `QUEUED`, reason *waiting for Wi-Fi* |
+| Connectivity returns | the banner disappears; queued downloads start; no automatic sync or refresh is triggered (refresh stays a user action) |
+| Loss mid-download | the worker retries with WorkManager's backoff; the row stays `DOWNLOADING`/*resuming*, and only an exhausted retry chain becomes `ERROR` + an S8 entry |
+
+Browsing is fully available offline: everything on S1, S2, S3 and S8 comes from Room.
+
+### 12.12 One "downloads paused" state
+
+Folder-missing, permission-revoked and disk-full are three causes of **one** user-visible condition:
+**Downloads paused**. It is a queue-level state, not a per-episode one.
+
+- Existing `QUEUED` rows stay `QUEUED` (they are not failed, not cancelled, not lost); the row reason
+  reads *paused*.
+- New download requests are still accepted and join the queue — the app never refuses a decision
+  because of a fixable configuration problem.
+- Surfaced as a persistent banner at the top of S1, S2 and S7, always with the fix as a button:
+  **Choose folder** (missing/revoked) or **Free up space** (disk full). Same wording everywhere.
+- The foreground-service notification, if present, shows *Paused* rather than progress.
+- Resolving the cause resumes the queue automatically; nothing needs re-queuing by hand.
+- An in-flight download interrupted by the cause becomes `ERROR` with its reason (and an S8 entry) —
+  the pause applies to the *queue*, and one already-started transfer can still fail properly.
+- A `DownloadFolderUnavailableException` failure is **non-retryable** by design (ADR 0011), so its row
+  must not offer a bare **Retry** — the action is **Choose folder**. Retry only appears on failures
+  where retrying can plausibly work (network, 5xx, truncated body).
+
+### 12.13 Accessibility & density
+
+- Tap targets ≥ 48 dp; row height ≥ 72 dp with 3 lines of text.
+- Selection mode is reachable without a long-press (a checkbox appears on the leading artwork when
+  the accessibility service is active) and announces `n selected` on every change.
+- Sticky month headers are exposed as list headings; the fast-scroll thumb is not the only way to
+  move through a long list.
+- Swipe actions duplicated as accessibility custom actions and visible overflow items; the announced
+  label follows the configured mapping.
+- Content descriptions on artwork ("cover art for <podcast>"); progress announced as text
+  ("downloading, 62 percent"); greyed-out rows announce their state word, not just a visual change.
+- Large font scales supported without truncating decision affordances (title truncates first).
+- Type scale: Material 3 `titleMedium` for episode titles, `bodySmall` for meta and snippets; never
+  below 12 sp.
+
+---
+
+## 13. Coverage check against the architecture
+
+| Architecture / README feature | Covered by | Verdict |
+|---|---|---|
+| Mirror read-only subscriptions | S1 (no add/remove affordance anywhere) | ✔ |
+| Per-feed undecided counts (§13 step 9) | S1 badge, §12.5 | ✔ |
+| Manual refresh / sync pass (§6) | S1 & S2 pull-to-refresh, S4 "Last sync", S7 "Sync now" | ✔ |
+| Episode list with image/title/description/date | S2, S3 | ✔ (raw HTML forces S3 — **added**) |
+| Download triage → `QUEUED` (§10) | S2 swipe right, S3, overflow | ✔ |
+| Skip triage → `SKIPPED`/`PLAY` (§10) | S2 swipe left ("Mark as played"), S3, overflow | ✔ |
+| Filter decided/undecided (§12 item 11) | S2 chips (To decide · Downloaded · Played · All) | ✔ |
+| Backlog handling (`firstSeenAt` cutoff) | replaced by S4's *Mark old episodes as played* write | ⚠ **changed — ADR needed (§14.2)** |
+| Theme light/dark/system, persisted | S4 Appearance, §12.7 | ✔ |
+| Nextcloud instance display + change + auth (§8) | S4, S5 (Login Flow v2 only) | ✔ |
+| **SAF download-folder grant + re-grant (§8)** | S4 Download folder row + S1 banner | **added — downloads cannot work without it** |
+| **Naming templates + live preview (§6, §11)** | S6 | **added** |
+| **`QUEUED`/`DOWNLOADING` progress + cancel (§9, §10)** | S2/S3 progress bars, S1 ring, S7, notification (§12.2) | **added** |
+| **`ERROR` state + retry (§9)** | S7 failed group, row badge, S8 | **added** |
+| **`HANDLED_REMOTELY` visibility (§6 inbound)** | §12.6 badge "handled elsewhere", greyed out | **added** |
+| **Outbox depth / unsynced actions (§5, §10)** | S4 "Last sync", S7 sync row | **added** |
+| **Failure diagnostics** | S8 error log | **added** |
+| Re-download of a handled episode | §12.3 Download again + duplicate-file guard | ⚠ **changed — ADR needed (§14.1)** |
+| Feed titles unknown before first fetch (§4) | S1 falls back to URL | ✔ |
+| Episodes without enclosure (§7) | S2 dimmed "no audio" row | ✔ |
+| Foreground service notification (TODO 4b) | §12.9 | ✔ |
+| No auto-download invariant (§7 item 6) | no rules, no background triage; *Download all* / selection mode are explicit user actions behind a counted confirmation | ⚠ **narrowed — ADR needed (§14.3)** |
+| Setup completeness before first download | S1 first-run checklist (§4) | **added** |
+| Offline / metered behaviour (§8 "never throw") | §12.11 | **added** |
+| Folder-missing + disk-full as one condition | §12.12 downloads-paused state | **added** |
+| Progress across process death | §12.2 *resuming* rule | **added** |
+| Failure-log flooding | §11 collapsed repeated entries | **added** |
+| Batch triage / long backlog ergonomics | S2 selection mode, *Download all*, sticky headers, fast-scroll | **added** |
+| Not a player / not a file manager | no playback controls; S7 shows filenames only, never deletes | ✔ |
+
+---
+
+## 14. Decisions that need an ADR
+
+Three UX decisions here contradict statements in `docs/architecture.md` or in code that now exists,
+and must be recorded before Tier 4c, not settled in code review. [§15](#15-adaptations-to-the-code-as-built-tier-4b)
+lists the smaller, non-contentious adaptations.
+
+### 14.1 Terminal ledger states are re-openable **by explicit user action**
+
+Architecture §9 states `DOWNLOADED`, `SKIPPED` and `HANDLED_REMOTELY` are terminal and "never
+automatically revisited". That property is preserved for *automatic* logic — sync still never
+revisits them. What changes: the **user** may transition any of them back to `QUEUED` via
+**Download again** (§12.3), adding these edges to the state machine:
+
+```mermaid
+stateDiagram-v2
+    DOWNLOADED --> QUEUED : user taps "Download again"
+    SKIPPED --> QUEUED : user taps "Download"
+    HANDLED_REMOTELY --> QUEUED : user taps "Download"
+    QUEUED --> DOWNLOADED : target file already exists (aborted, informational)
+```
+
+Implications to nail down in the ADR: whether a second successful download re-posts a `DOWNLOAD`
+action (proposed: yes, `syncedToServer = false` again — it is a true event), whether `attempts`
+resets (proposed: yes), and that `writtenFileName` is reused as the pre-flight existence check
+target — which must remain the *only* use of it as an existence check, since architecture §11 calls
+"never use `writtenFileName` as an existence check" its single most important invariant. The
+distinction to preserve: the guard runs **because the user asked for this file**, never to decide
+whether an episode is new.
+
+⚠ **This now contradicts shipped code.** Tier 4b's `DownloadWorker` "refuses to act on an
+already-terminal ledger row" (`DownloadWorkerTest`), which is exactly the guard that makes the
+no-auto-download invariant provable — but it also means **Download again would silently do nothing**.
+The ADR must decide the mechanism, not just the intent. Proposed: an explicit
+`forceRedownload`/`userRequested` input on the work request, defaulting to `false`, that is the only
+way past the terminal-state guard; the invariant test keeps asserting that nothing *without* that
+flag can create a file. The flag must be set only from a UI event, never from a worker or sync path.
+
+### 14.2 The backlog cutoff moves from read-time filter to a written `SKIPPED` state
+
+Architecture §4/§12 item 11 defines "New" as `no ledger row AND pubDate >= Feed.firstSeenAt`, with
+the cutoff resolved in SQL. This design instead **writes** `SKIPPED` rows for old episodes (S4's
+*Mark old episodes as played*, §7), which means:
+
+- `LedgerFilter`'s "new" predicate simplifies to `no ledger row` — `firstSeenAt` is no longer part of
+  the episode-list or badge query;
+- the state is visible (`Played` filter), per-episode reversible (`Download`), and shared with other
+  clients as `PLAY` actions — the read-time filter was none of those;
+- it is a bulk write of hundreds of rows plus hundreds of outbox entries; the ADR should decide
+  whether the outbox pushes them in batches and whether the rule runs automatically after each feed
+  refresh (proposed: yes to both, batched);
+- `Feed.firstSeenAt` stays in the schema — it is the natural default for the cutoff on a
+  newly-appearing feed.
+
+⚠ **The cutoff is already implemented** — Tier 4a resolves it in SQL inside
+`EpisodeLedgerDao.observeNewEpisodes`. Nothing needs deleting: the recommendation is that the UI
+simply stops requesting the cutoff variant (the `To decide` filter asks for "no ledger row", full
+stop) and leaves the DAO capability in place. The ADR should say which of the two mechanisms is
+authoritative, so a future reader doesn't find both and assume they compose.
+
+### 14.3 Bulk, user-initiated download is allowed — README's "no download all" is narrowed
+
+README states plainly: **"Not automatic. No auto-download rules, no 'download all'."** This design
+adds both a per-podcast **Download all (n)** overflow action and a selection-mode **Download** (§5),
+at the author's request. The distinction to record, because it is the whole reason the original rule
+exists:
+
+| Forbidden (unchanged) | Allowed (new) |
+|---|---|
+| A *rule* that downloads episodes without being asked | A *command* the user issues now, to a set they can see |
+| Anything triggered by sync, refresh, or app start | Only a tap, followed by a confirmation naming the count |
+| Global scope | Scoped to one podcast's current `To decide` filter |
+| Invisible | Every queued episode appears in S7 and can be cancelled individually |
+
+The no-auto-download invariant test (CLAUDE.md §7 item 6 / `NoAutoDownloadInvariantTest`) is
+unaffected: it asserts that sync and parsing create **zero** ledger rows and post **zero** actions,
+and nothing here changes that — the new rows only ever originate from a UI event. The ADR should
+record the wording change to README. *Download all* is **not** capped by count: the only guard is a
+non-blocking warning when the estimated total exceeds free space in the download volume (§5).
+
+---
+
+## 15. Adaptations to the code as built (Tier 4b)
+
+Everything below `:feature:*` now exists (TODO Tier 4b complete, 269 tests). These are the points
+where this document meets that code — recorded so Tier 4c doesn't rediscover them.
+
+| This design needs | Status in the built code | Action |
+|---|---|---|
+| Download progress, cancel, foreground notification | `DownloadWorker` + `DownloadNotifications`, progress throttled to 1 Hz | UI adopts the same 1 Hz throttle (§12.2) |
+| Folder states for the checklist and the paused banner | `DownloadFolderAccess` → `NotChosen` / `Granted` / `Revoked` | used verbatim (§4, §12.12) |
+| "File still there?" for the duplicate guard | `DownloadTarget.existingNames(folder)` (ADR 0011) | reuse; **no new port method** (§12.3) |
+| Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.12) |
+| Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; `SyncTrigger` in `:core:download` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
+| Credential change takes effect immediately after S5 | `SyncOrchestratorFactory` builds the client per pass from current credentials | nothing to do; no restart needed after connecting |
+| Re-download of a terminal episode | `DownloadWorker` **refuses** terminal rows | needs the `forceRedownload` flag decided in §14.1 |
+| "To decide" list + counts | `EpisodeLedgerRepository.observeEpisodes(filter)` → `EpisodeListItem` | matches §12.5; see §14.2 on the `firstSeenAt` variant |
+| **S8 error log** | — **no data source exists** | see below |
+
+**The error log is the one screen with no backend.** Failures are currently returned as values
+(`FeedFetchResult`, `Result`, `SyncOutcome`, ledger `lastError`) and then discarded once handled;
+nothing persists a chronological, categorised history. S8 therefore needs, before it can be built:
+
+- a small Room table (`error_log`: `id`, `at`, `category`, `feedUrl?`, `episodeKey?`, `message`,
+  `detail?`, `occurrences`, `firstSeenAt`) with a `LogRepository` port in `:core:model`, implemented
+  in `:core:database` — the collapse-on-identity rule from §11 belongs in its DAO, not in the UI;
+- write points in the four places failures are already classified: `FeedRefresher`,
+  `SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/`DownloadWorker`, and the S5 auth flow;
+- eviction (200 collapsed entries / 7 days) as a DAO query, not an app-start sweep.
+
+It is deliberately additive — no existing type changes — so it can be built alongside `:feature:*`
+rather than blocking it. `:feature:episodes`'s TODO scope ("filterable list, per-row triage, feed
+filter chips") also does not yet mention S1 (podcast list), S7 (activity) or S8; the module list
+should gain them, or S7/S8 should land in `:app`.
