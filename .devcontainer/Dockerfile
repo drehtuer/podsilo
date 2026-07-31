@@ -13,17 +13,22 @@
 
 FROM ubuntu:24.04
 
-# Host UID/GID so bind-mounted workspace files are not root-owned.
-# KVM_GID must match `getent group kvm` on the WSL2 host for the in-container
-# emulator (Tier 2) to be able to open /dev/kvm.
+# Host UID/GID so bind-mounted workspace files are not root-owned, and the GIDs
+# owning /dev/kvm and /var/run/docker.sock on the host.
+#
+# All four are **best-effort defaults, not requirements** — they are the values on
+# the machine this was first built on. Do not edit them for a new host: the real
+# IDs are only knowable at container start, so post-create.sh re-chowns the
+# persisted directories and re-aligns the kvm/docker groups to whatever the host
+# actually uses. That keeps one image working across machines with different IDs
+# (this project has already moved between a uid-1000/docker-109 host and a
+# uid-1002/docker-108 one).
 ARG USERNAME=dev
 ARG USER_UID=1000
 ARG USER_GID=1000
 ARG KVM_GID=993
-# Must equal `getent group docker | cut -d: -f3` on the WSL2 host, so the
-# bind-mounted /var/run/docker.sock is readable by the container user.
-# 109 on this host — NOT the 999 that Ubuntu's docker.io package picks inside the
-# image, which is exactly why the user setup below groupmods it.
+# NOT the 999 that Ubuntu's docker.io package picks inside the image, which is
+# exactly why the user setup below groupmods it.
 ARG DOCKER_GID=109
 
 # Android command-line tools build number. Bump deliberately; keep it in sync

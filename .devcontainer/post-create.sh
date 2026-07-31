@@ -31,6 +31,82 @@ warn() { printf '\n\033[1;33m!!  %s\033[0m\n' "$*"; }
 # volume), so it can never infer the root — always pass --sdk_root explicitly.
 sdkm() { sdkmanager --sdk_root="${ANDROID_HOME}" "$@"; }
 
+# --- Runtime ownership / group repair -------------------------------------------
+# The image bakes USER_UID/USER_GID/KVM_GID/DOCKER_GID in as build args, but the
+# values that actually matter belong to the *host*, and they differ per machine.
+# Two things then go wrong that no build arg can fix from inside the image:
+#
+#   1. The devcontainer CLI rewrites this user's UID/GID at container start
+#      (updateRemoteUserUID) to match the host user, and chowns only $HOME. On a
+#      host whose UID is not USER_UID, $ANDROID_HOME (a named volume, initialised
+#      from the image's ownership) is left owned by a stranger.
+#   2. /dev/kvm and the bind-mounted /var/run/docker.sock carry the *host's* GIDs,
+#      which need not be the ones the image created.
+#
+# Both were hit for real when this project moved to a second machine (host uid
+# 1002, docker gid 108). sdkmanager's failure mode for (1) is silent and
+# genuinely misleading: `--licenses` prints "All SDK package licenses accepted"
+# while writing nothing at all, and the install that follows then prompts
+# "Accept? (y/N):" against a closed stdin and skips every package. So repair the
+# ownership here, at runtime, where the real IDs are knowable — rather than
+# asking every host to edit devcontainer.json first.
+log "Runtime ownership and group repair"
+
+uid="$(id -u)"
+gid="$(id -g)"
+username="$(id -un)"
+needs_new_shell=0
+
+for dir in \
+  "${ANDROID_HOME}" \
+  "${ANDROID_USER_HOME:-${HOME}/.android}" \
+  "${GRADLE_USER_HOME:-${HOME}/.gradle}" \
+  "${CLAUDE_CONFIG_DIR:-${HOME}/.claude}" \
+  "${HOME}/.config/gh"; do
+  [[ -d "${dir}" ]] || continue
+  owner="$(stat -c '%u:%g' "${dir}")"
+  if [[ "${owner}" != "${uid}:${gid}" ]]; then
+    warn "${dir} is owned by ${owner}, not ${uid}:${gid} (${username}) — fixing."
+    sudo chown -R "${uid}:${gid}" "${dir}"
+  fi
+done
+
+# Give the container user access to a host-provided node by aligning a group with
+# the GID that owns it. Deliberately never chgrp the node itself: /var/run/docker.sock
+# is a bind mount, so changing its group would change it on the HOST too.
+align_group() {
+  local node="$1" fallback_name="$2" label="$3"
+  [[ -e "${node}" ]] || return 0
+
+  local node_gid
+  node_gid="$(stat -c '%g' "${node}")"
+  if id -G | tr ' ' '\n' | grep -qx "${node_gid}"; then
+    echo "${label}: ${node} (gid ${node_gid}) already accessible to ${username}."
+    return 0
+  fi
+
+  # `|| true` is load-bearing: getent exits 2 when the GID has no group, which
+  # under `set -euo pipefail` would abort the script on the very case this
+  # function exists to handle.
+  local grp
+  grp="$(getent group "${node_gid}" | cut -d: -f1 || true)"
+  if [[ -z "${grp}" ]]; then
+    if getent group "${fallback_name}" >/dev/null; then
+      sudo groupmod -g "${node_gid}" "${fallback_name}"
+    else
+      sudo groupadd -g "${node_gid}" "${fallback_name}"
+    fi
+    grp="${fallback_name}"
+  fi
+
+  sudo usermod -aG "${grp}" "${username}"
+  warn "${label}: ${node} is owned by gid ${node_gid}; added ${username} to '${grp}'."
+  needs_new_shell=1
+}
+
+align_group /var/run/docker.sock docker "Docker socket"
+align_group /dev/kvm kvm "KVM device"
+
 # IPv6-only network? The JVM tries IPv4 first and does not fall back the way curl's
 # happy-eyeballs does, so sdkmanager sits on IPv4 connect timeouts for tens of
 # minutes and then reports "Failed to download any source lists! / IO exception
@@ -63,6 +139,20 @@ log "Accepting Android SDK licences"
 # `yes` closes the pipe early once sdkmanager stops reading; that is expected.
 yes | sdkm --licenses >/dev/null || true
 
+# Verify rather than trust the exit code. sdkmanager prints "All SDK package
+# licenses accepted" and exits 0 even when it could not create the licences
+# directory at all — the failure only surfaces much later, as every package being
+# skipped for an unaccepted licence. Checking for the files turns that into an
+# immediate, explicable error.
+if ! compgen -G "${ANDROID_HOME}/licenses/*" >/dev/null; then
+  warn "sdkmanager reported success but wrote no licence files to ${ANDROID_HOME}/licenses."
+  echo "  That means it could not write to \$ANDROID_HOME. Current ownership:"
+  ls -ld "${ANDROID_HOME}"
+  echo "  Expected owner: $(id -u):$(id -g) ($(id -un))."
+  echo "  The repair step above should have handled this — check that sudo works."
+  exit 1
+fi
+
 packages=()
 for pkg in ${SDK_PACKAGES}; do
   if [[ "${pkg}" == system-images* && "${INSTALL_SYSTEM_IMAGE}" != "1" ]]; then
@@ -77,6 +167,16 @@ sdkm "${packages[@]}"
 
 log "Installed"
 sdkm --list_installed || true
+
+# A bare `adb version` here used to abort the whole script under `set -e` with
+# nothing but "adb: command not found" — true, but it names the symptom rather
+# than the cause. Say which install did not complete.
+if ! command -v adb >/dev/null; then
+  warn "adb is not on PATH — the platform-tools install did not complete."
+  echo "  Re-read the sdkmanager output above; the usual cause is a licence or"
+  echo "  permission problem on \$ANDROID_HOME rather than a download failure."
+  exit 1
+fi
 adb version
 
 # --- Virtualisation report ------------------------------------------------------
@@ -138,3 +238,10 @@ else
 fi
 
 log "Dev container ready"
+
+# Group changes only apply to processes started after usermod, so the shell this
+# script runs in still has the old set. New VS Code terminals get the new one.
+if [[ "${needs_new_shell}" == "1" ]]; then
+  warn "Group membership changed — open a NEW terminal before using docker/the emulator."
+  echo "  This shell still has the old groups: $(id -Gn)"
+fi

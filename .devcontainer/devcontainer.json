@@ -11,18 +11,22 @@
     // `RUN apt-get`/`curl` step fails with "Could not connect ... connection timed
     // out" while the WSL2 host itself has perfectly good internet.
     "options": ["--network=host"],
+    // These four are BEST-EFFORT DEFAULTS — you should not need to change them on
+    // a new machine, and changing them is not sufficient on its own anyway.
+    //
+    // The devcontainer CLI rewrites the container user's UID/GID at start to match
+    // the host user (updateRemoteUserUID) but only chowns $HOME, so the named
+    // volumes below keep the image's ownership. And /dev/kvm and the docker socket
+    // arrive carrying the host's GIDs, whatever those are.
+    //
+    // post-create.sh therefore repairs all of it at runtime, where the real IDs
+    // are actually knowable: it re-chowns the persisted directories to the current
+    // user and aligns the kvm/docker groups to whatever owns those nodes. That is
+    // what makes this container portable across hosts with different IDs.
     "args": {
-      // Match the WSL2 host user so bind-mounted files are not root-owned.
-      // Override here if `id -u` / `id -g` on the host are not 1000.
       "USER_UID": "1000",
       "USER_GID": "1000",
-      // Must equal `getent group kvm | cut -d: -f3` on the WSL2 host, otherwise
-      // the container user cannot open /dev/kvm for the Tier 2 emulator.
       "KVM_GID": "993",
-      // Must equal `getent group docker | cut -d: -f3` on the WSL2 host, otherwise
-      // the bind-mounted docker socket below is unreadable and `docker ps` fails
-      // with a permission error. On this host that is 109 (Ubuntu's docker.io
-      // package assigns 999 in the image, which is why the Dockerfile groupmods it).
       "DOCKER_GID": "109"
     }
   },
