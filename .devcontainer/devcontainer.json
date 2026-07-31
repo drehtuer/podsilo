@@ -65,31 +65,30 @@
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "runArgs": [
-    // --network=host, because this host's network is currently IPv6-only.
+    // --network=host.
     //
-    // `ip -4 route show default` on the WSL2 host is EMPTY — there is no IPv4
-    // default route, only IPv6 (confirmed 2026-07-31: `curl -4 https://dl.google.com`
-    // fails, `curl -6` returns 200, and even the LAN gateway is unreachable over
-    // IPv4). Docker's default bridge is IPv4-only, so a bridged container reaches its
-    // own gateway (172.17.0.1) and absolutely nothing beyond it: every apt-get and
-    // curl in the image build times out. Host networking puts the container in the
-    // WSL2 network namespace, where the working IPv6 route lives.
+    // ORIGINALLY added because the host was on an IPv6-only access point and
+    // Docker's default bridge is IPv4-only, so bridged containers had no route out
+    // at all and every apt-get/curl in the build timed out. That is no longer the
+    // reason: on the current machine (2026-07-31) the situation is reversed —
+    // `curl -4 https://dl.google.com` returns 302 and `curl -6` fails outright.
     //
-    // This is NOT caused by `networkingMode=Mirrored` in .wslconfig — bridged builds
-    // worked fine under mirrored mode earlier the same day, before the host moved to
-    // an IPv6-only access point.
-    //
-    // Useful side effect for Tier 3 — under mirrored networking the container's
-    // `localhost` is the Windows host, so a Windows-side
-    // `adb -a -P 5037 nodaemon server` is reachable at tcp:localhost:5037 with no
-    // host-IP lookup.
+    // It is KEPT because it is independently useful, not because it is still
+    // load-bearing for connectivity:
+    //   - The opodsync test server (docker-compose.yml) comes up as a sibling
+    //     container on the host daemon and is reachable at http://localhost:8080
+    //     from in here with no host-IP lookup. docs/dev-environment.md §7 documents
+    //     that address.
+    //   - For Tier 3, under WSL2 mirrored networking the container's `localhost` is
+    //     the Windows host, so a Windows-side `adb -a -P 5037 nodaemon server` is
+    //     reachable at tcp:localhost:5037, again with no host-IP lookup.
     //
     // Consequences to remember:
     //   - No network isolation and no devcontainer port forwarding; anything the
     //     container listens on binds straight onto the host.
     //   - No container-to-container DNS for this container.
-    // Once the host has an IPv4 default route again, plain bridge networking works
-    // and this line can go.
+    // Plain bridge networking should work now; dropping this line means re-checking
+    // both bullets above.
     "--network=host",
 
     // Hardware virtualisation for the in-container (Tier 2) emulator. Requires

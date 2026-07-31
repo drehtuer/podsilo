@@ -13,7 +13,7 @@ and this document records what was actually built — deviations are called out 
 1. [What works, and what has never been run](#1-what-works-and-what-has-never-been-run)
 2. [Quick start](#2-quick-start)
 3. [Host prerequisites](#3-host-prerequisites-windows--wsl2--docker)
-4. [Build arguments you may need to change](#4-build-arguments-you-may-need-to-change)
+4. [Host UID/GID portability](#4-host-uidgid-portability)
 5. [Clean checkout to green tests](#5-clean-checkout-to-green-tests)
 6. [Testing tiers](#6-testing-tiers)
 7. [The opodsync test sync server](#7-the-opodsync-test-sync-server)
@@ -31,10 +31,12 @@ below differ enormously in how well-proven they are.
 |---|---|---|
 | Dev container builds and starts | ✅ Verified | Repeatedly, incl. 2026-07-31 |
 | Android SDK provisioning (`post-create.sh`) | ✅ Verified | Idempotent, installs into the named volume |
-| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-07-31: 215 tests, 3 skipped, exit 0 |
+| Portability across hosts with different UID/GID | ✅ Verified | 2026-07-31: second machine, uid 1002 / docker gid 108 — see [§4](#4-host-uidgid-portability) |
+| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-07-31, on both machines: 215 tests, 3 skipped, exit 0 |
 | `./gradlew assembleDebug` | ✅ Verified | 29 MB debug APK |
-| opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green |
-| `docker` from inside the container | ✅ Verified | uid 1000, group `docker(109)`, host daemon |
+| opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green (3 tests, 0 skipped) |
+| `docker` from inside the container | ✅ Verified | Host daemon, group aligned at runtime by `post-create.sh` |
+| `gh` (GitHub CLI) | ✅ Verified | 2.97.0, upstream release tarball |
 | `/dev/kvm` usable in-container | ✅ Verified | `emulator -accel-check` → "KVM (version 12) is installed and usable" |
 | **Tier 2 — emulator booting in-container** | ❌ **Never run** | No AVD has ever booted; see [§6](#6-testing-tiers) |
 | **Tier 2 — `connectedAndroidTest`** | ❌ **Never run** | Follows from the above |
@@ -138,20 +140,41 @@ Docker Engine.
 
 ---
 
-## 4. Build arguments you may need to change
+## 4. Host UID/GID portability
 
-Three GIDs in `.devcontainer/devcontainer.json` are host-specific. The committed values are correct
-for this project's host; on any other machine, check them:
+**You should not need to change anything here for a new machine.** This section explains why, since
+the four host-specific build args in `.devcontainer/devcontainer.json` look like they need editing.
 
-| Arg | Committed | How to get the right value on your host |
+| Arg | Committed default | What it actually is on your host |
 |---|---|---|
 | `USER_UID` / `USER_GID` | `1000` | `id -u` / `id -g` |
 | `KVM_GID` | `993` | `getent group kvm \| cut -d: -f3` |
 | `DOCKER_GID` | `109` | `getent group docker \| cut -d: -f3` |
 
-Getting `DOCKER_GID` wrong makes the bind-mounted `/var/run/docker.sock` unreadable — `docker ps`
-fails with a permission error and the opodsync server cannot be started. Getting `KVM_GID` wrong
-makes `/dev/kvm` unopenable; `post-create.sh` detects this specific case and tells you.
+These are **best-effort defaults, not requirements**, because a build arg cannot know the host's IDs
+in the general case, and two of the three things that depend on them are decided *after* the image
+is built:
+
+- The devcontainer CLI rewrites the container user's UID/GID at container start
+  (`updateRemoteUserUID`, on by default) to match the host user — you can spot this in the image
+  name, which gains a `-uid` suffix. It chowns `$HOME`, but **not** the named volumes, so
+  `/opt/android-sdk` keeps whatever ownership the image gave it.
+- `/dev/kvm` and the bind-mounted `/var/run/docker.sock` arrive carrying the **host's** GIDs,
+  whatever those happen to be.
+
+So `post-create.sh` repairs all of it at runtime, where the real IDs are knowable: it re-chowns the
+persisted directories to the current user, and aligns the `kvm`/`docker` groups to whatever GID owns
+those nodes (adding the user to an existing group if the GID is already taken, and never `chgrp`-ing
+the socket itself — it is a bind mount, so that would change it on the host too).
+
+This was not theoretical: the project moved from a `uid 1000` / `docker gid 109` machine to a
+`uid 1002` / `docker gid 108` one, and every one of these broke at once. See
+[§8.2](#82-android-sdk-install-skips-every-package) for the failure mode, which is much less obvious
+than it sounds.
+
+> **Group changes need a new shell.** `usermod -aG` only affects processes started afterwards, so
+> `docker ps` will still fail in the terminal `post-create.sh` ran in. Open a new one (the script
+> says so when it happens).
 
 ### `--device=/dev/kvm`
 
@@ -342,6 +365,11 @@ The single most expensive failure mode encountered on this project. Symptoms ran
 devcontainer build fails at `apt-get update`" to "`sdkmanager` hangs for 20 minutes then blames the
 mirror".
 
+> **Resolved on the current machine (2026-07-31)** by moving to a different PC/network. The state
+> is now the mirror image of the original problem: `curl -4` returns 302 and `curl -6` fails, so
+> everything works and the IPv6 steering in `post-create.sh` correctly does nothing. Kept because
+> the diagnostic method below is what matters, not which family happened to be broken.
+
 **Probe reachability; never infer it from a routing table.** An IPv4 default route can be present
 while IPv4 is completely dead:
 
@@ -364,23 +392,61 @@ The JVM tries IPv4 first and does *not* fall back the way curl's happy-eyeballs 
 `_JAVA_OPTIONS=-Djava.net.preferIPv6Addresses=true` automatically when IPv4 is dead but IPv6 works.
 Gradle needs the same export.
 
-### 8.2 `docker ps` fails with a permission error
+### 8.2 Android SDK install skips every package
 
-`DOCKER_GID` doesn't match the host's docker group. See [§4](#4-build-arguments-you-may-need-to-change).
+Symptom — `post-create.sh` scrolls a licence, then:
 
-### 8.3 `/dev/kvm` exists but isn't accessible
+```
+Accept? (y/N): Skipping following packages as the license is not accepted:
+...
+The following packages can not be installed since their licenses ... were not accepted:
+  emulator
+  platform-tools
+  ...
+```
 
-`KVM_GID` mismatch, or `/etc/wsl.conf` isn't chowning the device on boot. `post-create.sh`
-distinguishes "not present" from "present but inaccessible" and prints the fix for each.
+and the script dies at `adb: command not found`.
 
-### 8.4 `sdkmanager: Could not determine SDK root`
+**This is a file-ownership problem wearing a licence problem's clothes.** `$ANDROID_HOME` is owned
+by a UID that isn't yours (see [§4](#4-host-uidgid-portability)), so `sdkmanager --licenses` cannot
+create `$ANDROID_HOME/licenses` — and it does not say so. It prints *"All SDK package licenses
+accepted"* and exits **0** having written nothing. The install that follows then re-prompts on a
+closed stdin, reads EOF, takes the `N` default, and skips everything.
+
+`post-create.sh` now repairs the ownership before it starts and verifies the licence files exist
+afterwards, so this should be self-healing. To confirm by hand:
+
+```bash
+ls -ld /opt/android-sdk        # should be owned by `id -u`:`id -g`
+ls /opt/android-sdk/licenses   # should be non-empty
+```
+
+### 8.3 `docker ps` fails with a permission error
+
+The `docker` group inside the container doesn't match the GID owning the bind-mounted
+`/var/run/docker.sock`. `post-create.sh` aligns them automatically — but **group changes only apply
+to new processes**, so open a fresh terminal after it runs. To check without one:
+
+```bash
+stat -c '%g' /var/run/docker.sock   # host's docker GID
+id -G                               # must contain it
+sg docker -c 'docker ps'            # test with the new group applied
+```
+
+### 8.4 `/dev/kvm` exists but isn't accessible
+
+Same class of problem as 8.3, handled the same way — or `/etc/wsl.conf` isn't chowning the device on
+boot. `post-create.sh` distinguishes "not present" from "present but inaccessible" and prints the fix
+for each.
+
+### 8.5 `sdkmanager: Could not determine SDK root`
 
 `sdkmanager` lives in `/opt/android-cmdline-tools` (part of the image) while the SDK lives in
 `$ANDROID_HOME` (a named volume), so the volume mount can never shadow it — but it also means
 `sdkmanager` can never infer its root. **Every** invocation needs `--sdk_root="$ANDROID_HOME"`.
 `post-create.sh` wraps this in an `sdkm()` shell function.
 
-### 8.5 ktlint and detekt disagree with each other
+### 8.6 ktlint and detekt disagree with each other
 
 Recurring friction, hit in every tier so far. The ktlint Gradle plugin (14.x) and
 `detekt-formatting` 1.23.8 bundle **different ktlint versions with different wrapping and
@@ -391,7 +457,7 @@ Practical rule, learned the hard way: **write to the stricter/older (detekt) ktl
 and prefer extracting a local variable over clever multiline wrapping.** A deeply nested named
 argument is the usual trigger; hoisting it into a `val` satisfies both tools at once.
 
-### 8.6 Robolectric can't download `android-all`
+### 8.7 Robolectric can't download `android-all`
 
 Needs network from the Gradle test worker specifically. On a healthy network this is automatic. If
 the worker cannot reach Maven Central while `curl` can, pre-fetch the jar and run Robolectric in
@@ -414,13 +480,15 @@ Verified inside the container on 2026-07-31.
 | `compileSdk` / `targetSdk` | **37** | Bumped from 35: current `androidx.core`/`androidx.activity` fail AAR metadata checks below 36 |
 | Build tools | 37.0.0 | |
 | Platform tools / adb | **37.0.1** / adb 1.0.41 | Match this on the Windows side for Tier 3 |
+| `gh` (GitHub CLI) | **2.97.0** | Upstream release tarball pinned via the `GH_VERSION` build arg, not apt — noble only packages 2.45.0 (Feb 2024) |
 | Emulator | 37.1.11 | |
 | System image | `android-35;google_apis;x86_64` | Deliberately still 35; Tier 2 is unproven anyway |
 | cmdline-tools | build 13114758 | |
 | opodsync | **0.5.3** | Upstream's version line is `0.x` — there has never been a `1.x` |
 
-Persisted as named Docker volumes so rebuilds don't re-download gigabytes: the Android SDK
-(`/opt/android-sdk`), `~/.gradle`, `~/.android`, and Claude Code's config dir.
+Persisted as named Docker volumes so rebuilds don't re-download gigabytes or re-authenticate: the
+Android SDK (`/opt/android-sdk`), `~/.gradle`, `~/.android`, Claude Code's config dir, and
+`~/.config/gh` (so `gh auth login` survives a rebuild).
 
 ---
 

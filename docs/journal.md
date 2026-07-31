@@ -798,3 +798,92 @@ run happened in an already-warm container, not from a virgin clone plus from-scr
   `connectedAndroidTest` is the actually-unproven part and would be its own task.
 - `scripts/adb-connect-host.sh` still doesn't exist.
 - No `--profile nextcloud`; decided out of scope earlier this session (see the entry above).
+
+---
+
+## 2026-07-31 (later still) — Moving to a second machine: three host-ID bugs and a missing `gh`
+
+**Symptom:** on a new PC, `post-create.sh` scrolled a licence, printed *"Skipping following
+packages as the license is not accepted"* for all five SDK packages, and died at
+`adb: command not found`. Also: no `gh` binary in the container.
+
+**The licence message was a lie, and that is the interesting part.** Nothing was wrong with the
+licences. `$ANDROID_HOME` (a named volume, initialised from the image's ownership) was owned by
+`1000:1000` while the container user was `1002:1002`, so `sdkmanager --licenses` could not create
+`/opt/android-sdk/licenses`. It does not report that. It prints **"All SDK package licenses
+accepted"** and exits **0** having written nothing. The install that follows then re-prompts,
+reads EOF from a closed stdin, takes the `N` default, and skips every package. Three layers of
+misdirection between cause and symptom, and the script's own `yes | sdkm --licenses >/dev/null ||
+true` deleted the only remaining evidence.
+
+**Why the UID differed at all:** the devcontainer CLI rewrites the container user's UID/GID at
+container start (`updateRemoteUserUID`, default on) to match the host user, and chowns `$HOME` but
+not the named volumes. Confirmed rather than assumed — the running image's name carries the CLI's
+`-uid` suffix. The old machine's host uid was 1000, so the build arg matched *by luck*, not design.
+
+Two more of the same class fell out once looked for: `/var/run/docker.sock` is group **108** on this
+host against `DOCKER_GID=109` in the image (so `docker ps` → permission denied, and no opodsync),
+and `/dev/kvm` is 993 (which happened to still match).
+
+**Fix: repair at runtime, don't re-pin build args.** The author's steer mid-session — *"ideally the
+container should be able to run on any PC which may have different uid/gid settings"* — was already
+the direction, and it rules out the tempting one-line fix of editing `1000`→`1002`, which just
+relocates the breakage to the next machine. `post-create.sh` now, before touching sdkmanager:
+
+- re-chowns `$ANDROID_HOME`, `~/.android`, `~/.gradle`, `~/.claude`, `~/.config/gh` to the *current*
+  uid:gid when they differ (it has passwordless sudo);
+- aligns the `kvm`/`docker` groups to whatever GID owns those nodes — reusing an existing group if
+  that GID is taken, otherwise `groupmod`-ing the image's placeholder. Deliberately **never**
+  `chgrp`s the socket itself: it is a bind mount, so that would change it **on the host**;
+- verifies `$ANDROID_HOME/licenses/*` actually exists after the accept step, instead of trusting an
+  exit code that is known to lie;
+- replaces the bare `adb version` (which under `set -e` aborted with a true but useless
+  "command not found") with a check that names the install that failed.
+
+The build args stay as documented best-effort defaults, with comments in all three files saying not
+to edit them for a new host.
+
+**`gh`:** added to the Dockerfile as the upstream **2.97.0** release tarball rather than
+`apt-get install gh`. Ubuntu noble does package it, but at 2.45.0 (Feb 2024) — well over a year
+stale for a tool that talks to a moving API. A pinned static binary over HTTPS is also the pattern
+the Dockerfile already uses twice (Google's cmdline-tools, Claude Code), so it keeps the "no
+third-party apt repositories" property the file's header promises. Added a `podsilo-gh-config`
+volume for `~/.config/gh` so `gh auth login` survives a rebuild, same rationale as the Claude Code
+volume.
+
+**What bit me while writing the fix:** `grp="$(getent group "${node_gid}" | cut -d: -f1)"` aborted
+the script under `set -euo pipefail`. `getent` exits **2** when the GID has no group, and `pipefail`
+propagates that past `cut`'s 0 — so the guard died on precisely the case it existed to handle.
+Caught by running it (`bash -x`), not by reading it.
+
+**Verified on this host — all run, not inferred**
+
+- `post-create.sh` exits **0** from the broken starting state; all five SDK packages install;
+  `/opt/android-sdk/licenses` has 7 files; `adb version` → 37.0.1.
+- `docker ps` works (via `sg docker` in the same shell; a new terminal gets it normally).
+- `./gradlew ktlintCheck detekt test` → **BUILD SUCCESSFUL, exit 0**. Test counts read from the
+  JUnit XML rather than the console: naming 75, sync 43, feed 38, gpodder 23 (3 skipped), database
+  20, datastore 7, download 5, model 4 = **215 discovered, 3 skipped**. Identical to the previous
+  machine's baseline.
+- opodsync: built, came up healthy, served `GET /subscriptions` with auth and **401** without, and
+  `OpodsyncIntegrationTest` ran **3 tests, 0 skipped, 0 failures**. Torn down afterwards
+  (`docker compose down -v`), so the machine is left as found.
+- `gh --version` → 2.97.0, installed with the exact command the Dockerfile now runs.
+
+**Not verified**
+
+- **The image itself has not been rebuilt.** `gh` was installed into the *running* container with
+  the Dockerfile's own commands, which proves the URL, the archive layout, and the install path —
+  but not the layer in context. The `podsilo-gh-config` volume and the `GH_CONFIG_DIR` mkdir/chown
+  only take effect on a rebuild; until then `post-create.sh` correctly reports `gh` as present and
+  the config dir is a plain directory rather than a volume.
+- Tiers 2 and 3 remain untouched and unproven; the half-created `podsilo-test` AVD noted in the
+  previous entry was not investigated.
+
+**Process note.** The IPv6-only network from the earlier entry is gone, and the current machine is
+the exact mirror image — `curl -4` returns 302, `curl -6` fails outright. Every comment that
+confidently explained *why* `--network=host` was needed was now wrong in a way that would mislead
+the next reader into thinking it is load-bearing for connectivity. Rewrote them to say what is
+actually true: kept for opodsync's `localhost:8080` and Tier 3's adb, not for reachability. A stale
+*rationale* is worse than no comment, because it survives the condition that produced it and still
+reads as authoritative.
