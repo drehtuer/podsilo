@@ -200,6 +200,22 @@ else
   echo "  Tier 1 (./gradlew test) and Tier 3 (emulator on the Windows host) are unaffected."
 fi
 
+# --- GitHub CLI -----------------------------------------------------------------
+log "GitHub CLI"
+if command -v gh >/dev/null; then
+  gh --version | head -1
+  echo "config dir: ${HOME}/.config/gh (named volume — 'gh auth login' survives a rebuild)"
+  if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
+    echo "GH_TOKEN/GITHUB_TOKEN is set in the environment."
+  elif gh auth status >/dev/null 2>&1; then
+    echo "Authenticated — no login needed."
+  else
+    warn "Not authenticated yet. Run 'gh auth login' once; it persists in the volume."
+  fi
+else
+  warn "gh not on PATH — rebuild the container to pick it up (added 2026-07-31)."
+fi
+
 # --- Claude Code ----------------------------------------------------------------
 log "Claude Code"
 if command -v claude >/dev/null; then

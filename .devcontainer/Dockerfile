@@ -114,6 +114,23 @@ RUN apt-get update \
       docker-compose-v2 \
  && rm -rf /var/lib/apt/lists/*
 
+# --- GitHub CLI ----------------------------------------------------------------
+# Ubuntu noble does package `gh`, but only 2.45.0 (Feb 2024) — well over a year
+# behind, and `gh` talks to a moving API. Take the upstream release tarball
+# instead: a pinned, static binary fetched over HTTPS, which is the same pattern
+# this file already uses for Google's cmdline tools and Claude Code, and still
+# not a third-party apt repository (see the header).
+#
+# Swap for `apt-get install gh` if the older version is ever preferable.
+ARG GH_VERSION=2.97.0
+RUN arch="$(dpkg --print-architecture)" \
+ && curl -fsSL -o /tmp/gh.tar.gz \
+      "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz" \
+ && tar -xzf /tmp/gh.tar.gz -C /tmp \
+ && install -m 0755 "/tmp/gh_${GH_VERSION}_linux_${arch}/bin/gh" /usr/local/bin/gh \
+ && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_${arch}" \
+ && gh --version
+
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 # --- Non-root user -------------------------------------------------------------
@@ -158,10 +175,17 @@ ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_USER_HOME=/home/${USERNAME}/.android \
     GRADLE_USER_HOME=/home/${USERNAME}/.gradle \
-    CLAUDE_CONFIG_DIR=/home/${USERNAME}/.claude
-RUN mkdir -p "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" "${CLAUDE_CONFIG_DIR}" \
+    CLAUDE_CONFIG_DIR=/home/${USERNAME}/.claude \
+    GH_CONFIG_DIR=/home/${USERNAME}/.config/gh
+# These are all volume mount points. Docker creates a missing mount point as
+# root, which the container user then cannot write, so create them here with the
+# right ownership first. USER_UID/USER_GID are only a best guess at the host's
+# IDs — post-create.sh re-chowns these at runtime, where the real IDs are known.
+RUN mkdir -p "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" \
+      "${CLAUDE_CONFIG_DIR}" "${GH_CONFIG_DIR}" \
  && chown -R "${USER_UID}:${USER_GID}" \
-      "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" "${CLAUDE_CONFIG_DIR}"
+      "${ANDROID_HOME}" "${ANDROID_USER_HOME}" "${GRADLE_USER_HOME}" \
+      "${CLAUDE_CONFIG_DIR}" "/home/${USERNAME}/.config"
 
 ENV PATH=/home/${USERNAME}/.local/bin:${ANDROID_CMDLINE_TOOLS}/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}
 

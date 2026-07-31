@@ -49,6 +49,9 @@
     // credentials and history file between host Claude Code and container Claude
     // Code, which both write to it. Cost is one `/login` inside the container.
     "source=podsilo-claude-config,target=/home/dev/.claude,type=volume",
+    // $GH_CONFIG_DIR — `gh auth login`'s token and config, so authenticating to
+    // GitHub also survives an image rebuild. Same rationale as the Claude volume.
+    "source=podsilo-gh-config,target=/home/dev/.config/gh,type=volume",
     // Commit identity for Claude Code (and you) inside the container. Read-only —
     // nothing in here should be rewriting the host's git config.
     // Requires ~/.gitconfig to exist on the host: Docker silently creates a
