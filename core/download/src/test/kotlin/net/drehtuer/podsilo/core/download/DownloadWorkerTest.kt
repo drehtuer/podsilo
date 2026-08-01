@@ -113,8 +113,11 @@ class DownloadWorkerTest {
     private fun buildWorker(
         episodes: List<Episode> = listOf(episode()),
         feeds: List<Feed> = listOf(feed()),
+        userRequested: Boolean = false,
     ): DownloadWorker {
-        val cacheDir = temporaryFolder.newFolder("cache")
+        // Stable across calls, like the real app's cache dir — a test that builds the worker twice
+        // (to compare two runs of the same episode) is exercising exactly the case that matters.
+        val cacheDir = File(temporaryFolder.root, "cache").apply { mkdirs() }
         val factory =
             object : WorkerFactory() {
                 override fun createWorker(
@@ -143,8 +146,13 @@ class DownloadWorkerTest {
                     )
             }
         return TestListenableWorkerBuilder<DownloadWorker>(context)
-            .setInputData(Data.Builder().putString(DownloadWorker.KEY_EPISODE_KEY, EPISODE_KEY).build())
-            .setWorkerFactory(factory)
+            .setInputData(
+                Data
+                    .Builder()
+                    .putString(DownloadWorker.KEY_EPISODE_KEY, EPISODE_KEY)
+                    .putBoolean(DownloadWorker.KEY_USER_REQUESTED, userRequested)
+                    .build(),
+            ).setWorkerFactory(factory)
             .build()
     }
 
@@ -199,6 +207,79 @@ class DownloadWorkerTest {
 
             assertEquals(0, server.requestCount)
             assertEquals("already there.mp3", ledger.get(EPISODE_KEY)?.writtenFileName)
+        }
+
+    @Test
+    fun `the user-requested flag is the only way past the terminal-row refusal`() =
+        runBlocking {
+            // The half of docs/decisions/0012 that keeps the no-auto-download invariant provable.
+            // Same episode, same terminal row, same everything — only the flag differs.
+            ledger.upsert(queuedRow(state = LedgerState.DOWNLOADED, writtenFileName = "already there.mp3"))
+            ledger.writes.clear()
+
+            buildWorker(userRequested = false).doWork()
+            assertEquals("without the flag, nothing is fetched", 0, server.requestCount)
+
+            server.enqueue(MockResponse().setResponseCode(200).setBody(mp3Body()))
+            buildWorker(userRequested = true).doWork()
+            assertEquals("with the flag, the download proceeds", 1, server.requestCount)
+        }
+
+    @Test
+    fun `a re-download resets attempts and clears the error, but keeps the written file name`() =
+        runBlocking {
+            // docs/decisions/0012 sections 2 and 3. Keeping writtenFileName is the non-obvious half:
+            // it is what the duplicate guard checks, so losing it here would let a second copy be
+            // written on the *next* re-download.
+            server.enqueue(MockResponse().setResponseCode(200).setBody(mp3Body()))
+            ledger.upsert(
+                queuedRow(state = LedgerState.DOWNLOADED, writtenFileName = "20260714_earlier name.mp3")
+                    .copy(attempts = 4, lastError = "No space left on device", syncedToServer = true),
+            )
+            ledger.writes.clear()
+
+            buildWorker(userRequested = true).doWork()
+
+            val stored = checkNotNull(ledger.get(EPISODE_KEY))
+            assertEquals(LedgerState.DOWNLOADED, stored.state)
+            assertEquals("a re-decision is a new attempt chain, not attempt 5 of 5", 1, stored.attempts)
+            assertNull(stored.lastError)
+            assertEquals("20260714_earlier name.mp3", stored.writtenFileName)
+            assertFalse("a re-download re-posts DOWNLOAD, so it re-enters the outbox", stored.syncedToServer)
+        }
+
+    @Test
+    fun `a re-download whose own file is still there aborts instead of writing a second copy`() =
+        runBlocking {
+            // The one licensed existence check in the app (docs/decisions/0012 §4). Not an ERROR:
+            // the row stays DOWNLOADED and the user is told the file is already there.
+            target.seed("Der Podcast", "20260714_earlier name.mp3")
+            ledger.upsert(
+                queuedRow(state = LedgerState.DOWNLOADED, writtenFileName = "20260714_earlier name.mp3"),
+            )
+            ledger.writes.clear()
+
+            val result = buildWorker(userRequested = true).doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            assertEquals("nothing is fetched when the file is already present", 0, server.requestCount)
+            assertEquals(emptyList<String>(), target.deliveries)
+            assertEquals(LedgerState.DOWNLOADED, ledger.get(EPISODE_KEY)?.state)
+        }
+
+    @Test
+    fun `a first-time download performs no existence check at all`() =
+        runBlocking {
+            // A first download has no writtenFileName, so file presence is never consulted — the
+            // ledger stays the only authority on whether an episode was handled (CLAUDE.md §11).
+            server.enqueue(MockResponse().setResponseCode(200).setBody(mp3Body()))
+            target.seed("Der Podcast", "20260714_Warum-Hamburg-immer-regnet.mp3")
+            ledger.upsert(queuedRow())
+
+            buildWorker(userRequested = true).doWork()
+
+            assertEquals(1, server.requestCount)
+            assertEquals(LedgerState.DOWNLOADED, ledger.get(EPISODE_KEY)?.state)
         }
 
     @Test

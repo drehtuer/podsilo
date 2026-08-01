@@ -72,14 +72,13 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
         }
 
     @Test
-    fun `observeEpisodes NEW returns only episodes with no ledger row, past the firstSeenAt cutoff`() =
+    fun `observeEpisodes NEW returns exactly the episodes with no ledger row`() =
         runTest {
             feeds.replaceAll(listOf(feed("f", firstSeenAt = 1_000)))
             episodes.replaceForFeed(
                 "f",
                 listOf(
                     episode("recent", "f", pubDate = 1_500),
-                    episode("backlog", "f", pubDate = 500),
                     episode("undated", "f", pubDate = null),
                     episode("handled", "f", pubDate = 2_000),
                 ),
@@ -94,8 +93,12 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
         }
 
     @Test
-    fun `observeEpisodes NEW with includeBacklog lifts the date cutoff`() =
+    fun `observeEpisodes NEW does not apply a firstSeenAt cutoff`() =
         runTest {
+            // The regression guard for docs/decisions/0013. An episode published long before its feed
+            // was first seen is still undecided, and must appear — the backlog is cleared by writing
+            // SKIPPED rows, never by hiding rows at read time. If a date clause ever comes back, this
+            // fails and the two mechanisms cannot silently coexist.
             feeds.replaceAll(listOf(feed("f", firstSeenAt = 1_000)))
             episodes.replaceForFeed(
                 "f",
@@ -105,12 +108,9 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
                 ),
             )
 
-            val archive =
-                ledger
-                    .observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW, includeBacklog = true))
-                    .first()
+            val new = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
 
-            assertEquals(setOf("recent", "backlog"), archive.map { it.episode.episodeKey }.toSet())
+            assertEquals(setOf("recent", "backlog"), new.map { it.episode.episodeKey }.toSet())
         }
 
     @Test

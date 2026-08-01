@@ -41,7 +41,39 @@ sealed interface DownloadOutcome {
         val reason: String,
         val retryable: Boolean,
     ) : DownloadOutcome
+
+    /**
+     * The user asked to download this episode again, and **its own previously written file is still
+     * in the folder** — so nothing was fetched (`docs/decisions/0012` §4).
+     *
+     * Informational, not a failure: the ledger returns to `DOWNLOADED` unchanged, the UI says
+     * *"Already in your folder — <name>"*, and nothing is written to the error log. Aborting rather
+     * than overwriting is deliberate — the file may be mid-playback in the user's player, and a
+     * suffixed second copy is exactly what `writtenFileName` exists to prevent.
+     */
+    data class AlreadyPresent(
+        val fileName: String,
+    ) : DownloadOutcome
 }
+
+/**
+ * One download, as a value — the same grouping idiom the pipeline's internal `Delivery` uses, so
+ * the entry point reads as "download this request" rather than as a six-item parameter list.
+ *
+ * @property previousFileName the name a previous successful delivery recorded in the ledger.
+ *   Reused verbatim so a retry overwrites its own file instead of creating a second copy
+ *   (CLAUDE.md §6). Never derived from what is on disk.
+ * @property userRequested set **only** from a UI triage event (`docs/decisions/0012`). It is what
+ *   permits re-downloading a terminal row at all, and the only thing that enables the pre-flight
+ *   duplicate check below.
+ */
+data class DownloadRequest(
+    val feed: Feed,
+    val episode: Episode,
+    val naming: NamingSettings,
+    val previousFileName: String? = null,
+    val userRequested: Boolean = false,
+)
 
 /**
  * Sequences the whole download pipeline CLAUDE.md §6 mandates:
@@ -77,12 +109,31 @@ class EpisodeDownloader(
      */
     @Suppress("ReturnCount")
     suspend fun download(
-        feed: Feed,
-        episode: Episode,
-        naming: NamingSettings,
-        previousFileName: String? = null,
+        request: DownloadRequest,
         onProgress: (bytesWritten: Long, totalBytes: Long?) -> Unit = { _, _ -> },
     ): DownloadOutcome {
+        // Named, not destructured: five positional bindings would silently change meaning if the
+        // fields of DownloadRequest were ever reordered, and two of them are same-typed.
+        val feed = request.feed
+        val episode = request.episode
+        val naming = request.naming
+        val previousFileName = request.previousFileName
+        // The one licensed existence check in the app (docs/decisions/0012 §4). It runs *only*
+        // because the user asked for this specific file again, and only when this episode already
+        // wrote one. It never decides whether an episode is new or whether it was handled — that
+        // stays the ledger, unconditionally (CLAUDE.md §11). A first-time download performs no
+        // existence check at all.
+        if (request.userRequested && previousFileName != null) {
+            val folder = resolveFolder(feed, episode, naming)
+            if (folder != null &&
+                downloadTarget
+                    .existingNames(folder)
+                    .getOrDefault(emptySet())
+                    .contains(previousFileName)
+            ) {
+                return DownloadOutcome.AlreadyPresent(previousFileName)
+            }
+        }
         // Compiled once, up front: a user-entered pattern that doesn't compile is a settings bug the
         // author has to fix, so it surfaces as a visible non-retryable error rather than being
         // silently dropped or blowing up halfway through the pipeline.
@@ -117,6 +168,34 @@ class EpisodeDownloader(
             cacheDir.listFiles { file -> file.name.startsWith(prefix) }?.forEach { it.delete() }
         }
     }
+
+    /**
+     * The folder this episode would be delivered into, resolved from the naming templates alone —
+     * no network, no bytes. Used by the duplicate guard, which has to know where to look *before*
+     * deciding whether to fetch anything.
+     *
+     * A template the engine cannot resolve yields `null`, which the guard reads as "cannot tell" and
+     * proceeds with the download: refusing to re-download because we could not check would be worse
+     * than an extra fetch.
+     */
+    private fun resolveFolder(
+        feed: Feed,
+        episode: Episode,
+        naming: NamingSettings,
+    ): String? =
+        runCatching {
+            DefaultNamingTemplateEngine(
+                zoneId = zoneId,
+                titleCleanupRules = naming.compiledCleanupRules(),
+                transliterate = naming.transliterate,
+            ).resolve(
+                feed = feed,
+                episode = episode,
+                folderTemplate = naming.folderTemplate,
+                fileTemplate = naming.fileTemplate,
+                contentType = null,
+            ).folder
+        }.getOrNull()
 
     /** Everything one delivery needs, grouped so the steps below read as a pipeline, not a parameter list. */
     private data class Delivery(

@@ -27,6 +27,16 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    // MigrationTestHelper reads the exported schemas through the *asset* manager, so the directory
+    // ksp writes them to has to be on the unit-test asset path. Without this the helper fails at
+    // construction with "Cannot find the schema file", which reads like a missing export rather
+    // than a missing source set.
+    sourceSets {
+        named("test") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 // Export the schema so future migrations have a versioned baseline to diff against (CLAUDE.md §3:

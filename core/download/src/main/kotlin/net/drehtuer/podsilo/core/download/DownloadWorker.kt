@@ -73,19 +73,24 @@ class DownloadWorker
 
         override suspend fun doWork(): Result {
             val episodeKey = inputData.getString(KEY_EPISODE_KEY) ?: return Result.failure()
+            val userRequested = inputData.getBoolean(KEY_USER_REQUESTED, false)
             val existing = ledgerRepository.get(episodeKey)
 
             // A remote DOWNLOAD/PLAY/DELETE (or a local skip) that landed while this was queued wins:
             // the episode is already handled, so downloading it now would be the double-download the
             // ledger exists to prevent (CLAUDE.md §11).
-            if (existing != null && existing.state in TERMINAL_STATES) return Result.success()
+            //
+            // The single exception is an explicit *Download again* (docs/decisions/0012): the flag is
+            // settable only from a UI event, never by a worker or a sync path, which is what keeps
+            // "only a user can create a file from a terminal row" one grep and one test to verify.
+            if (existing != null && existing.state in TERMINAL_STATES && !userRequested) return Result.success()
 
             val episode = episodeRepository.get(episodeKey)
             val feed = episode?.let { feedRepository.get(it.feedUrl) }
             return when {
                 episode == null -> fail(existing, "episode is no longer in any subscribed feed")
                 feed == null -> fail(existing, "feed is no longer subscribed")
-                else -> runGuarded(existing, episode, feed)
+                else -> runGuarded(existing, episode, feed, userRequested)
             }
         }
 
@@ -94,9 +99,10 @@ class DownloadWorker
             existing: EpisodeLedgerRow?,
             episode: Episode,
             feed: Feed,
+            userRequested: Boolean,
         ): Result =
             try {
-                run(existing, episode, feed)
+                run(existing, episode, feed, userRequested)
             } catch (cancellation: CancellationException) {
                 // Stopped by WorkManager (constraints lost, work cancelled). Hand the row back to
                 // QUEUED so it doesn't sit in DOWNLOADING forever; the partial file stays for resume.
@@ -113,8 +119,14 @@ class DownloadWorker
             existing: EpisodeLedgerRow?,
             episode: Episode,
             feed: Feed,
+            userRequested: Boolean,
         ): Result {
-            val attempts = (existing?.attempts ?: 0) + 1
+            // docs/decisions/0012 section 3: a re-decision is a new attempt chain, not a continuation.
+            // Leaving attempts at 3 would render a fresh download as "attempt 3 of 3" and look
+            // exhausted before it started. writtenFileName is deliberately NOT reset — it is what the
+            // duplicate guard checks, and losing it would let a second copy be written.
+            val reopening = userRequested && existing != null && existing.state in TERMINAL_STATES
+            val attempts = if (reopening) 1 else (existing?.attempts ?: 0) + 1
             val recordedFileName = existing?.writtenFileName
             ledgerRepository.upsert(rowFor(episode, LedgerState.DOWNLOADING, attempts, recordedFileName))
             notifications.ensureChannel()
@@ -123,10 +135,13 @@ class DownloadWorker
             var lastNotifiedAt = 0L
             val outcome =
                 episodeDownloader.download(
-                    feed = feed,
-                    episode = episode,
-                    naming = settingsRepository.observeNaming().first(),
-                    previousFileName = recordedFileName,
+                    DownloadRequest(
+                        feed = feed,
+                        episode = episode,
+                        naming = settingsRepository.observeNaming().first(),
+                        previousFileName = recordedFileName,
+                        userRequested = userRequested,
+                    ),
                 ) { written, total ->
                     // Throttled: a 64 KB read granularity would otherwise redraw the notification
                     // hundreds of times a second for no benefit.
@@ -140,6 +155,15 @@ class DownloadWorker
 
             return when (outcome) {
                 is DownloadOutcome.Delivered -> succeed(episode, attempts, outcome.fileName)
+                is DownloadOutcome.AlreadyPresent -> {
+                    // Nothing was fetched, so this is not an attempt: the row goes back to exactly
+                    // what it was, `attempts` and all. Not an ERROR, not logged (docs/decisions/0012
+                    // §4) — the UI reports it as a snackbar and the file stays untouched.
+                    ledgerRepository.upsert(
+                        rowFor(episode, LedgerState.DOWNLOADED, existing?.attempts ?: 0, outcome.fileName),
+                    )
+                    Result.success()
+                }
                 is DownloadOutcome.Failed -> {
                     ledgerRepository.upsert(
                         rowFor(episode, LedgerState.ERROR, attempts, recordedFileName, outcome.reason),
@@ -221,6 +245,16 @@ class DownloadWorker
         companion object {
             const val KEY_EPISODE_KEY: String = "episodeKey"
 
+            /**
+             * The one way past the terminal-row refusal (`docs/decisions/0012`). **Settable only
+             * from a UI triage event** — never from a worker, a sync pass, or `FeedRefresher`.
+             *
+             * A flag rather than relaxing the refusal, because the invariant then reads "only a UI
+             * event can create a file from a terminal row", which is one grep and one test to
+             * verify, instead of a property that has to be re-derived whenever the worker changes.
+             */
+            const val KEY_USER_REQUESTED: String = "userRequested"
+
             /** Beyond this, retrying is noise: the ledger keeps ERROR + `lastError` and the user decides. */
             const val MAX_ATTEMPTS: Int = 5
 
@@ -229,10 +263,18 @@ class DownloadWorker
             /** One unique work item per episode, so a double tap can't start two downloads of the same file. */
             fun uniqueWorkName(episodeKey: String): String = "podsilo-download:$episodeKey"
 
-            fun request(episodeKey: String): OneTimeWorkRequest =
+            fun request(
+                episodeKey: String,
+                userRequested: Boolean = false,
+            ): OneTimeWorkRequest =
                 OneTimeWorkRequestBuilder<DownloadWorker>()
-                    .setInputData(Data.Builder().putString(KEY_EPISODE_KEY, episodeKey).build())
-                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                    .setInputData(
+                        Data
+                            .Builder()
+                            .putString(KEY_EPISODE_KEY, episodeKey)
+                            .putBoolean(KEY_USER_REQUESTED, userRequested)
+                            .build(),
+                    ).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
                     .build()
         }

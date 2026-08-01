@@ -9,6 +9,7 @@ import net.drehtuer.podsilo.core.database.dao.EpisodeLedgerDao
 import net.drehtuer.podsilo.core.database.dao.EpisodeListDao
 import net.drehtuer.podsilo.core.database.toDomain
 import net.drehtuer.podsilo.core.database.toEntity
+import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.BulkScope
@@ -39,7 +40,7 @@ class EpisodeLedgerRepositoryImpl(
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> {
         val rows =
             when (filter.state) {
-                LedgerFilterState.NEW -> listDao.observeNewEpisodes(filter.feedUrl, filter.includeBacklog)
+                LedgerFilterState.NEW -> listDao.observeNewEpisodes(filter.feedUrl)
                 LedgerFilterState.ALL -> listDao.observeAllEpisodes(filter.feedUrl)
                 LedgerFilterState.DOWNLOADED ->
                     listDao.observeEpisodesByState(filter.feedUrl, LedgerState.DOWNLOADED.name)
@@ -69,6 +70,11 @@ class EpisodeLedgerRepositoryImpl(
         listDao
             .countUndecidedByFeed(feedUrl = scope.feedUrl, olderThanMillis = scope.cutoffOrNull())
             .map { FeedUndecidedCount(feedUrl = it.feedUrl, count = it.count) }
+
+    override suspend fun undecided(scope: BulkScope): List<Episode> =
+        listDao
+            .undecided(feedUrl = scope.feedUrl, olderThanMillis = scope.cutoffOrNull())
+            .map { it.toDomain() }
 }
 
 /**

@@ -12,9 +12,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.Feed
+import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.model.port.BulkScopeKind
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.OlderThan
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -42,6 +46,9 @@ class FeedRefreshWorkerTest {
     private lateinit var context: Context
     private val feeds = RecordingFeedRepository()
     private val episodes = RecordingEpisodeRepository()
+    private val ledger = RecordingLedgerRepository()
+    private val settings = FakeRefreshSettings()
+    private val log = RecordingLogRepository()
 
     @Before
     fun setUp() {
@@ -98,6 +105,14 @@ class FeedRefreshWorkerTest {
                                 feedFetcher = FeedFetcher(),
                                 feedXmlParser = FeedXmlParser(),
                                 clock = Clock.fixed(Instant.ofEpochMilli(NOW_MILLIS), ZoneOffset.UTC),
+                                logRepository = log,
+                                markOldEpisodesRule =
+                                    MarkOldEpisodesRule(
+                                        ledgerRepository = ledger,
+                                        settingsRepository = settings,
+                                        clock = Clock.fixed(Instant.ofEpochMilli(NOW_MILLIS), ZoneOffset.UTC),
+                                        zone = ZoneOffset.UTC,
+                                    ),
                             ),
                     )
             }
@@ -189,8 +204,6 @@ class FeedRefreshWorkerTest {
         runBlocking {
             // The no-auto-download invariant at the refresh layer (CLAUDE.md §7 item 6): a feed with
             // hundreds of untouched episodes must produce exactly zero downloads and zero actions.
-            // Structurally guaranteed — this worker has no ledger, client, or download dependency at
-            // all — and asserted here so a future edit that adds one fails loudly.
             server.enqueue(MockResponse().setResponseCode(200).setBody(feedXml((1..500).map { "Folge $it" })))
             feeds.seed(feed())
 
@@ -202,7 +215,95 @@ class FeedRefreshWorkerTest {
                     .single()
                     .size,
             )
+            assertTrue("a refresh writes no ledger rows when the mark-old rule is off", ledger.writes.isEmpty())
         }
+
+    @Test
+    fun `with the mark-old rule off, nothing is ever marked`() =
+        runBlocking {
+            settings.markOldOlderThan = OlderThan.OFF
+            ledger.seedUndecided(listOf(oldEpisode("ancient", pubDate = 0)))
+            server.enqueue(MockResponse().setResponseCode(200).setBody(feedXml(listOf("Folge 1"))))
+            feeds.seed(feed())
+
+            buildWorker().doWork()
+
+            assertTrue(ledger.writes.isEmpty())
+            assertTrue("the rule must not even query when it is off", ledger.queriedScopes.isEmpty())
+        }
+
+    @Test
+    fun `the mark-old rule writes SKIPPED, never QUEUED`() =
+        runBlocking {
+            // docs/decisions/0013 amended CLAUDE.md §5 to permit this write — but only this one.
+            // FeedRefresher has no download dependency at all, so a QUEUED row is not merely absent,
+            // it is unreachable; this pins the guarantee against a future edit that adds one.
+            settings.markOldOlderThan = OlderThan.MONTH_3
+            ledger.seedUndecided(listOf(oldEpisode("ancient", pubDate = 0)))
+            server.enqueue(MockResponse().setResponseCode(200).setBody(feedXml(listOf("Folge 1"))))
+            feeds.seed(feed())
+
+            buildWorker().doWork()
+
+            val written = ledger.writes.single()
+            assertEquals("ancient", written.episodeKey)
+            assertEquals(LedgerState.SKIPPED, written.state)
+            assertTrue("the PLAY action goes through the normal outbox", !written.syncedToServer)
+        }
+
+    @Test
+    fun `the rule uses the configured cutoff, and undated episodes are never swept up`() =
+        runBlocking {
+            settings.markOldOlderThan = OlderThan.MONTH_1
+            ledger.seedUndecided(
+                listOf(
+                    oldEpisode("ancient", pubDate = 0),
+                    // No pubDate is not evidence of being old — marking it would emit a PLAY the
+                    // user never agreed to, and it cannot be taken back.
+                    oldEpisode("undated", pubDate = null),
+                ),
+            )
+            server.enqueue(MockResponse().setResponseCode(200).setBody(feedXml(listOf("Folge 1"))))
+            feeds.seed(feed())
+
+            buildWorker().doWork()
+
+            assertEquals(listOf("ancient"), ledger.writes.map { it.episodeKey })
+            val scope = ledger.queriedScopes.single()
+            assertEquals(BulkScopeKind.OLDER_THAN, scope.kind)
+            assertEquals(
+                OlderThan.MONTH_1.cutoffMillis(Instant.ofEpochMilli(NOW_MILLIS), ZoneOffset.UTC),
+                scope.olderThanMillis,
+            )
+        }
+
+    @Test
+    fun `a feed failure is written to the error log in plain language`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(503))
+            feeds.seed(feed())
+
+            buildWorker().doWork()
+
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.FEED, entry.category)
+            assertTrue("the sentence the user reads comes first", entry.message.contains("could not be loaded"))
+            assertTrue("the technical half is separate", entry.detail.orEmpty().contains("503"))
+        }
+
+    private fun oldEpisode(
+        key: String,
+        pubDate: Long?,
+    ) = Episode(
+        episodeKey = key,
+        feedUrl = feed().url,
+        guid = key,
+        enclosureUrl = "https://example.org/$key.mp3",
+        title = key,
+        description = null,
+        pubDate = pubDate,
+        durationMs = null,
+    )
 }
 
 private class RecordingFeedRepository : FeedRepository {

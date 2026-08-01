@@ -6,6 +6,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
+import net.drehtuer.podsilo.core.database.entity.EpisodeEntity
 
 /**
  * The UI-facing joins across `episodes` and `episode_ledger`, split out of `EpisodeLedgerDao` —
@@ -38,14 +39,14 @@ interface EpisodeListDao {
     fun observeAllEpisodes(feedUrl: String?): Flow<List<EpisodeWithLedger>>
 
     /**
-     * The `To decide` tab: episodes with **no** ledger row at all (CLAUDE.md §9), with the backlog
-     * cutoff `pubDate >= Feed.firstSeenAt` applied unless [includeBacklog].
+     * The `To decide` tab: episodes with **no** ledger row at all (CLAUDE.md §9). That is the whole
+     * predicate — no date clause.
      *
-     * **The cutoff is retired** (`docs/decisions/0013`): old episodes are now hidden by *writing*
-     * `SKIPPED` rows, which is visible, per-episode reversible and shared with other clients, and
-     * "new" means exactly "no ledger row". The parameter and its clause are removed together with
-     * the `error_log` work; until then callers pass `includeBacklog = true`, and nothing new should
-     * be built against the other branch.
+     * The `pubDate >= Feed.firstSeenAt` cutoff this query used to carry is **retired**
+     * (`docs/decisions/0013`), removed rather than left behind a flag: old episodes are hidden by
+     * *writing* `SKIPPED` rows now, and an unused parameter is one caller away from becoming a
+     * second, contradictory mechanism. `Feed.firstSeenAt` stays in the schema as the default cutoff
+     * date offered for a newly-appearing feed.
      */
     @Transaction
     @Query(
@@ -55,16 +56,11 @@ interface EpisodeListDao {
             "NULL AS l_attempts, NULL AS l_lastError, NULL AS l_writtenFileName, " +
             "NULL AS l_durationSeconds " +
             "FROM episodes e " +
-            "JOIN feeds f ON e.feedUrl = f.url " +
             "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
             "AND (:feedUrl IS NULL OR e.feedUrl = :feedUrl) " +
-            "AND (:includeBacklog OR e.pubDate IS NULL OR e.pubDate >= f.firstSeenAt) " +
             "ORDER BY e.pubDate DESC",
     )
-    fun observeNewEpisodes(
-        feedUrl: String?,
-        includeBacklog: Boolean,
-    ): Flow<List<EpisodeWithLedger>>
+    fun observeNewEpisodes(feedUrl: String?): Flow<List<EpisodeWithLedger>>
 
     /** The `Downloaded` / `Played` tabs: episodes whose ledger row is in [state]. */
     @Transaction
@@ -103,4 +99,17 @@ interface EpisodeListDao {
         feedUrl: String?,
         olderThanMillis: Long?,
     ): List<FeedUndecidedCountRow>
+
+    /** The rows [countUndecidedByFeed] counts. Same predicate, verbatim — see that KDoc. */
+    @Query(
+        "SELECT e.* FROM episodes e " +
+            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
+            "AND (:feedUrl IS NULL OR e.feedUrl = :feedUrl) " +
+            "AND (:olderThanMillis IS NULL OR (e.pubDate IS NOT NULL AND e.pubDate < :olderThanMillis)) " +
+            "ORDER BY e.pubDate DESC",
+    )
+    suspend fun undecided(
+        feedUrl: String?,
+        olderThanMillis: Long?,
+    ): List<EpisodeEntity>
 }

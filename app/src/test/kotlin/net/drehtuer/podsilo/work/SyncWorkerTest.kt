@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.SyncState
@@ -209,6 +210,8 @@ private class FakeEpisodeLedgerRepository : EpisodeLedgerRepository {
     override suspend fun upsertAll(rows: List<EpisodeLedgerRow>) = rows.forEach { row -> upsert(row) }
 
     override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> = emptyList()
+
+    override suspend fun undecided(scope: BulkScope): List<Episode> = emptyList()
 }
 
 private class FakeSyncStateRepository : SyncStateRepository {

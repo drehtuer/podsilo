@@ -98,7 +98,7 @@ class EpisodeDownloaderTest {
         runBlocking {
             enqueueMp3()
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             val delivered = outcome as DownloadOutcome.Delivered
             assertEquals("20260714_Warum Hamburg immer regnet.mp3", delivered.fileName)
@@ -117,7 +117,7 @@ class EpisodeDownloaderTest {
             // URL says .mp3, the server says MP4 audio — CLAUDE.md §6 says believe the server.
             enqueueMp3(contentType = "audio/mp4")
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             assertTrue((outcome as DownloadOutcome.Delivered).fileName.endsWith(".m4a"))
         }
@@ -129,7 +129,7 @@ class EpisodeDownloaderTest {
             File(folder, "20260714_Warum Hamburg immer regnet.mp3").writeText("an earlier, different episode")
             enqueueMp3()
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             assertEquals(
                 "20260714_Warum Hamburg immer regnet (2).mp3",
@@ -147,10 +147,12 @@ class EpisodeDownloaderTest {
 
             val outcome =
                 downloader().download(
-                    feed = feed(),
-                    episode = episode(),
-                    naming = NamingSettings(),
-                    previousFileName = "20260714_Warum Hamburg immer regnet.mp3",
+                    DownloadRequest(
+                        feed = feed(),
+                        episode = episode(),
+                        naming = NamingSettings(),
+                        previousFileName = "20260714_Warum Hamburg immer regnet.mp3",
+                    ),
                 )
 
             assertEquals("20260714_Warum Hamburg immer regnet.mp3", (outcome as DownloadOutcome.Delivered).fileName)
@@ -168,7 +170,9 @@ class EpisodeDownloaderTest {
                 )
 
             val outcome =
-                downloader().download(feed(), episode(title = "Ep. 142 - Warum Hamburg immer regnet"), naming)
+                downloader().download(
+                    DownloadRequest(feed(), episode(title = "Ep. 142 - Warum Hamburg immer regnet"), naming),
+                )
 
             val delivered = outcome as DownloadOutcome.Delivered
             assertEquals("20260714_Warum Hamburg immer regnet.mp3", delivered.fileName)
@@ -180,7 +184,7 @@ class EpisodeDownloaderTest {
         runBlocking {
             val naming = NamingSettings(titleCleanupRules = listOf(TitleCleanupRuleSetting("[unclosed", "")))
 
-            val outcome = downloader().download(feed(), episode(), naming)
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), naming))
 
             val failed = outcome as DownloadOutcome.Failed
             assertFalse(failed.retryable)
@@ -193,7 +197,7 @@ class EpisodeDownloaderTest {
             // CLAUDE.md §6: never lose a successful download because a tag write failed.
             server.enqueue(MockResponse().setResponseCode(200).setBody("not actually audio"))
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             val delivered = outcome as DownloadOutcome.Delivered
             assertTrue(delivered.tagOutcome is TagWriteOutcome.Failure)
@@ -205,7 +209,7 @@ class EpisodeDownloaderTest {
         runBlocking {
             server.enqueue(MockResponse().setResponseCode(404))
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             assertFalse((outcome as DownloadOutcome.Failed).retryable)
         }
@@ -215,7 +219,7 @@ class EpisodeDownloaderTest {
         runBlocking {
             server.enqueue(MockResponse().setResponseCode(503))
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             assertTrue((outcome as DownloadOutcome.Failed).retryable)
             assertEquals(emptyList<String>(), target.deliveries)
@@ -227,7 +231,7 @@ class EpisodeDownloaderTest {
             enqueueMp3()
             target.unavailable = DownloadFolderUnavailableException("permission revoked")
 
-            val outcome = downloader().download(feed(), episode(), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             val failed = outcome as DownloadOutcome.Failed
             assertFalse(failed.retryable)
@@ -240,7 +244,7 @@ class EpisodeDownloaderTest {
         runBlocking {
             enqueueMp3()
 
-            val outcome = downloader().download(feed(), episode(pubDate = null), NamingSettings())
+            val outcome = downloader().download(DownloadRequest(feed(), episode(pubDate = null), NamingSettings()))
 
             assertEquals(
                 "00000000_Warum Hamburg immer regnet.mp3",
