@@ -6,10 +6,11 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: no UI yet.** Everything underneath the screens is built and tested — subscription
-> mirroring, feed refresh, the download pipeline, GPodder sync, naming and tagging (269 JVM tests,
-> green). The Compose UI is fully designed (`docs/UI.md`) and not yet written, so the app builds and
-> installs but does nothing you can look at. Nothing here has run on a real device.
+> **Status: no screens yet.** Everything underneath them is built and tested — subscription
+> mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
+> (339 JVM tests, green). The Compose UI is fully designed (`docs/UI.md`) and its foundations are in
+> place, but the screens themselves are unwritten, so the app installs and shows a placeholder.
+> Nothing here has run on a real device.
 
 ## The idea
 
@@ -48,7 +49,8 @@ Retrofit/OkHttp underneath. Feeds are parsed with
 [rssparser](https://github.com/prof18/RSS-Parser), audio tags rewritten with the Android-compatible
 [jaudiotagger fork](https://github.com/Kaned1as/jaudiotagger), and downloads written through the
 Storage Access Framework so you can point them at an SD card. Both library choices deviate from the
-first pick and say why in `docs/decisions/`.
+first pick and say why in `docs/decisions/`; so does the decision to add no date-time library at
+all.
 
 The codebase is split into small modules (`:core:model`, `:core:feed`, `:core:naming`,
 `:core:download`, `:core:gpodder`, `:core:sync`, `:feature:*`) so the interesting logic — sync

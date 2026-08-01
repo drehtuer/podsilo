@@ -14,8 +14,8 @@ disagree, they win.
    §§4–11 are the eight screens; §12 the cross-cutting rules; §16 motion; §17 spacing; §18 icons;
    §19 orientation. This is the canonical UX document — when it and anything else disagree, it wins.
 2. **`docs/UI_interface.md`** — the code seam: per-screen `UiState`/`UiEvent`/`UiEffect`, the ports
-   that do not exist yet (§8), corner cases (§14), notifications (§15), accessibility (§16). Start at
-   §0's seven rules; they are what the rest is derived from.
+   the screens bind to (§8, all built), corner cases (§14), notifications (§15), accessibility (§16).
+   Start at §0's seven rules; they are what the rest is derived from.
 3. **`docs/architecture.md`** §3 (data flow), §5 (ports), §9 (ledger state machine) — the contracts you
    are binding to. §12 is the decision index — ADRs 0012–0016 are the ones this design produced.
 4. **`TODO.md`** Tier 4c — the task order, which is dependency-ordered rather than screen-ordered on
@@ -23,24 +23,24 @@ disagree, they win.
 5. The visual reference lives in the design project, not the repo: `Podsilo Screens.dc.html` (all
    eight screens, every state, light and dark) and `Podsilo Prototype.dc.html` (tap-through).
 
-## Start here, in this order
+## Start here
 
-The order is not cosmetic: steps 1 and 2 are what let the four feature tasks run in parallel.
+**Nothing is blocked, on a decision or on a port.** The four open decisions were settled on
+2026-08-01 as ADRs 0012–0016, and every port those ADRs and `docs/UI_interface.md` §8 called for is
+now declared *and* implemented — error log, `KEY_USER_REQUESTED`, connectivity, Login Flow v2, free
+space, bulk writes, per-feed refresh, `Episode.link`, the four settings, Coil and Lucide.
 
-**Nothing is blocked on a decision any more** — the four open items were settled on 2026-08-01 as
-ADRs 0012–0016. Read those five before starting; three of them changed a rule in CLAUDE.md or README
-rather than filling a hole.
+What is left is **the screens themselves**, and only them:
 
-1. **Pin Coil and Lucide Compose** in the version catalog (ADR 0015) and add them to
-   `docs/third-party.md`. First, because no screen renders a row without them.
-2. **Declare the `:core:model` additions** (`docs/UI_interface.md` §8, all ten, plus `EpochTime` and
-   the four `SettingsRepository` values). Pure declarations, no behaviour. Doing these first is what
-   lets the four feature tasks proceed in parallel.
-3. Then `:core:database` (error-log table, schema v2 migration, **and removing the `firstSeenAt`
-   cutoff** per ADR 0013), `:core:download` (`KEY_USER_REQUESTED`), `:core:feed` (the mark-old rule
-   after refresh), `:core:gpodder` (Login Flow v2), `FeedRefreshWorker`'s `KEY_FEED_URL`.
-4. Then the screens: `:feature:settings` (S4/S5/S6), `:feature:episodes` (S1/S2/S3), `:app`
-   (navigation, theme, S7, S8).
+1. `:feature:episodes` — S1 (podcast list), S2 (episode list), S3 (detail sheet).
+2. `:feature:settings` — S4, S5, S6.
+3. `:app` — the `NavHost`, S7 (activity), S8 (error log).
+4. The error-log **write points** outside `FeedRefresher`, plus the test that no entry ever contains
+   a credential.
+
+The theme is already applied at the root from the persisted preference, and `sanitizeEpisodeHtml`
+(the one thing in `:feature:episodes` that exists) is table-tested, so S3 can render show notes on
+day one.
 
 ## Decisions already made — do not re-litigate
 
@@ -93,10 +93,11 @@ Things a reasonable implementation gets wrong. Each is a test, not a note.
 
 ## Known gaps, stated plainly
 
-- **`FeedRefresher` becomes a ledger writer** (ADR 0013's mark-old rule after refresh). It has never
-  written a ledger row before, and "the refresher has no ledger dependency at all" was previously
-  what made *refreshing never downloads* structural. It writes `SKIPPED` only — extend
-  `NoAutoDownloadInvariantTest` rather than trusting the reading.
+- **`FeedRefresher` is now a ledger writer** (ADR 0013's mark-old rule, via `MarkOldEpisodesRule`).
+  "The refresher has no ledger dependency at all" used to be what made *refreshing never downloads*
+  structural; it writes `SKIPPED` only, and the tests now pin that rather than the reading.
+- **S8 will render an honest but very quiet log.** Only `FeedRefresher` records; the sync, download
+  and auth write points are not wired yet.
 - **`SafDownloadTarget` and `KeystoreAppPasswordCipher` remain untested** (ADRs 0011, 0010) — device-only.
   They are also the two things most likely to be what is actually broken when a download or a login
   fails on real hardware, so check them before suspecting the UI.
@@ -110,10 +111,10 @@ Things a reasonable implementation gets wrong. Each is a test, not a note.
 
 ## Ready?
 
-Yes. Every state is specified, every state class is declared, every referenced type exists in
-`docs/UI_interface.md` §13, the corner cases are written down, and as of 2026-08-01 no decision is
-outstanding. Two screens still need their foundation built first, and both are steps 2–3 above: S8
-has no data source until `LogRepository` lands, and S3's action bar for terminal episodes needs
+Yes, and more so than last time: every state is specified, every state class is declared, every
+referenced type exists in `docs/UI_interface.md` §13, the corner cases are written down, no decision
+is outstanding, and — as of 2026-08-01 — every port the screens call is implemented rather than
+merely declared. S8 has its `LogRepository`; S3's terminal-episode action bar has
 `KEY_USER_REQUESTED`.
 
 The remaining risk is not design and not decisions — it is that **none of this has run on a device**,

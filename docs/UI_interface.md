@@ -163,7 +163,7 @@ sealed interface PodcastListEvent {
 **Ports used:** `FeedRepository.observeAll`, `EpisodeLedgerRepository.observeEpisodes(filter)` for
 the counts (the *same* query as S2, so a badge can never disagree with the list it opens),
 `SettingsRepository`, `DownloadFolderAccess`, `WorkScheduler` (refresh + sync), `ConnectivityMonitor`
-(new — §8).
+(§8).
 
 **Ordering is frozen.** The ViewModel sorts once per explicit refresh and on cold start, then holds
 the key order in a `List<String>` and re-projects updated `FeedUi` values into it. Rows update in
@@ -269,7 +269,7 @@ file rather than a page. Needs one field on the domain type:
 // :core:model — Episode
 val link: String?,   // RSS <item><link> / Atom <link rel="alternate">, mapped in :core:feed
 ```
-See §8.8.
+See §8.
 
 **Sanitisation happens at render, never at write** (architecture §4). The sanitiser is a UI-layer
 function, not a repository concern:
@@ -354,7 +354,7 @@ sealed interface ConnectEvent {
 discarded, never stored. The dialog is not dismissable by tapping outside while a request is in
 flight.
 
-Needs a port that does not exist yet — see §8, `NextcloudLoginFlowClient`.
+Uses `NextcloudLoginFlowClient` (§8), implemented in `:core:gpodder`.
 
 ### S6 — Naming template editor
 
@@ -473,183 +473,41 @@ animates between updates rather than stepping.
 
 ---
 
-## 8. Gap list — what the UI needs that does not exist yet
+## 8. What the screens bind to — all of it built
 
-Everything below `:feature:*` is built (269 tests, Tier 4b). These are the pieces the screens above
-require that are **not** in the repository today, in the order they block work.
+This was a gap list of ten items the UI needed and the repository did not have. **Every one of them
+now exists** (2026-08-01), so it is kept as a short index of what each turned into, and of the three
+places the built thing differs from the sketch.
 
-### 8.1 Error log has no backend — blocks S8 entirely
+| # | Needed for | Built as |
+|---|---|---|
+| 8.1 | S8's entire backing store | `LogRepository` + `error_log` (schema v2). Collapse-on-identity and eviction are **DAO queries**, not UI logic and not an app-start sweep |
+| 8.2 | *Download again* | `KEY_USER_REQUESTED` + the pre-flight duplicate guard — `docs/decisions/0012` |
+| 8.3 | `UI.md` §12.10's offline rules | `ConnectivityMonitor` / `AndroidConnectivityMonitor` |
+| 8.4 | S5 | `NextcloudLoginFlowClient` / `RetrofitNextcloudLoginFlowClient` |
+| 8.5 | the bulk-download warning line | `DownloadTarget.freeBytes()` |
+| 8.6 | S2 selection mode, S4's mark-as-played | `upsertAll`, `previewUndecided`, `undecided` |
+| 8.7 | S2's pull-to-refresh | `FeedRefreshWorker.KEY_FEED_URL` — the same worker, not a second one |
+| 8.8 | *Open in browser* | `Episode.link`, mapped in `:core:feed`, stored in schema v2 |
+| 8.9 | S4's four persisted controls | `SettingsRepository.observeTheme`/`SwipeMapping`/`AllowMobileData`/`MarkOldOlderThan` |
+| 8.10 | artwork and icons | Coil and `icons-lucide-android`, pinned — `docs/decisions/0015` |
 
-`UI.md` §15 already states this. Concretely:
+**Three things came out differently from the sketch, and the built shape is the contract:**
 
-```kotlin
-// :core:model
-data class LogEntry(
-    val id: Long,
-    val at: Instant,
-    val category: LogCategory,          // SYNC, FEED, DOWNLOAD, STORAGE, AUTH
-    val feedUrl: String?,
-    val episodeKey: String?,
-    val message: String,                // plain language, first
-    val detail: String?,                // HTTP status, exception class, URL, worker name, attempts
-    val occurrences: Int,
-    val firstSeenAt: Instant,
-)
+- `previewUndecided` returns `List<FeedUndecidedCount>`, not `List<Pair<String, Int>>` —
+  `first`/`second` says nothing about which is the feed and which is the count.
+- `BulkScope` is a **data class**, not an enum: `OLDER_THAN` has to carry its cutoff, and both scopes
+  need the optional per-feed narrowing *Download all* uses. Both select only episodes with **no
+  ledger row**, so a bulk action can never re-touch a decided episode; with a cutoff, episodes with
+  an unknown `pubDate` are excluded, because a missing date is not evidence of being old and
+  sweeping one up would emit a `PLAY` the user never agreed to.
+- `Instant` is **`java.time`**, and nothing was added to get it — see §1 and `docs/decisions/0016`.
 
-interface LogRepository {
-    fun observe(category: LogCategory?): Flow<List<LogEntry>>
-    suspend fun record(entry: NewLogEntry)   // collapses on identity: category + feed/episode + normalised message
-    suspend fun clear()
-    suspend fun exportPlainText(): String
-}
-```
-
-Implemented in `:core:database` (`error_log` table). **The collapse-on-identity rule belongs in the
-DAO, not the UI** — otherwise a feed failing hourly evicts every one-off error inside a day and the
-list still looks fine. Eviction (200 collapsed entries or 7 days, whichever is larger) is a DAO
-query, not an app-start sweep. Write points: `FeedRefresher`, `SyncOrchestrator`/`SyncWorker`,
-`EpisodeDownloader`/`DownloadWorker`, and the S5 auth flow. Never records the app password, the
-Basic-auth header, or a URL containing credentials.
-
-### 8.2 `KEY_USER_REQUESTED` — blocks "Download again"
-
-`DownloadWorker` currently **refuses** a terminal ledger row (that refusal is what makes the
-no-auto-download invariant provable), so *Download again* would silently do nothing. Needs an
-explicit input on the work request:
-
-```kotlin
-// :core:download
-const val KEY_USER_REQUESTED = "userRequested"   // Boolean, default false
-```
-
-Set **only** from a `EpisodeListEvent.Triage`/`EpisodeDetailEvent.Triage`, never from a worker or a
-sync path. The pre-flight duplicate guard (`DownloadTarget.existingNames`, checking *this episode's
-own* `writtenFileName`) runs only when the flag is set — that keeps `writtenFileName` from becoming
-the general "have I downloaded this?" test, which stays the ledger.
-
-**ADR 0012, accepted 2026-08-01**, settles the rest: a re-decision behaves exactly like a first one
-(action re-posted, `attempts` reset, `lastError` cleared), *Mark as played* over a terminal row
-follows the same rules and needs **no** flag because it writes no file, and `writtenFileName`
-survives every re-decision — losing it would silently disarm the guard above. The "already in your
-folder" outcome is informational only and is counted nowhere.
-
-### 8.3 Connectivity, before the request — blocks `UI.md` §12.10
-
-```kotlin
-// :core:model
-interface ConnectivityMonitor { fun observe(): Flow<Connectivity> }
-data class Connectivity(val online: Boolean, val metered: Boolean)
-```
-Android implementation over `ConnectivityManager` in `:app` or `:core:download`. Required so a
-pull-to-refresh with no connectivity returns *immediately* with a banner rather than timing out —
-and so that state is explicitly **not** written to the error log (a precondition, not a failure).
-
-### 8.4 Nextcloud Login Flow v2 — blocks S5
-
-No module speaks Login Flow v2 today; `:core:gpodder` only implements the three gpoddersync
-endpoints.
-
-```kotlin
-// :core:model
-interface NextcloudLoginFlowClient {
-    suspend fun start(baseUrl: String): Result<LoginFlow>        // POST /index.php/login/v2
-    suspend fun poll(flow: LoginFlow): Result<LoginResult>       // until granted / cancelled / timeout
-    suspend fun verifyGpodderSync(creds: NextcloudCredentials): Result<Unit>  // GET /subscriptions, 200 or nothing
-}
-```
-Implemented in `:core:gpodder` (still a JVM module — ADR 0007 holds, nothing here touches Android).
-The custom tab launch is a `UiEffect.OpenUrl`, so the client stays testable with MockWebServer.
-
-### 8.5 Free space — blocks the bulk-download warning line
-
-`BulkPreview.freeBytes` needs a `StatFs`/`ContentResolver` read on the download volume. Small, but
-Android-only, so it belongs behind the existing `DownloadTarget` port or a sibling —
-**not** in the ViewModel:
-
-```kotlin
-suspend fun DownloadTarget.freeBytes(): Long?   // null when unknowable; the warning is then not shown
-```
-
-### 8.6 Bulk write path — blocks S2 selection mode and S4's mark-as-played
-
-Writing 412 `SKIPPED` rows one `upsert` at a time is 412 transactions and 412 `Flow` emissions.
-Needs one batched method:
-
-**Built.** As declared, with one change from the draft: the preview returns a named type rather than
-`List<Pair<String, Int>>`, because `first`/`second` at the call site says nothing about which is the
-feed and which is the count.
-
-```kotlin
-// :core:model — EpisodeLedgerRepository
-suspend fun upsertAll(rows: List<EpisodeLedgerRow>)
-suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount>
-
-data class FeedUndecidedCount(val feedUrl: String, val count: Int)
-
-// BulkScope is a data class, not the enum the draft sketched: "older than" needs to carry its
-// cutoff, and both scopes need the optional per-feed narrowing that *Download all* uses.
-data class BulkScope(val kind: BulkScopeKind, val olderThanMillis: Long? = null, val feedUrl: String? = null)
-enum class BulkScopeKind { OLDER_THAN, ALL_UNDECIDED }
-```
-
-Both scopes select only episodes with **no ledger row**, so a bulk action can never re-touch an
-already decided episode. With an `OLDER_THAN` cutoff, episodes with an unknown `pubDate` are
-**excluded** — a missing date is not evidence of being old, and sweeping one up would emit a `PLAY`
-the user never agreed to.
-Also required by ADR 0013: the "mark old episodes as played" rule is applied to newly-parsed
-episodes after each feed refresh once an *older than* value is set — which makes it a
-`FeedRefresher` concern, not a UI one, and makes `FeedRefresher` the first component that writes
-ledger rows. It writes `SKIPPED` only, never `QUEUED`; `NoAutoDownloadInvariantTest` should be
-extended to assert exactly that. The same ADR **retires** the read-time `pubDate >= firstSeenAt`
-cutoff in `EpisodeLedgerDao.observeNewEpisodes` — removed, not left unused, so it cannot become a
-second mechanism.
-
-### 8.7 Feed-scoped refresh — blocks S2 pull-to-refresh
-
-`FeedRefreshWorker` refreshes all feeds. S2's pull-to-refresh is scoped to one feed and needs a
-single-feed input on the same worker (`KEY_FEED_URL`), not a second worker.
-
-### 8.8 `Episode.link` — blocks “Open in browser”
-
-`Episode` has no `link` field today; `docs/architecture.md` §7's RSS mapping table stops at
-`enclosureUrl`. S3's browser row and S2's overflow *Open in browser* both need the item's own page
-URL, so `:core:feed`'s `RssMapping` must carry `<item><link>` (Atom: `<link rel="alternate">`)
-through to the entity, and `:core:database` needs a nullable `link` column plus a migration to
-schema version 2. Null for feeds that omit it — the affordance is then absent, never a dead tap.
-
-### 8.9 Four settings the UI persists that `SettingsRepository` does not have
-
-As built (Tier 4a), `SettingsRepository` carries naming, download-folder URI, sync interval and the
-Nextcloud account/credentials — and nothing else. S4 reads and writes four more, all of which need
-adding to the port and to `:core:datastore`:
-
-```kotlin
-// :core:model — SettingsRepository additions
-fun observeTheme(): Flow<ThemePreference>;          suspend fun setTheme(value: ThemePreference)
-fun observeSwipeMapping(): Flow<SwipeMapping>;      suspend fun setSwipeMapping(value: SwipeMapping)
-fun observeAllowMobileData(): Flow<Boolean>;        suspend fun setAllowMobileData(value: Boolean)
-fun observeMarkOldOlderThan(): Flow<OlderThan>;     suspend fun setMarkOldOlderThan(value: OlderThan)
-```
-
-`allowMobileData` is not only a settings value: it is the `NetworkType` constraint `WorkScheduler`
-puts on a download request, so it has a second reader.
-
-### 8.10 Two new dependencies — approved
-
-Both were CLAUDE.md §3 "ask first" items and both were **accepted on 2026-08-01** (ADR 0015). They
-still need pinning in `gradle/libs.versions.toml` and rows in `docs/third-party.md`:
-
-- **Coil** (`io.coil-kt.coil3:coil-compose`, Apache-2.0) for artwork. S1, S2 and S3 all render
-  `Feed.imageUrl`/episode images and nothing in the repo loads a remote image today. It sits on the
-  OkHttp already pinned rather than bringing a second HTTP stack, which is what decided it over
-  Glide.
-- **Lucide's Compose artifact** for icons — §17 makes the case; the alternative was 27
-  hand-converted `VectorDrawable`s kept in step with `UI.md` §18's table by hand.
-
-The third question — `kotlinx-datetime` — was answered by **not** adding anything: see §1 and
-ADR 0016.
-
----
+**Still missing, and it is not a port:** error-log *write points*. `FeedRefresher` records feed
+failures; `SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/`DownloadWorker` and the S5 auth flow
+do not record anything yet, so S8 will render an honest but very quiet log until they do. The test
+that no entry ever contains the app password, the Basic-auth header, or a URL with credentials is
+also still unwritten.
 
 ## 9. Navigation
 
@@ -838,7 +696,7 @@ The cases below are where a plausible implementation is wrong. Each is a test, n
 | Two episodes in one feed share a `guid` | the ledger is keyed by `episodeKey`, so they are one row and one decision. The list must not show a duplicate — dedup by key when projecting, and do not assume the DAO did it. |
 | A title long enough to overflow at the largest font scale | the title truncates first; the decision affordances never do (§12.12). |
 | A feed with 500+ episodes under `All` | paging or a keyed `LazyColumn` with stable `episodeKey`s — the sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them. |
-| `writtenFileName` present but the file is gone | the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists — the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (§8.2). |
+| `writtenFileName` present but the file is gone | the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists — the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (`docs/decisions/0012`). |
 
 ### 14.4 Disconnect
 

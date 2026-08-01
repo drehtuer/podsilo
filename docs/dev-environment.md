@@ -32,7 +32,7 @@ below differ enormously in how well-proven they are.
 | Dev container builds and starts | ✅ Verified | Repeatedly, incl. 2026-07-31 |
 | Android SDK provisioning (`post-create.sh`) | ✅ Verified | Idempotent, installs into the named volume |
 | Portability across hosts with different UID/GID | ✅ Verified | 2026-07-31: second machine, uid 1002 / docker gid 108 — see [§4](#4-host-uidgid-portability) |
-| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-07-31, after Tier 4b: 269 tests, 3 skipped, exit 0 |
+| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-01, after Tier 4c's foundations: 339 tests, 3 skipped, exit 0 |
 | `./gradlew assembleDebug` | ✅ Verified | 29 MB debug APK |
 | opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green (3 tests, 0 skipped) |
 | `docker` from inside the container | ✅ Verified | Host daemon, group aligned at runtime by `post-create.sh` |
@@ -209,20 +209,21 @@ bash .devcontainer/post-create.sh
 ./gradlew ktlintCheck detekt test
 ```
 
-**Verified 2026-07-31** — `BUILD SUCCESSFUL`, exit 0:
+**Verified 2026-08-01** — `BUILD SUCCESSFUL`, exit 0:
 
 | Module | Tests |
 |---|---|
 | `:core:naming` | 81 |
-| `:core:feed` | 44 |
+| `:core:feed` | 48 |
 | `:core:sync` | 43 |
-| `:core:download` | 39 |
-| `:core:database` | 25 |
-| `:core:gpodder` | 23 (3 of them skipped — see below) |
+| `:core:download` | 43 |
+| `:core:database` | 39 |
+| `:core:gpodder` | 36 (3 of them skipped — see below) |
+| `:core:model` | 23 |
+| `:feature:episodes` | 16 |
 | `:core:datastore` | 7 |
-| `:core:model` | 4 |
 | `:app` | 3 |
-| **Total** | **269 discovered, 3 skipped, 266 executed** |
+| **Total** | **339 discovered, 3 skipped, 336 executed** |
 
 The 3 skips are `OpodsyncIntegrationTest`, which self-skips via JUnit's `assumeTrue` unless
 `PODSILO_OPODSYNC_URL` is set. That is deliberate: CLAUDE.md §7 requires Tier 1 to be offline and

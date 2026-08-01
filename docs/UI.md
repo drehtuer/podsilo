@@ -9,7 +9,7 @@ Companion documents: [`docs/architecture.md`](architecture.md) (modules, schema,
 architecture implies but does not state, it is marked **[gap]** and listed again in
 [§13](#13-coverage-check-against-the-architecture). Three decisions here **change** the architecture
 or the README and need an ADR before implementation — all three are collected in
-[§14](#14-decisions-that-need-an-adr).
+[§14](#14-decisions-that-needed-an-adr--all-three-accepted).
 
 **Vocabulary:** the user-facing word for the "I don't want this file" decision is **Mark as played**
 (never "Skip"). The ledger state behind it is still `SKIPPED` and the emitted GPodder action is still
@@ -30,8 +30,8 @@ or the README and need an ADR before implementation — all three are collected 
 11. [S8 — Error log](#11-s8--error-log)
 12. [Cross-cutting: gestures, filters, badges, theme, errors, notifications, a11y](#12-cross-cutting-rules)
 13. [Coverage check against the architecture](#13-coverage-check-against-the-architecture)
-14. [Decisions that need an ADR](#14-decisions-that-need-an-adr)
-15. [Adaptations to the code as built (Tier 4b)](#15-adaptations-to-the-code-as-built-tier-4b)
+14. [Decisions that needed an ADR — all three accepted](#14-decisions-that-needed-an-adr--all-three-accepted)
+15. [Adaptations to the code as built](#15-adaptations-to-the-code-as-built)
 16. [Motion](#16-motion)
 17. [Consistency invariants](#17-consistency-invariants)
 18. [Iconography](#18-iconography)
@@ -934,7 +934,7 @@ the old rules were amended in the same pass, so nothing below is still a proposa
 | §14.3 | [0014](decisions/0014-bulk-user-initiated-download-is-allowed.md) | Bulk download allowed as a *command*, never a *rule* — CLAUDE.md §1 and README amended |
 
 The subsections below are kept as the design rationale that fed each ADR; where a detail differs,
-the ADR is current. [§15](#15-adaptations-to-the-code-as-built-tier-4b) lists the smaller,
+the ADR is current. [§15](#15-adaptations-to-the-code-as-built) lists the smaller,
 non-contentious adaptations.
 
 ### 14.1 Terminal ledger states are re-openable **by explicit user action**
@@ -1014,9 +1014,9 @@ per-feed rules, no global bulk scope — stands exactly as it was.
 
 ---
 
-## 15. Adaptations to the code as built (Tier 4b)
+## 15. Adaptations to the code as built
 
-Everything below `:feature:*` now exists (TODO Tier 4b complete, 269 tests). These are the points
+Everything this design binds to now exists (339 tests). These are the points
 where this document meets that code — recorded so Tier 4c doesn't rediscover them.
 
 | This design needs | Status in the built code | Action |
@@ -1027,25 +1027,16 @@ where this document meets that code — recorded so Tier 4c doesn't rediscover t
 | Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.11) |
 | Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; `SyncTrigger` in `:core:download` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
 | Credential change takes effect immediately after S5 | `SyncOrchestratorFactory` builds the client per pass from current credentials | nothing to do; no restart needed after connecting |
-| Re-download of a terminal episode | `DownloadWorker` **refuses** terminal rows | add `KEY_USER_REQUESTED`, the only way past that refusal (ADR 0012) |
+| Re-download of a terminal episode | `KEY_USER_REQUESTED` is the only way past `DownloadWorker`'s terminal-row refusal | set it from a triage event and nowhere else (ADR 0012) |
 | "To decide" list + counts | `EpisodeLedgerRepository.observeEpisodes(filter)` → `EpisodeListItem` | matches §12.5; the `firstSeenAt` cutoff variant is retired (ADR 0013) |
-| **S8 error log** | — **no data source exists** | see below |
+| **S8 error log** | `LogRepository` over the `error_log` table (schema v2) | collapse and eviction are DAO queries, so the screen just renders (§11) |
+| S2's scoped pull-to-refresh | `FeedRefreshWorker.KEY_FEED_URL` | same worker, not a second one |
+| S5 | `NextcloudLoginFlowClient`, with typed failures | each `ConnectError` in §8 maps to one of them |
+| Artwork and icons | Coil and `icons-lucide-android`, pinned | ADR 0015; §18's table is the allow-list |
 
-**The error log is the one screen with no backend.** Failures are currently returned as values
-(`FeedFetchResult`, `Result`, `SyncOutcome`, ledger `lastError`) and then discarded once handled;
-nothing persists a chronological, categorised history. S8 therefore needs, before it can be built:
-
-- a small Room table (`error_log`: `id`, `at`, `category`, `feedUrl?`, `episodeKey?`, `message`,
-  `detail?`, `occurrences`, `firstSeenAt`) with a `LogRepository` port in `:core:model`, implemented
-  in `:core:database` — the collapse-on-identity rule from §11 belongs in its DAO, not in the UI;
-- write points in the four places failures are already classified: `FeedRefresher`,
-  `SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/`DownloadWorker`, and the S5 auth flow;
-- eviction (200 collapsed entries / 7 days) as a DAO query, not an app-start sweep.
-
-It is deliberately additive — no existing type changes — so it can be built alongside `:feature:*`
-rather than blocking it. `:feature:episodes`'s TODO scope ("filterable list, per-row triage, feed
-filter chips") also does not yet mention S1 (podcast list), S7 (activity) or S8; the module list
-should gain them, or S7/S8 should land in `:app`.
+**One thing S8 still lacks is content, not a backend.** Only `FeedRefresher` records failures so far;
+`SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/`DownloadWorker` and the S5 auth flow are not
+wired yet, so the screen will render an honest but very quiet log until they are.
 
 ---
 
