@@ -1217,3 +1217,50 @@ needs schema v2, which is the next step along with the `error_log` table and rem
 `firstSeenAt` cutoff. `LogRepository`, `ConnectivityMonitor` and `NextcloudLoginFlowClient` are
 declarations with no implementation behind them. `SafDownloadTarget.freeBytes` is as untested as the
 rest of that class — it needs a real `DocumentsProvider`.
+
+## 2026-08-01 (later still) — Tier 4c: every foundation the UI needs, and none of the UI
+
+**Attempted:** all of Tier 4c — the eight screens plus everything under them.
+
+**Delivered:** everything under them. **Not the screens.** 339 tests (up from 288),
+`ktlintCheck detekt test assembleDebug` green. Being plain about the split matters more than the
+total: `:feature:episodes` contains one pure function and `:feature:settings` is still empty
+scaffolding, so the app installs and shows a placeholder.
+
+I misjudged the size. Eight screens with per-screen state classes, ViewModels and smoke tests is
+comparable in volume to everything below them put together, and the foundations turned out to be
+much more than the "declare a few ports" the plan implied — widening a port means implementing it
+in three modules and updating every hand-written fake.
+
+**What got built, and what it cost:**
+
+- **Schema v2**, the project's first migration. `MigrationTest` runs against the exported v1 schema
+  rather than the current entities, which is the only way it can fail for the right reason. The
+  point of the test is the ledger: a destructive fallback would drop `episode_ledger` and every
+  handled episode would return as new, here and on every client after the next sync.
+- **The error log.** Collapse-on-identity and eviction are queries. The identity folds digits,
+  because the same failure never carries the same text twice — and a test records the deliberate
+  over-reach that "failure 1" and "failure 2" therefore collapse too. That test also caught my
+  eviction test, which had numbered its 220 entries and so was really asserting against a single
+  collapsed row.
+- **ADR 0013's cutoff, removed** rather than left behind a flag.
+- **ADR 0012's flag and guard**, with the two-run test that only differs by the flag.
+- **Login Flow v2.** Writing it surfaced that forcing HTTPS on the typed address would reject
+  servers `RetrofitGpodderClient` then happily uses — so a bare host defaults to https and an
+  explicit scheme is honoured rather than silently rewritten.
+- **`sanitizeEpisodeHtml`**, which TODO flagged as worth doing early and was: writing the test found
+  two real bugs in my own first version. `AnnotatedString.Builder.toString()` is not the accumulated
+  text, so the line-break collapse silently never fired; and my link handling would have made
+  `javascript:` hrefs clickable, which Compose hands straight to an `Intent`.
+
+**detekt was the most useful reviewer again**, and I fixed rather than suppressed four times:
+`MarkOldEpisodesRule` extracted from a nine-dependency `FeedRefresher`, `DownloadRequest` grouping
+the pipeline entry point, named access replacing a five-way destructuring, and a speculative
+`undecidedKeys` query deleted for having no caller. Three suppressions remain, each with its reason
+in the KDoc.
+
+**The lesson worth recording** is about estimating from a plan written by a previous session. TODO
+listed the foundations as a handful of bullets and the screens as four; the ratio in reality was the
+other way around. A plan's bullet count is not a size estimate, and "pure declarations, no
+behaviour" hid three modules' worth of implementation behind it. Next session starts with the
+screens and nothing else in front of them.

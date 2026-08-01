@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Android library (Compose UI). Empty until build order step 8.
+// Android library (Compose UI): S1 (podcast list), S2 (episode list) and S3 (episode detail).
+// S1 lives here rather than in :app because it shares the ledger query and the episode projection
+// with S2 — a badge that disagrees with the list it opens is the bug co-location prevents.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -25,8 +27,12 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:model"))
+
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
     implementation(libs.compose.material3)
+
     testImplementation(libs.junit4)
 }

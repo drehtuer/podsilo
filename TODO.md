@@ -6,11 +6,17 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-01): Tiers 1–4b are complete and green — 269 tests, 3 skipped.** Everything
-below the UI is built: model, naming, sync, feed parse + fetch + refresh worker, the download
-pipeline, the GPodder client, Room, DataStore, the three workers and the Hilt graph. **Tier 4c (the
-Compose UI) is designed but not written**, and is blocked on four decisions rather than on code —
-see `docs/architecture.md` §12. Nothing in this project has ever run on a device.
+**Repo state (2026-08-01): Tiers 1–4b complete; Tier 4c's foundations complete, its screens not
+started. 339 tests, 3 skipped.**
+
+Everything the UI binds to now exists: schema v2 with the error log and the project's first
+migration, `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the
+mark-old rule, connectivity, the theme, and `sanitizeEpisodeHtml`.
+
+**What is not written: the screens themselves.** S1–S8, their `UiState`/`UiEvent` types, their
+ViewModels, and the `NavHost` that joins them. `MainActivity` renders a placeholder inside the real
+theme. That is the whole of what remains in 4c, and it is no longer blocked on anything — every port
+it needs is declared *and* implemented. Nothing in this project has ever run on a device.
 
 Each tier's completion note below is kept as written at the time, in build order.
 
@@ -222,45 +228,50 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
   - **The DAO was split**: `EpisodeLedgerDao` (ledger + outbox) and `EpisodeListDao` (the joins and
     `countUndecidedByFeed`). detekt's `TooManyFunctions` flagged it, and the old KDoc had already
     confessed to two jobs in one sentence — worth splitting rather than suppressing.
-- [ ] **`:core:database`** — `error_log` table + DAO, with the collapse-on-identity rule (category +
-  affected feed/episode + normalised message) and eviction (200 collapsed entries or 7 days,
-  whichever is larger) **as queries**, not as UI logic or an app-start sweep. Plus the `link` column
-  and the project's **first migration — schema v2** — with a `MigrationTest`. **And remove the
-  `firstSeenAt` cutoff** from `EpisodeLedgerDao.observeNewEpisodes` (ADR 0013) — parameter, SQL
-  clause and its tests, so it cannot become a second mechanism.
-- [ ] **`:core:download`** — `KEY_USER_REQUESTED` on the work request, and the pre-flight
+- [x] **`:core:database`** — `error_log` table + `LogDao` (collapse-on-identity and eviction both as
+  queries), `episodes.link`, and the project's **first migration — schema v2** — with a
+  `MigrationTest` that runs against the *exported v1 schema* and asserts the ledger row survives.
+  `DatabaseModule` registers the migration and deliberately does not fall back destructively. The
+  `firstSeenAt` cutoff is **removed** from `observeNewEpisodes` and `LedgerFilter.includeBacklog` is
+  gone (ADR 0013), with a regression test pinning that a pre-`firstSeenAt` episode still appears.
+- [x] **`:core:download`** — `KEY_USER_REQUESTED` on the work request, and the pre-flight
   duplicate-file guard behind it (reuses the existing `DownloadTarget.existingNames`, no new port
   method). Test that the flag is the *only* path past the terminal-row refusal, so the
   no-auto-download invariant stays provable. Per ADR 0012 a re-decision resets `attempts` and
   `lastError` and re-posts its action, but **keeps `writtenFileName`** — that field is what the
   guard checks, and a test should pin it.
-- [ ] **`:core:feed`** — apply the *mark old as played* rule to newly-parsed episodes after a
+- [x] **`:core:feed`** — apply the *mark old as played* rule to newly-parsed episodes after a
   refresh when the setting is on (ADR 0013). `FeedRefresher` becomes the first non-UI component that
   writes ledger rows: extend `NoAutoDownloadInvariantTest` to assert it writes `SKIPPED` only, never
   `QUEUED`, and still enqueues no download work.
-- [ ] **`:core:gpodder`** — `NextcloudLoginFlowClient` (`POST /index.php/login/v2` + poll). Stays a
+- [x] **`:core:gpodder`** — `NextcloudLoginFlowClient` (`POST /index.php/login/v2` + poll). Stays a
   JVM module, MockWebServer-testable; success is only claimed after an authenticated
   `GET /subscriptions` returns 200, because a completed login flow is not proof gpoddersync is
   installed.
-- [ ] **`FeedRefreshWorker`** — a `KEY_FEED_URL` input so S2's pull-to-refresh can scope to one feed.
+- [x] **`FeedRefreshWorker`** — a `KEY_FEED_URL` input so S2's pull-to-refresh can scope to one feed.
   Same worker, not a second one.
 - [ ] **`:feature:settings`** — S4 (settings), S5 (Nextcloud connection dialog), S6 (naming editor
-  with live preview over the already-tested `resolve()`).
-- [ ] **`:feature:episodes`** — S1 (podcast list), S2 (episode list), S3 (detail sheet). **S1 belongs
+  with live preview over the already-tested `resolve()`). **Not started.** Every port it needs now
+  exists, including `NextcloudLoginFlowClient` and the four persisted settings values.
+- [~] **`:feature:episodes`** — S1 (podcast list), S2 (episode list), S3 (detail sheet). **S1 belongs
   here, not in `:app`:** it shares the ledger query and the `EpisodeUi` projection with S2, and a
   badge that disagrees with the list it opens is exactly the bug co-location prevents.
-- [ ] **`:app`** — Hilt wiring was **done in 4b** (`di/` provides every port its adapter,
-  `PodsiloApplication` supplies the `HiltWorkerFactory`, `WorkScheduler` owns all enqueueing).
-  Still to do: navigation, `@AndroidEntryPoint` on `MainActivity`, the theme (one seed, two schemes,
-  **dynamic colour off** so both can be verified), and **S7 (activity) + S8 (error log)** — those two
-  are cross-cutting (workers, sync, the log) rather than episode-list concerns.
-- [ ] **Error-log write points** — `FeedRefresher`, `SyncOrchestrator`/`SyncWorker`,
-  `EpisodeDownloader`/`DownloadWorker`, and the S5 auth flow. Assert in a test that no entry ever
-  contains the app password, the Basic-auth header, or a URL with credentials.
+  **Only `sanitizeEpisodeHtml` is built** (16 tests) — the module is otherwise still scaffolding.
+  The three screens, their `UiState`/`UiEvent` types and their ViewModels are **not written**.
+- [~] **`:app`** — Hilt wiring was **done in 4b**. Done now: `@AndroidEntryPoint` on `MainActivity`,
+  `PodsiloTheme` (one seed, two schemes, **dynamic colour off**) applied at the root from the
+  persisted preference, `AndroidConnectivityMonitor`, and `WorkScheduler`'s additions
+  (`userRequested` downloads, per-feed refresh, bulk enqueue, work observation).
+  **Still to do: navigation and S7 (activity) + S8 (error log).**
+- [~] **Error-log write points** — `FeedRefresher` writes them (feed HTTP failures, unreachable
+  hosts, unparseable XML), with a test asserting the plain sentence comes first and the technical
+  half is separate. **Still to do:** `SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/
+  `DownloadWorker`, and the S5 auth flow — plus the test that no entry ever contains the app
+  password, the Basic-auth header, or a URL with credentials.
 
 ### Worth doing early despite appearing last
 
-- [ ] **`sanitizeEpisodeHtml` table test** (`:feature:episodes`). `Episode.description` is stored raw
+- [x] **`sanitizeEpisodeHtml` table test** (`:feature:episodes`). `Episode.description` is stored raw
   and sanitised at render time (architecture §4), so this pure function is the only place hostile feed
   HTML meets a renderer — scripts, styles, iframes, remote images and tracking pixels out; paragraphs,
   emphasis, lists and links in. Tier 1 testable and cheap; no reason it waits for the screen it serves.

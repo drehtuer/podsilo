@@ -32,12 +32,27 @@ class WorkScheduler
          * KEEP, not REPLACE: a second tap on the same episode must join the download already
          * running rather than restart it (and restarting would discard the resume progress).
          */
-        fun enqueueDownload(episodeKey: String) {
+        fun enqueueDownload(
+            episodeKey: String,
+            userRequested: Boolean = false,
+        ) {
             workManager.enqueueUniqueWork(
                 DownloadWorker.uniqueWorkName(episodeKey),
                 ExistingWorkPolicy.KEEP,
-                DownloadWorker.request(episodeKey),
+                DownloadWorker.request(episodeKey, userRequested),
             )
+        }
+
+        /**
+         * Bulk triage (docs/UI.md section 5). One work request per episode, deliberately: each row
+         * then appears in S7 and can be cancelled on its own, which is what makes "every queued
+         * episode is visible" true rather than aspirational (docs/decisions/0014).
+         *
+         * `userRequested` is false here — a bulk action only ever covers undecided episodes, so it
+         * never needs to pass the terminal-row refusal.
+         */
+        fun enqueueDownloads(episodeKeys: List<String>) {
+            episodeKeys.forEach { enqueueDownload(it) }
         }
 
         fun cancelDownload(episodeKey: String) {
@@ -45,13 +60,22 @@ class WorkScheduler
         }
 
         /** "Refresh now" — CLAUDE.md §11: periodic work is best-effort, so a manual trigger must exist. */
-        fun requestFeedRefresh() {
+        fun requestFeedRefresh(feedUrl: String? = null) {
             workManager.enqueueUniqueWork(
-                FeedRefreshWorker.UNIQUE_WORK_NAME,
+                FeedRefreshWorker.uniqueWorkName(feedUrl),
                 ExistingWorkPolicy.KEEP,
-                FeedRefreshWorker.request(),
+                FeedRefreshWorker.request(feedUrl),
             )
         }
+
+        /** Work state for the screens: S1's aggregate ring, S7's list, and the "is a refresh running" flag. */
+        fun observeDownloadWork(): kotlinx.coroutines.flow.Flow<List<androidx.work.WorkInfo>> =
+            workManager.getWorkInfosFlow(
+                androidx.work.WorkQuery.fromStates(
+                    androidx.work.WorkInfo.State.ENQUEUED,
+                    androidx.work.WorkInfo.State.RUNNING,
+                ),
+            )
 
         override fun requestSyncNow() {
             workManager.enqueueUniqueWork(
