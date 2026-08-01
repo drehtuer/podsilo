@@ -3,6 +3,9 @@
 package net.drehtuer.podsilo.core.model.port
 
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
+import java.time.Period
+import java.time.ZoneId
 
 /**
  * Port for user-configurable settings, implemented in `:core:datastore` (Jetpack DataStore, with
@@ -14,7 +17,14 @@ import kotlinx.coroutines.flow.Flow
  * preview in `:feature:settings`) reacts to edits. The password is read-only through the suspend
  * [nextcloudCredentials] accessor rather than a hot [Flow], so the decrypted secret is never held
  * in a long-lived stream — it's fetched at the point of use (a sync pass) and dropped.
+ *
+ * `@Suppress("TooManyFunctions")`: the method count here *is* the setting count — one observe and
+ * one set per value — so it grows linearly with the settings screen and says nothing about
+ * complexity. Related fields that are genuinely read together are already grouped behind a single
+ * type ([NamingSettings], [SwipeMapping]); grouping the rest would only make each observer
+ * recompose on changes it does not care about.
  */
+@Suppress("TooManyFunctions")
 interface SettingsRepository {
     fun observeNaming(): Flow<NamingSettings>
 
@@ -27,6 +37,38 @@ interface SettingsRepository {
     fun observeSyncIntervalMinutes(): Flow<Long>
 
     suspend fun setSyncIntervalMinutes(minutes: Long)
+
+    fun observeTheme(): Flow<ThemePreference>
+
+    suspend fun setTheme(theme: ThemePreference)
+
+    /**
+     * Which triage action each swipe direction performs (`docs/UI.md` §12.1). Persisted because the
+     * swipe background's icon and word are rendered *from* this — so the UI cannot show one verb
+     * and perform another.
+     */
+    fun observeSwipeMapping(): Flow<SwipeMapping>
+
+    suspend fun setSwipeMapping(mapping: SwipeMapping)
+
+    /**
+     * Whether downloads may run on a metered network. **A constraint, not a rule** — off by default,
+     * and it only decides *when* an already-requested download runs, never *whether* one is
+     * requested. Read by the UI and by `WorkScheduler`, which turns it into a WorkManager
+     * `NetworkType`.
+     */
+    fun observeAllowMobileData(): Flow<Boolean>
+
+    suspend fun setAllowMobileData(allowed: Boolean)
+
+    /**
+     * The *mark old episodes as played* cutoff (`docs/decisions/0013`). [OlderThan.OFF] by default:
+     * this rule **writes** `SKIPPED` rows and emits `PLAY` actions other clients will see, so it is
+     * opt-in and its first bulk application always goes through the counted preview.
+     */
+    fun observeMarkOldOlderThan(): Flow<OlderThan>
+
+    suspend fun setMarkOldOlderThan(value: OlderThan)
 
     /** Non-secret connection fields, observable for the settings UI (URL + username, never the password). */
     fun observeNextcloudAccount(): Flow<NextcloudAccount?>
@@ -89,3 +131,87 @@ data class NextcloudCredentials(
 
 /** Default background sync cadence when the user hasn't chosen one (best-effort — CLAUDE.md §11's Doze note). */
 const val DEFAULT_SYNC_INTERVAL_MINUTES: Long = 240
+
+/**
+ * Light / dark / system, applied at the Compose root without recreating the activity
+ * (`docs/UI.md` §12.7). Material You dynamic colour is deliberately **off** — one seed, two
+ * schemes, so both can actually be verified.
+ */
+enum class ThemePreference { LIGHT, DARK, SYSTEM }
+
+/** Which triage action a swipe performs. [NONE] disables that direction entirely. */
+enum class SwipeAction { DOWNLOAD, MARK_AS_PLAYED, NONE }
+
+enum class SwipeDirection { LEFT, RIGHT }
+
+/**
+ * The swipe configuration, with the "no direction may hold the same action as the other" invariant
+ * enforced by [with] rather than by a check in a ViewModel — a mapping that violated it would make
+ * two gestures do the same thing and leave one action unreachable.
+ */
+data class SwipeMapping(
+    val right: SwipeAction = SwipeAction.DOWNLOAD,
+    val left: SwipeAction = SwipeAction.MARK_AS_PLAYED,
+) {
+    fun actionFor(direction: SwipeDirection): SwipeAction =
+        when (direction) {
+            SwipeDirection.RIGHT -> right
+            SwipeDirection.LEFT -> left
+        }
+
+    /**
+     * Assigns [action] to [direction], **swapping** rather than rejecting when the other direction
+     * already holds it (`docs/UI.md` §7) — the user's most recent choice is always honoured, and
+     * the pair stays valid, so the swipe background can be rendered from state with no defensive
+     * branch. [SwipeAction.NONE] is exempt: both directions may be disabled at once.
+     */
+    fun with(
+        direction: SwipeDirection,
+        action: SwipeAction,
+    ): SwipeMapping {
+        val other = actionFor(if (direction == SwipeDirection.RIGHT) SwipeDirection.LEFT else SwipeDirection.RIGHT)
+        val displaced = if (action != SwipeAction.NONE && other == action) actionFor(direction) else other
+        return when (direction) {
+            SwipeDirection.RIGHT -> SwipeMapping(right = action, left = displaced)
+            SwipeDirection.LEFT -> SwipeMapping(right = displaced, left = action)
+        }
+    }
+}
+
+/**
+ * The *mark old episodes as played* cutoff (`docs/decisions/0013`). [OFF] by default — the rule
+ * writes ledger rows and emits `PLAY` actions to the shared log, so it never runs unasked.
+ *
+ * `@Suppress("MagicNumber")`: each constant's name states its own number, so extracting
+ * `MONTHS_3 = 3` beside `MONTH_3` would be strictly less readable, not more.
+ */
+@Suppress("MagicNumber")
+enum class OlderThan(
+    private val period: Period?,
+) {
+    OFF(null),
+    MONTH_1(Period.ofMonths(1)),
+    MONTH_3(Period.ofMonths(3)),
+    MONTH_6(Period.ofMonths(6)),
+    YEAR_1(Period.ofYears(1)),
+    ;
+
+    /**
+     * The epoch-millis instant an episode must predate to be swept up, or `null` for [OFF].
+     *
+     * Calendar arithmetic, not `now - 90 days`: "3 months" has to mean three calendar months or the
+     * cutoff drifts against what the label says. [zone] is passed in rather than read from the
+     * device mid-calculation, for the same reason `:core:naming` takes one (`docs/decisions/0004`).
+     */
+    fun cutoffMillis(
+        now: Instant,
+        zone: ZoneId,
+    ): Long? =
+        period?.let {
+            now
+                .atZone(zone)
+                .minus(it)
+                .toInstant()
+                .toEpochMilli()
+        }
+}

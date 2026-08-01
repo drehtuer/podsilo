@@ -11,6 +11,10 @@ package net.drehtuer.podsilo.core.model
  * @property episodeKey `guid ?: enclosureUrl` — see [episodeKey], not a free choice.
  * @property description Raw as received (CDATA and all); sanitised for display at render time,
  *   never at write time.
+ * @property link The episode's own page (`<item><link>`, or Atom `<link rel="alternate">`) — what
+ *   *Open in browser* opens (`docs/UI.md` §6). **Not** derivable from [enclosureUrl], which points
+ *   at an audio file rather than a page, so a feed that omits it gets `null` and the UI omits the
+ *   affordance rather than offering a dead tap.
  * @property pubDate Epoch millis, or null if the feed supplied nothing usable. Fallback chain and
  *   timezone normalisation are `:core:feed`'s and `:core:naming`'s job respectively, not modelled
  *   here.
@@ -26,4 +30,5 @@ data class Episode(
     val description: String?,
     val pubDate: Long?,
     val durationMs: Long?,
+    val link: String? = null,
 )

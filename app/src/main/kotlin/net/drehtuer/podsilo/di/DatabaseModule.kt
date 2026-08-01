@@ -51,7 +51,7 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideEpisodeLedgerRepository(database: PodsiloDatabase): EpisodeLedgerRepository =
-        EpisodeLedgerRepositoryImpl(database.episodeLedgerDao())
+        EpisodeLedgerRepositoryImpl(database.episodeLedgerDao(), database.episodeListDao())
 
     @Provides
     @Singleton

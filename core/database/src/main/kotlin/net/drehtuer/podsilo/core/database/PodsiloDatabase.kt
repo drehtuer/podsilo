@@ -6,6 +6,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import net.drehtuer.podsilo.core.database.dao.EpisodeDao
 import net.drehtuer.podsilo.core.database.dao.EpisodeLedgerDao
+import net.drehtuer.podsilo.core.database.dao.EpisodeListDao
 import net.drehtuer.podsilo.core.database.dao.FeedDao
 import net.drehtuer.podsilo.core.database.dao.SyncStateDao
 import net.drehtuer.podsilo.core.database.entity.EpisodeEntity
@@ -37,6 +38,8 @@ abstract class PodsiloDatabase : RoomDatabase() {
     abstract fun episodeDao(): EpisodeDao
 
     abstract fun episodeLedgerDao(): EpisodeLedgerDao
+
+    abstract fun episodeListDao(): EpisodeListDao
 
     abstract fun syncStateDao(): SyncStateDao
 

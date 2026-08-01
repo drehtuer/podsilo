@@ -11,7 +11,10 @@ import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.NextcloudAccount
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
+import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SwipeMapping
+import net.drehtuer.podsilo.core.model.port.ThemePreference
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -92,6 +95,22 @@ private class MutableSettingsRepository : SettingsRepository {
     override fun observeSyncIntervalMinutes(): Flow<Long> = MutableStateFlow(0)
 
     override suspend fun setSyncIntervalMinutes(minutes: Long) = error("not needed by these tests")
+
+    override fun observeTheme(): Flow<ThemePreference> = MutableStateFlow(ThemePreference.SYSTEM)
+
+    override suspend fun setTheme(theme: ThemePreference) = error("not needed by these tests")
+
+    override fun observeSwipeMapping(): Flow<SwipeMapping> = MutableStateFlow(SwipeMapping())
+
+    override suspend fun setSwipeMapping(mapping: SwipeMapping) = error("not needed by these tests")
+
+    override fun observeAllowMobileData(): Flow<Boolean> = MutableStateFlow(false)
+
+    override suspend fun setAllowMobileData(allowed: Boolean) = error("not needed by these tests")
+
+    override fun observeMarkOldOlderThan(): Flow<OlderThan> = MutableStateFlow(OlderThan.OFF)
+
+    override suspend fun setMarkOldOlderThan(value: OlderThan) = error("not needed by these tests")
 
     override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = MutableStateFlow(null)
 

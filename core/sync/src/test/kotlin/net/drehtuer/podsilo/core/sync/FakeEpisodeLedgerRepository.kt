@@ -6,8 +6,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 
 /**
@@ -38,4 +40,9 @@ class FakeEpisodeLedgerRepository(
         val keys = episodeKeys.toSet()
         state.value = state.value.mapValues { (key, row) -> if (key in keys) row.copy(syncedToServer = true) else row }
     }
+
+    override suspend fun upsertAll(rows: List<EpisodeLedgerRow>) = rows.forEach { row -> upsert(row) }
+
+    // Bulk triage is a UI path; SyncOrchestrator never previews or writes in batches.
+    override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> = emptyList()
 }

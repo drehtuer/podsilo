@@ -43,7 +43,51 @@ interface EpisodeLedgerRepository {
     suspend fun getUnsynced(): List<EpisodeLedgerRow>
 
     suspend fun markSynced(episodeKeys: List<String>)
+
+    /**
+     * Writes many rows in **one transaction and one [Flow] emission**. Bulk triage (`docs/UI.md`
+     * §5's *Download all* and selection mode, §7's *mark old/all as played*) routinely touches
+     * hundreds of episodes; doing that as N calls to [upsert] is N transactions and N list
+     * re-emissions into a `LazyColumn`.
+     */
+    suspend fun upsertAll(rows: List<EpisodeLedgerRow>)
+
+    /**
+     * Per-feed counts of episodes that would be affected by a bulk operation, for the confirmation
+     * dialog — feed URL to count, largest first.
+     *
+     * This is the safeguard, not a nicety. A bulk *mark as played* emits `PLAY` actions to the
+     * shared log and **cannot be undone in bulk** (`docs/decisions/0013`); naming the exact count
+     * and the feeds before anything is written is what replaced the old rule against writing
+     * backlog rows at all.
+     */
+    suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount>
 }
+
+/**
+ * What a bulk operation applies to. Both select only episodes with **no ledger row** — an already
+ * decided episode is never swept up by a bulk action, which is why *Download all* cannot re-fetch
+ * something the user already marked as played.
+ *
+ * @property olderThanMillis For [BulkScopeKind.OLDER_THAN], the epoch-millis cutoff; episodes with
+ *   an unknown `pubDate` are **excluded** rather than guessed at (an episode with no date is not
+ *   evidence of being old).
+ * @property feedUrl Narrows to one feed — *Download all* is deliberately per-podcast and there is
+ *   no global variant (`docs/decisions/0014`).
+ */
+data class BulkScope(
+    val kind: BulkScopeKind,
+    val olderThanMillis: Long? = null,
+    val feedUrl: String? = null,
+)
+
+enum class BulkScopeKind { OLDER_THAN, ALL_UNDECIDED }
+
+/** One line of the bulk-confirmation dialog: how many undecided episodes this feed contributes. */
+data class FeedUndecidedCount(
+    val feedUrl: String,
+    val count: Int,
+)
 
 /**
  * One row of the triage list: the parsed [episode] plus its [ledger] state, or `null` [ledger]
@@ -58,9 +102,12 @@ data class EpisodeListItem(
 enum class LedgerFilterState { NEW, DOWNLOADED, SKIPPED, ALL }
 
 /**
- * @property includeBacklog Lifts the `pubDate >= Feed.firstSeenAt` restriction that otherwise
- *   applies to [LedgerFilterState.NEW] (CLAUDE.md §5's "backlog is a UI problem, not a download
- *   problem" — the default view must stay short even when a feed exposes years of back catalogue).
+ * @property includeBacklog **Retired by `docs/decisions/0013` — do not build against it.** It lifts
+ *   the `pubDate >= Feed.firstSeenAt` restriction that used to apply to [LedgerFilterState.NEW].
+ *   That read-time cutoff has been replaced by *writing* `SKIPPED` rows, so "new" is now exactly
+ *   "no ledger row" and this flag selects between two mechanisms that must not both exist. The
+ *   parameter and its SQL clause are removed together with the `error_log` work; it is still here
+ *   only because the Room implementation still reads it.
  */
 data class LedgerFilter(
     val state: LedgerFilterState = LedgerFilterState.NEW,

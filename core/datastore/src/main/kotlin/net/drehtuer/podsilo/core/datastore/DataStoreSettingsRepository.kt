@@ -17,7 +17,11 @@ import net.drehtuer.podsilo.core.model.port.DEFAULT_SYNC_INTERVAL_MINUTES
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.NextcloudAccount
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
+import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SwipeAction
+import net.drehtuer.podsilo.core.model.port.SwipeMapping
+import net.drehtuer.podsilo.core.model.port.ThemePreference
 import net.drehtuer.podsilo.core.model.port.TitleCleanupRuleSetting
 
 /**
@@ -60,6 +64,41 @@ class DataStoreSettingsRepository(
 
     override suspend fun setSyncIntervalMinutes(minutes: Long) {
         dataStore.edit { it[Keys.SYNC_INTERVAL_MINUTES] = minutes }
+    }
+
+    override fun observeTheme(): Flow<ThemePreference> =
+        dataStore.data.map { prefs -> prefs[Keys.THEME].toEnumOr(ThemePreference.SYSTEM) }
+
+    override suspend fun setTheme(theme: ThemePreference) {
+        dataStore.edit { it[Keys.THEME] = theme.name }
+    }
+
+    override fun observeSwipeMapping(): Flow<SwipeMapping> =
+        dataStore.data.map { prefs ->
+            SwipeMapping(
+                right = prefs[Keys.SWIPE_RIGHT].toEnumOr(SwipeAction.DOWNLOAD),
+                left = prefs[Keys.SWIPE_LEFT].toEnumOr(SwipeAction.MARK_AS_PLAYED),
+            )
+        }
+
+    override suspend fun setSwipeMapping(mapping: SwipeMapping) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SWIPE_RIGHT] = mapping.right.name
+            prefs[Keys.SWIPE_LEFT] = mapping.left.name
+        }
+    }
+
+    override fun observeAllowMobileData(): Flow<Boolean> = dataStore.data.map { it[Keys.ALLOW_MOBILE_DATA] ?: false }
+
+    override suspend fun setAllowMobileData(allowed: Boolean) {
+        dataStore.edit { it[Keys.ALLOW_MOBILE_DATA] = allowed }
+    }
+
+    override fun observeMarkOldOlderThan(): Flow<OlderThan> =
+        dataStore.data.map { prefs -> prefs[Keys.MARK_OLD_OLDER_THAN].toEnumOr(OlderThan.OFF) }
+
+    override suspend fun setMarkOldOlderThan(value: OlderThan) {
+        dataStore.edit { it[Keys.MARK_OLD_OLDER_THAN] = value.name }
     }
 
     override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = dataStore.data.map { it.toNextcloudAccount() }
@@ -110,6 +149,11 @@ class DataStoreSettingsRepository(
     }
 
     private object Keys {
+        val THEME = stringPreferencesKey("theme")
+        val SWIPE_RIGHT = stringPreferencesKey("swipe_right")
+        val SWIPE_LEFT = stringPreferencesKey("swipe_left")
+        val ALLOW_MOBILE_DATA = booleanPreferencesKey("allow_mobile_data")
+        val MARK_OLD_OLDER_THAN = stringPreferencesKey("mark_old_older_than")
         val FOLDER_TEMPLATE = stringPreferencesKey("folder_template")
         val FILE_TEMPLATE = stringPreferencesKey("file_template")
         val TRANSLITERATE = booleanPreferencesKey("transliterate")
@@ -125,3 +169,12 @@ class DataStoreSettingsRepository(
         val RULES_SERIALIZER = ListSerializer(SerializableTitleCleanupRule.serializer())
     }
 }
+
+/**
+ * Enums are persisted by `name`, so a value renamed or removed in a later version would otherwise
+ * throw on read and take the whole settings [Flow] down with it. An unrecognised stored name falls
+ * back to [fallback] — the same defensive posture as the invalidated-cipher path above: a settings
+ * store that cannot be read must degrade to defaults, never crash the screen reading it.
+ */
+private inline fun <reified T : Enum<T>> String?.toEnumOr(fallback: T): T =
+    this?.let { stored -> enumValues<T>().firstOrNull { it.name == stored } } ?: fallback
