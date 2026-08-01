@@ -179,16 +179,60 @@ was the service locator CLAUDE.md §3 forbids.
 
 ### 4c. Compose UI (emulator recommended, per CLAUDE.md's Tier 3 host-emulator path)
 
-- [ ] **`:feature:settings`** — folder picker, credentials, naming template editor with live
-  preview (calls the already-tested naming module's `resolve()`).
-- [ ] **`:feature:episodes`** — filterable list, per-row triage, feed-filter chips.
-- [x] **`:app`** — Hilt wiring: **done in 4b** (`di/` provides every port its adapter,
+**Update (2026-08-01): designed, not yet built.** All eight screens and every state
+`docs/UI.md` enumerates are drawn (light and dark), and the UI↔logic contract is written down in
+**`UI_interface.md`** — per-screen state classes, events, effects, the corner cases (state changes
+arriving under the user, process death, data shapes that break naive rendering), notifications,
+accessibility, motion, and the spacing invariants. Read it before writing a Composable; it also
+carries the gap list the tasks below are derived from. Two design decisions were promoted into
+`docs/architecture.md` (§4/§5/§7/§9 and §12 items 15–18).
+
+The order matters: the `:core:model` declarations come first so the four feature tasks can then be
+built in parallel, and the one genuinely blocking item is an **ADR, not code**.
+
+- [ ] **Accept `docs/decisions/0012-terminal-states-reopenable-by-user.md`** — architecture §12
+  item 15. **Drafted, not accepted:** the mechanism (`KEY_USER_REQUESTED`) is decided and recorded in
+  §9, but the ADR's "Still to settle" section has four points that need the author. Blocks
+  `:core:download` below, and therefore *Download again*, *Retry* and the whole S3 action bar for
+  terminal episodes.
+- [ ] **`:core:model` additions** — `Episode.link`; `LogRepository` + `LogEntry`/`NewLogEntry`/
+  `LogCategory`; `ConnectivityMonitor` + `Connectivity`; `NextcloudLoginFlowClient`;
+  `EpisodeLedgerRepository.upsertAll`/`previewUndecided`; `DownloadTarget.freeBytes`. Pure
+  declarations, no behaviour — do these first.
+- [ ] **`:core:database`** — `error_log` table + DAO, with the collapse-on-identity rule (category +
+  affected feed/episode + normalised message) and eviction (200 collapsed entries or 7 days,
+  whichever is larger) **as queries**, not as UI logic or an app-start sweep. Plus the `link` column
+  and the project's **first migration — schema v2** — with a `MigrationTest`.
+- [ ] **`:core:download`** — `KEY_USER_REQUESTED` on the work request, and the pre-flight
+  duplicate-file guard behind it (reuses the existing `DownloadTarget.existingNames`, no new port
+  method). Test that the flag is the *only* path past the terminal-row refusal, so the
+  no-auto-download invariant stays provable.
+- [ ] **`:core:gpodder`** — `NextcloudLoginFlowClient` (`POST /index.php/login/v2` + poll). Stays a
+  JVM module, MockWebServer-testable; success is only claimed after an authenticated
+  `GET /subscriptions` returns 200, because a completed login flow is not proof gpoddersync is
+  installed.
+- [ ] **`FeedRefreshWorker`** — a `KEY_FEED_URL` input so S2's pull-to-refresh can scope to one feed.
+  Same worker, not a second one.
+- [ ] **`:feature:settings`** — S4 (settings), S5 (Nextcloud connection dialog), S6 (naming editor
+  with live preview over the already-tested `resolve()`).
+- [ ] **`:feature:episodes`** — S1 (podcast list), S2 (episode list), S3 (detail sheet). **S1 belongs
+  here, not in `:app`:** it shares the ledger query and the `EpisodeUi` projection with S2, and a
+  badge that disagrees with the list it opens is exactly the bug co-location prevents.
+- [ ] **`:app`** — Hilt wiring was **done in 4b** (`di/` provides every port its adapter,
   `PodsiloApplication` supplies the `HiltWorkerFactory`, `WorkScheduler` owns all enqueueing).
-  **Still to do here:** navigation, and `@AndroidEntryPoint` on `MainActivity` once there are
-  screens to host.
+  Still to do: navigation, `@AndroidEntryPoint` on `MainActivity`, the theme (one seed, two schemes,
+  **dynamic colour off** so both can be verified), and **S7 (activity) + S8 (error log)** — those two
+  are cross-cutting (workers, sync, the log) rather than episode-list concerns.
+- [ ] **Error-log write points** — `FeedRefresher`, `SyncOrchestrator`/`SyncWorker`,
+  `EpisodeDownloader`/`DownloadWorker`, and the S5 auth flow. Assert in a test that no entry ever
+  contains the app password, the Basic-auth header, or a URL with credentials.
 
 ### Worth doing early despite appearing last
 
+- [ ] **`sanitizeEpisodeHtml` table test** (`:feature:episodes`). `Episode.description` is stored raw
+  and sanitised at render time (architecture §4), so this pure function is the only place hostile feed
+  HTML meets a renderer — scripts, styles, iframes, remote images and tracking pixels out; paragraphs,
+  emphasis, lists and links in. Tier 1 testable and cheap; no reason it waits for the screen it serves.
 - [x] CLAUDE.md §7 item 6, the no-auto-download invariant test — **done in Tier 3**, in two halves
   (`:core:sync`'s `NoAutoDownloadInvariantTest` + `:core:feed`'s 500-episode parse test), plus the
   `subscription_change/create` assertion in `:core:gpodder`'s MockWebServer test. **Tier 4b closes

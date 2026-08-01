@@ -32,6 +32,10 @@ and need an ADR before implementation — both are collected in
 13. [Coverage check against the architecture](#13-coverage-check-against-the-architecture)
 14. [Decisions that need an ADR](#14-decisions-that-need-an-adr)
 15. [Adaptations to the code as built (Tier 4b)](#15-adaptations-to-the-code-as-built-tier-4b)
+16. [Motion](#16-motion)
+17. [Consistency invariants](#17-consistency-invariants)
+18. [Iconography](#18-iconography)
+19. [Orientation](#19-orientation)
 
 ---
 
@@ -337,6 +341,7 @@ block-beta
   h["[ep art]  Warum Hamburg immer regnet\n           Der Podcast · 14 Jul 2026 · 48 min"]
   s["status: to decide   /   ✓ downloaded → Der Podcast/20260630_….mp3   /   ▸ played"]
   d["description (sanitised HTML, scrollable,\nlinks tappable, images stripped)"]
+  l["↗ Open episode page in browser                    ›"]
   a["[ Download ]   [ Mark as played ]        ⋮"]
 ```
 
@@ -358,7 +363,16 @@ Action bar, by state:
 | `SKIPPED` / `HANDLED_REMOTELY` | **Download** (i.e. "download anyway") |
 | `ERROR` | **Retry** · **Mark as played** |
 
-Deciding closes the sheet and animates the row into its new state.
+**Open episode page in browser** sits between the description and the action bar, on its own
+hairline-separated row: it belongs to the *read* step and must not compete with the decision. Rendered
+only when the feed supplied an item `<link>` — never synthesised from the enclosure URL, which points
+at an audio file rather than a page — so a feed that omits it simply has no row instead of a dead tap.
+It opens a Custom Tab (falling back to `ACTION_VIEW`) and the sheet **stays open behind it**: leaving
+to read show notes is not a triage decision, and coming back must not cost the user their place. The
+same action is in the row overflow on S2. Requires `Episode.link`, which did not exist — see
+architecture §12 item 16.
+
+Deciding closes the sheet and animates the row into its new state (§16).
 
 ---
 
@@ -644,7 +658,13 @@ since a tag failure never blocks a download — architecture §11), and abandone
 - Ring buffer, last 200 **collapsed** entries (or 7 days, whichever is larger); stored in Room,
   survives restart.
 - **Never** contains the app password, the Basic-auth header, or full URLs with credentials.
-- **Copy all** / **Share** produce plain text. **Clear** asks for confirmation.
+- **Copy all** / **Share** produce plain text. Both, and **Clear**, are *disabled rather than hidden*
+  when the log is empty, so the affordance stays where the user learned it.
+- **Clear** asks for confirmation. The dialog names the count ("Clear all 4 log entries?") and states
+  that the log is device-local — there is no copy anywhere else and this is not undoable. It clears
+  **the whole ring buffer, not the current filter**: a filtered clear would leave a count the user
+  cannot account for. Recording resumes immediately; nothing else is touched — no ledger row, no
+  worker, no sync state.
 - Tapping an entry that names an episode jumps to it in S2.
 - Successes are not logged — this is a failure log, not a journal. (`RECENTLY DOWNLOADED` in S7
   covers the success case.)
@@ -835,7 +855,9 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 
 ### 12.13 Accessibility & density
 
-- Tap targets ≥ 48 dp; row height ≥ 72 dp with 3 lines of text.
+- Tap targets ≥ 48 dp; row height ≥ 72 dp with 3 lines of text. **This includes filter chips and
+  segmented options** — they read as labels and are easy to leave at their text height, which is
+  exactly the drift this line exists to catch.
 - Selection mode is reachable without a long-press (a checkbox appears on the leading artwork when
   the accessibility service is active) and announces `n selected` on every change.
 - Sticky month headers are exposed as list headings; the fast-scroll thumb is not the only way to
@@ -871,7 +893,7 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 | **`HANDLED_REMOTELY` visibility (§6 inbound)** | §12.6 badge "handled elsewhere", greyed out | **added** |
 | **Outbox depth / unsynced actions (§5, §10)** | S4 "Last sync", S7 sync row | **added** |
 | **Failure diagnostics** | S8 error log | **added** |
-| Re-download of a handled episode | §12.3 Download again + duplicate-file guard | ⚠ **changed — ADR needed (§14.1)** |
+| Re-download of a handled episode | §12.3 Download again + duplicate-file guard | ⚠ **changed — ADR 0012 drafted, not accepted (§14.1)** |
 | Feed titles unknown before first fetch (§4) | S1 falls back to URL | ✔ |
 | Episodes without enclosure (§7) | S2 dimmed "no audio" row | ✔ |
 | Foreground service notification (TODO 4b) | §12.9 | ✔ |
@@ -882,6 +904,12 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 | Progress across process death | §12.2 *resuming* rule | **added** |
 | Failure-log flooding | §11 collapsed repeated entries | **added** |
 | Batch triage / long backlog ergonomics | S2 selection mode, *Download all*, sticky headers, fast-scroll | **added** |
+| Episode page link (`<item><link>`) | S3 *Open in browser* (§6), §18's `external-link` | **added — needs `Episode.link`, architecture §12 item 16** |
+| Motion / transitions | §16 | **added** |
+| Spacing consistency across screens | §17 | **added** |
+| Icon set and per-affordance mapping | §18 | **added — nothing recorded it before** |
+| Landscape / orientation | §19 | **added** |
+| UI ↔ app-logic contract | `UI_interface.md` | **added — the handover surface for Tier 4c** |
 | Not a player / not a file manager | no playback controls; S7 shows filenames only, never deletes | ✔ |
 
 ---
@@ -889,7 +917,12 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 ## 14. Decisions that need an ADR
 
 Three UX decisions here contradict statements in `docs/architecture.md` or in code that now exists,
-and must be recorded before Tier 4c, not settled in code review. [§15](#15-adaptations-to-the-code-as-built-tier-4b)
+and must be recorded before Tier 4c, not settled in code review.
+
+> **Status (2026-08-01):** §14.1 is drafted as
+> `docs/decisions/0012-terminal-states-reopenable-by-user.md` — **draft, not accepted**; its
+> "Still to settle" section lists what remains. §14.2 and §14.3 are still unwritten. Architecture §9
+> and §12 items 15–18 now carry the resolved parts. [§15](#15-adaptations-to-the-code-as-built-tier-4b)
 lists the smaller, non-contentious adaptations.
 
 ### 14.1 Terminal ledger states are re-openable **by explicit user action**
@@ -999,3 +1032,164 @@ It is deliberately additive — no existing type changes — so it can be built 
 rather than blocking it. `:feature:episodes`'s TODO scope ("filterable list, per-row triage, feed
 filter chips") also does not yet mention S1 (podcast list), S7 (activity) or S8; the module list
 should gain them, or S7/S8 should land in `:app`.
+
+---
+
+## 16. Motion
+
+One duration scale and two easings, all Material 3 motion tokens so they map to Compose without
+translation. Modernist has no soft edges to hide behind, so motion is short and mechanical: things
+slide and rule lines wipe; nothing bounces, scales, or fades in from nothing.
+
+| Transition | Spec |
+|---|---|
+| S1 → S2 forward | 300 ms emphasized-decelerate, slide from the trailing edge; outgoing screen holds still and dims to 60 % |
+| S1 → S2 back | 250 ms emphasized-accelerate — back is always faster than forward, so returning to the worklist never feels like a journey |
+| S3 sheet in | 350 ms emphasized-decelerate up; scrim 0 → 55 % over the first 200 ms |
+| S3 sheet out | 250 ms emphasized-accelerate, following the finger on a drag — never animating back past a position the user already moved it to |
+| Triage commit | 200 ms crossfade to the terminal treatment, badge wiping in over 150 ms, **400 ms hold**, then a 250 ms height collapse |
+| Swipe reveal | the accent field is *uncovered*, not faded in; a single 100 ms weight step at the 40 % commit threshold; snap-back 200 ms standard |
+| Progress | 1 Hz updates interpolated over **1 000 ms linear** rather than stepping; completion is a 200 ms crossfade to the ✓ badge; indeterminate is a 1 200 ms sweep |
+| Chips / segments | 100 ms fill swap with **no** motion — the list beneath rebuilds without a transition, because a filter change is a new question, not a movement |
+| Banners | 250 ms standard height expand, pushing content rather than covering it |
+| Dialogs | scrim fade plus a 12 px translate up, 200 ms |
+| Snackbar | 250 ms up, 3 200 ms hold, 200 ms out; never carries an action, since there is no undo to offer |
+| Theme change | instant — a colour-scheme crossfade on a flat, high-contrast palette reads as a rendering fault |
+
+Three rules the table cannot express, and the ones that actually get broken:
+
+1. **The triage hold survives reduced motion.** With *Remove animations* on, everything above
+   collapses to an instant state change **except** the 400 ms hold at commit. It is not decoration:
+   with no undo (§12.3) it is the only feedback that the decision landed on the row the user meant.
+   Implement it as a delay, not an animation, so the accessibility setting does not remove it.
+2. **Durable state is never animated into place.** A badge count, an outbox depth and a ledger state
+   render at their true value on first paint. Counting a badge up reads as data arriving when it has
+   already arrived.
+3. **No transition gates an action.** Every affordance stays hittable throughout every transition
+   above, and a second tap mid-transition is honoured rather than swallowed. A triage screen that makes
+   you wait 350 ms for a sheet is a triage screen you stop using.
+
+---
+
+## 17. Consistency invariants
+
+Spacing and sizing that holds across all eight screens. Collected because drift here is invisible in
+review and obvious in use — every value below was found drifting at least once while the screens were
+being drawn.
+
+- **App bar** — 2 px bottom rule, title flush left. Leading-icon screens (S2–S8) inset at **14 dp** so
+  the icon's optical edge lands on the 16 dp content grid; S1, whose leading element is the title
+  itself, insets at **16 dp**. This is the one intentional asymmetry.
+- **Rows** — 16 dp horizontal padding, ≥ 72 dp tall, 1 dp hairline between rows, 2 px rule between
+  *groups*. Artwork is 56 dp on S1, 52 dp on S2, 76 dp on S3.
+- **Group labels** — `15dp / 16dp / 7dp` padding, 11 sp at the heading weight, `.12em` tracking, accent
+  role, preceded by a 2 px rule. Identical on S4 and S7.
+- **Tap targets** — ≥ 48 dp on everything interactive, chips and segmented options included (§12.13).
+- **Badges** — `5dp 7dp` padding, ≥ 26 dp wide; accent fill for a count, outlined for a state word.
+- **Dialogs** — 18 dp padding on every edge, 2 px border, no radius, actions flush left.
+- **Status bar** — `7dp / 16dp`, muted role.
+
+The per-screen state contract, corner cases, notifications and the accessibility semantics behind
+§12.13 live in **`UI_interface.md`** alongside these.
+
+---
+
+## 18. Iconography
+
+**Lucide** (ISC, https://lucide.dev), one weight everywhere: 24 dp grid, 2 dp stroke, round caps and
+joins. Never mixed with Material Symbols — two icon families in one app read as an unfinished
+migration. Icons are always accompanied by text for anything that carries state (§12.7); an icon-only
+control exists nowhere except the app bar, where the target is conventional.
+
+This table is the canonical mapping — an allow-list, not a manifest of files. An icon not listed here
+has no call site, and adding an affordance means adding a row before adding a glyph.
+
+**How they ship:** Android renders no SVG at runtime, so these become `VectorDrawable`/`ImageVector`.
+Preferred route is Lucide's own Compose artifact rather than hand-converting, per CLAUDE.md's
+"use existing libraries" rule — a new dependency, so it needs approval. Sizing, the conversion
+fallback and the reason there is no per-density work to do are in `UI_interface.md` §17.
+
+| Icon | Used for |
+|---|---|
+| `arrow-left` | up navigation on S2, S4, S6, S7, S8 |
+| `settings` | S1 app bar → S4 |
+| `activity` | S1/S2 app bar → S7; carries the badge dot |
+| `ellipsis-vertical` | row overflow, app-bar overflow |
+| `chevron-right` | row navigation affordance; also the collapsed *show technical detail* on S8 |
+| `chevron-down` | the swipe-mapping and *older than* dropdowns on S4 |
+| `download` | the Download action, and the swipe-right background |
+| `play` | the **played** state badge, and the mark-as-played swipe background |
+| `check` | ✓ downloaded badge; the satisfied step in S1's setup checklist; S7's delivered rows |
+| `check-check` | "all caught up" and "nothing has failed" empty states |
+| `cloud-check` | **handled elsewhere** — the state the user did not create |
+| `x` | leave selection mode |
+| `square` / `square-check` | selection-mode checkboxes, including the accessibility affordance (§12.13) |
+| `triangle-alert` | downloads-paused banner, failure badge, the free-space warning line |
+| `circle-alert` | inline field and feed errors |
+| `refresh-cw` | sync in progress on S1 |
+| `loader` | S5's awaiting-authorization spinner |
+| `wifi-off` | offline banner and status bar |
+| `server` | the not-configured empty state on S1 |
+| `inbox` | filter-empty states |
+| `file-text` | S7 app bar → S8 |
+| `copy` / `share-2` / `trash-2` | S8's copy all / share / clear |
+| `external-link` | *Open episode page in browser* (S3, and the S2 row overflow) |
+| `volume-off` | the **no audio** badge on an episode with no enclosure |
+
+Three distinctions that make the UI lie if they are used interchangeably:
+
+- **`triangle-alert` is a condition the queue is in** (paused, failed, will not fit).
+  **`circle-alert` is input the user can fix** (a bad server address, an invalid template, a feed that
+  did not respond). Swapping them makes a typo look like a system fault and vice versa.
+- **`cloud-check` is not `check`.** *Handled elsewhere* must never render as the same ✓ as a download
+  this device performed — the user did not make that decision here, and the affordances differ
+  (§12.6).
+- **`play` never means playback.** Podsilo does not play audio (README). It is the *played* state
+  marker only, and it appears beside the word, never alone.
+
+The **monogram tile** is not an icon: a feed with no `imageUrl` gets a filled surface square with its
+first letter, not a generic placeholder glyph. A stock "no image" icon repeated down the list is
+noise; a letter is at least identifying.
+
+---
+
+## 19. Orientation
+
+Every screen here is designed portrait-first, and deliberately stays a **single scrolling column** in
+landscape. That is the whole strategy: there is no landscape layout, because there is nothing to
+re-arrange — a triage worklist is a list, and a list in a wider window is the same list.
+
+**Orientation is not locked.** `screenOrientation` stays unset. Locking would break a device in a car
+mount, a keyboard case, or a foldable, and Podsilo has no reason to — nothing here depends on aspect
+ratio. Rotation preserves state (`UI_interface.md` §14.2): scroll position, filter, open sheet and open
+dialog all survive; one-shot effects do not replay.
+
+Four things genuinely break in a short window, all with cheap fixes. Nothing below justifies a second
+layout:
+
+1. **Rows stretch too wide.** At 900 dp the badge ends up an inch from the title it belongs to and the
+   row stops reading as one thing. Cap the list content at **~600 dp and centre it**; the rows keep
+   their 16 dp internal padding. This is the single highest-value landscape rule and the only one
+   that is also a tablet rule.
+2. **S3's sheet has no room.** 78 % of a ~400 dp-tall window is ~310 dp, and the header, status line
+   and action bar consume most of it, leaving the description a slit. Let the sheet **expand to full
+   height** in a short window — standard `ModalBottomSheet` behaviour, so this is a default to keep
+   rather than work to do — and drop the header artwork from 76 dp to 56 dp so the title and the
+   action bar are both visible without scrolling.
+3. **Dialogs overflow.** The bulk-download and mark-as-played previews carry a title, up to three
+   per-feed rows, two explanatory notes and two actions. In landscape that exceeds the window. Give
+   every dialog a **max height with the body scrolling and the actions pinned** — the count and the
+   buttons must never be the parts that scroll off, since they are the whole decision.
+4. **S5 with the keyboard up.** Landscape plus the IME leaves roughly 150 dp. The dialog must keep the
+   address field **and** the primary button visible; the explanatory line is what gives way. Same
+   pinned-actions rule as item 3, so it is one fix, not two.
+
+Display-scale type on the empty states (S1's "Podsilo follows the podcast subscriptions in your
+Nextcloud.", "Nothing new. All caught up.") is left alone: an empty state may scroll, and shrinking
+type per orientation is more machinery than the problem deserves.
+
+**No two-pane layout, deliberately** — not an omission. A list/detail split would put S1 and S2 side
+by side, but S2's own detail is a bottom sheet, so the pattern would need a third pane or a nested
+sheet, and every triage gesture would need a "which pane has focus" answer. The product is one
+decision at a time on a phone (§1). If a tablet layout is ever wanted it is a new design, and item 1's
+content-width cap is the part of it that already applies.
