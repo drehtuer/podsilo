@@ -1,14 +1,16 @@
 # UI_interface.md — the contract between the Compose UI and the app logic
 
-Companion to [`docs/UI.md`](docs/UI.md) (what the screens are) and
-[`docs/architecture.md`](docs/architecture.md) (what is underneath). This document defines the
+Companion to [`docs/UI.md`](UI.md) (what the screens are) and
+[`docs/architecture.md`](architecture.md) (what is underneath). This document defines the
 **seam**: for every screen, the immutable state the UI renders, the events it emits, and the ports
 it reaches through. Nothing here describes rendering; nothing here describes I/O. If a Composable
 needs a value that is not in a `UiState` below, or performs an action that is not a `UiEvent`, the
 seam is wrong — fix the seam, not the Composable.
 
-Designs: [`Podsilo Screens.dc.html`](Podsilo%20Screens.dc.html) (every screen and state, light and
-dark) and [`Podsilo Prototype.dc.html`](Podsilo%20Prototype.dc.html) (tap-through).
+Designs are **not in this repository**: `Podsilo Screens.dc.html` (every screen and state, light and
+dark) and `Podsilo Prototype.dc.html` (tap-through) live in the design project. The only design
+assets that are committed are `assets/icons/` (Lucide SVG source, see §17) and `assets/art/`
+(generated placeholder cover art for the mock-ups, never shipped in the app).
 
 Package root for everything below: `net.drehtuer.podsilo`.
 
@@ -26,7 +28,7 @@ Package root for everything below: `net.drehtuer.podsilo`.
    payload. Loading, empty, error and content are *variants*, not flags — every screen's state is a
    sealed hierarchy or carries an explicit `content:` variant field.
 5. **Every list item carries its own affordance set.** The row does not derive "can I download this?"
-   from a `when (state)` in the Composable — the ViewModel computes `actions: Set<EpisodeAction>`
+   from a `when (state)` in the Composable — the ViewModel computes `actions: Set<EpisodeUiAction>`
    so the row, the overflow, the swipe label and the accessibility custom actions all read one
    source (UI.md §12.6).
 6. **Presentation strings are resolved in the Composable, not the ViewModel.** State carries typed
@@ -43,8 +45,13 @@ Package root for everything below: `net.drehtuer.podsilo`.
 ```kotlin
 // :core:model — additions the UI needs. Everything else already exists.
 
-/** What a row/sheet may currently do. Computed by the ViewModel from the ledger row. */
-enum class EpisodeAction { DOWNLOAD, DOWNLOAD_AGAIN, MARK_AS_PLAYED, RETRY, CANCEL, CHOOSE_FOLDER, OPEN_IN_BROWSER, COPY_LINK }
+/**
+ * What a row/sheet may currently do. Computed by the ViewModel from the ledger row.
+ * NOT `EpisodeAction` — that name is already taken in :core:model by the GPodder wire type
+ * (`port.EpisodeAction`, architecture §5). Two different things called EpisodeAction in one
+ * module is a compile error at best and a silent mix-up at worst.
+ */
+enum class EpisodeUiAction { DOWNLOAD, DOWNLOAD_AGAIN, MARK_AS_PLAYED, RETRY, CANCEL, CHOOSE_FOLDER, OPEN_IN_BROWSER, COPY_LINK }
 
 /** One row in S2/S3/S7. Wraps the existing EpisodeListItem with UI-resolved bits. */
 data class EpisodeUi(
@@ -61,7 +68,7 @@ data class EpisodeUi(
     val writtenFileName: String?,
     val lastError: FailureUi?,
     val hasEnclosure: Boolean,        // false → dimmed "no audio" row, download disabled
-    val actions: Set<EpisodeAction>,
+    val actions: Set<EpisodeUiAction>,
 )
 
 /** Never reconstructed from a stale ledger row — see §7 "resuming". */
@@ -71,7 +78,7 @@ data class FailureUi(val cause: ErrorCause, val message: String, val attempts: I
 
 enum class ErrorCause { NETWORK, SERVER, AUTH, FEED_PARSE, DISK_FULL, FOLDER_UNAVAILABLE, TAG_WRITE, UNKNOWN }
 
-/** One user-visible condition with three causes (UI.md §12.12). */
+/** One user-visible condition with three causes (UI.md §12.11). */
 sealed interface QueueStatus {
     data object Running : QueueStatus
     data class Paused(val cause: PauseCause, val queuedCount: Int) : QueueStatus
@@ -87,8 +94,16 @@ sealed interface UiEffect {
 }
 ```
 
-`Instant`/`Duration` are `kotlinx.datetime`/`kotlin.time`; both are already JVM-safe for
-`:core:model`.
+**`Instant` and `Duration` are `java.time`** — free at `minSdk 33` and already this project's time
+vocabulary (`:core:naming`, `:core:sync`, `:core:feed`, `:core:download` all use it). **No
+`kotlinx-datetime`, no `kotlin.time.Instant`** — either would be a second vocabulary in a codebase
+that has one (ADR 0016).
+
+Storage keeps `Long` epoch millis, unchanged. The conversion happens in exactly one place,
+`EpochTime` in `:core:model`, whose value is its function names: `ofMillis` for everything, and
+`ofServerSeconds` for `SyncState.lastEpisodeActionSyncTs` alone, which is Unix **seconds** verbatim
+from the server. A ViewModel projecting `EpisodeListItem` → `EpisodeUi` calls `EpochTime`; nothing
+else calls `Instant.ofEpochMilli` directly.
 
 ---
 
@@ -188,14 +203,14 @@ enum class EpisodeFilter { TO_DECIDE, DOWNLOADED, PLAYED_OR_HANDLED, ALL }
 
 sealed interface EpisodeListEvent {
     data class RowClicked(val episodeKey: String) : EpisodeListEvent          // opens S3, never triages
-    data class Triage(val episodeKey: String, val action: EpisodeAction) : EpisodeListEvent
+    data class Triage(val episodeKey: String, val action: EpisodeUiAction) : EpisodeListEvent
     data class SwipeCommitted(val episodeKey: String, val direction: SwipeDirection) : EpisodeListEvent
     data class FilterChanged(val filter: EpisodeFilter) : EpisodeListEvent
     data class SelectionToggled(val episodeKey: String) : EpisodeListEvent
     data object SelectionStarted : EpisodeListEvent
     data object SelectionCleared : EpisodeListEvent
     data object SelectAllInFilter : EpisodeListEvent
-    data class BulkConfirmed(val action: EpisodeAction, val keys: Set<String>) : EpisodeListEvent
+    data class BulkConfirmed(val action: EpisodeUiAction, val keys: Set<String>) : EpisodeListEvent
     data object DownloadAllRequested : EpisodeListEvent                        // opens the confirm dialog
     data class DownloadAllConfirmed(val keys: List<String>) : EpisodeListEvent
     data object PullToRefresh : EpisodeListEvent
@@ -235,7 +250,7 @@ data class EpisodeDetailUiState(
 )
 
 sealed interface EpisodeDetailEvent {
-    data class Triage(val action: EpisodeAction) : EpisodeDetailEvent
+    data class Triage(val action: EpisodeUiAction) : EpisodeDetailEvent
     data object Dismissed : EpisodeDetailEvent
     data object ErrorDetailsClicked : EpisodeDetailEvent   // → S8
     data class LinkClicked(val url: String) : EpisodeDetailEvent
@@ -400,7 +415,7 @@ sealed interface ActivityEvent {
 open-file, and no existence check — Podsilo is not a file manager (README).
 
 A `FOLDER_UNAVAILABLE` failure carries `retryable = false`, so its row renders **Choose folder** and
-not **Retry** (UI.md §12.12, ADR 0011).
+not **Retry** (UI.md §12.11, ADR 0011).
 
 ---
 
@@ -427,7 +442,7 @@ sealed interface ErrorLogEvent {
 }
 ```
 
-**Clearing always confirms** (`docs/UI.md` §11) — the dialog names the count and says the log is
+**Clearing always confirms** (`UI.md` §11) — the dialog names the count and says the log is
 device-local, because there is no copy anywhere else and clearing is not undoable. It clears the
 whole ring buffer, **not** the current filter: a filtered view that cleared only the visible
 category would leave a count the user cannot account for. Recording resumes immediately; clearing is
@@ -465,7 +480,7 @@ require that are **not** in the repository today, in the order they block work.
 
 ### 8.1 Error log has no backend — blocks S8 entirely
 
-`docs/UI.md` §15 already states this. Concretely:
+`UI.md` §15 already states this. Concretely:
 
 ```kotlin
 // :core:model
@@ -510,11 +525,15 @@ const val KEY_USER_REQUESTED = "userRequested"   // Boolean, default false
 Set **only** from a `EpisodeListEvent.Triage`/`EpisodeDetailEvent.Triage`, never from a worker or a
 sync path. The pre-flight duplicate guard (`DownloadTarget.existingNames`, checking *this episode's
 own* `writtenFileName`) runs only when the flag is set — that keeps `writtenFileName` from becoming
-the general "have I downloaded this?" test, which stays the ledger. Drafted as `docs/decisions/0012-terminal-states-reopenable-by-user.md` — **not
-yet accepted**; its "Still to settle" section lists the four points that need the author before code
-is written against it.
+the general "have I downloaded this?" test, which stays the ledger.
 
-### 8.3 Connectivity, before the request — blocks `docs/UI.md` §12.11
+**ADR 0012, accepted 2026-08-01**, settles the rest: a re-decision behaves exactly like a first one
+(action re-posted, `attempts` reset, `lastError` cleared), *Mark as played* over a terminal row
+follows the same rules and needs **no** flag because it writes no file, and `writtenFileName`
+survives every re-decision — losing it would silently disarm the guard above. The "already in your
+folder" outcome is informational only and is counted nowhere.
+
+### 8.3 Connectivity, before the request — blocks `UI.md` §12.10
 
 ```kotlin
 // :core:model
@@ -556,15 +575,34 @@ suspend fun DownloadTarget.freeBytes(): Long?   // null when unknowable; the war
 Writing 412 `SKIPPED` rows one `upsert` at a time is 412 transactions and 412 `Flow` emissions.
 Needs one batched method:
 
+**Built.** As declared, with one change from the draft: the preview returns a named type rather than
+`List<Pair<String, Int>>`, because `first`/`second` at the call site says nothing about which is the
+feed and which is the count.
+
 ```kotlin
 // :core:model — EpisodeLedgerRepository
 suspend fun upsertAll(rows: List<EpisodeLedgerRow>)
-suspend fun previewUndecided(scope: BulkScope): List<Pair<String, Int>>   // per-feed counts for the dialog
+suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount>
+
+data class FeedUndecidedCount(val feedUrl: String, val count: Int)
+
+// BulkScope is a data class, not the enum the draft sketched: "older than" needs to carry its
+// cutoff, and both scopes need the optional per-feed narrowing that *Download all* uses.
+data class BulkScope(val kind: BulkScopeKind, val olderThanMillis: Long? = null, val feedUrl: String? = null)
+enum class BulkScopeKind { OLDER_THAN, ALL_UNDECIDED }
 ```
-Also required by UI.md §14.2: the "mark old episodes as played" rule must be applied to
-newly-parsed episodes after each feed refresh — which makes it a `FeedRefresher` concern, not a UI
-one. The ADR §14.2 asks for must state that the written-`SKIPPED` approach **replaces** the
-architecture's read-time `pubDate >= firstSeenAt` cutoff rather than composing with it.
+
+Both scopes select only episodes with **no ledger row**, so a bulk action can never re-touch an
+already decided episode. With an `OLDER_THAN` cutoff, episodes with an unknown `pubDate` are
+**excluded** — a missing date is not evidence of being old, and sweeping one up would emit a `PLAY`
+the user never agreed to.
+Also required by ADR 0013: the "mark old episodes as played" rule is applied to newly-parsed
+episodes after each feed refresh once an *older than* value is set — which makes it a
+`FeedRefresher` concern, not a UI one, and makes `FeedRefresher` the first component that writes
+ledger rows. It writes `SKIPPED` only, never `QUEUED`; `NoAutoDownloadInvariantTest` should be
+extended to assert exactly that. The same ADR **retires** the read-time `pubDate >= firstSeenAt`
+cutoff in `EpisodeLedgerDao.observeNewEpisodes` — removed, not left unused, so it cannot become a
+second mechanism.
 
 ### 8.7 Feed-scoped refresh — blocks S2 pull-to-refresh
 
@@ -578,6 +616,38 @@ single-feed input on the same worker (`KEY_FEED_URL`), not a second worker.
 URL, so `:core:feed`'s `RssMapping` must carry `<item><link>` (Atom: `<link rel="alternate">`)
 through to the entity, and `:core:database` needs a nullable `link` column plus a migration to
 schema version 2. Null for feeds that omit it — the affordance is then absent, never a dead tap.
+
+### 8.9 Four settings the UI persists that `SettingsRepository` does not have
+
+As built (Tier 4a), `SettingsRepository` carries naming, download-folder URI, sync interval and the
+Nextcloud account/credentials — and nothing else. S4 reads and writes four more, all of which need
+adding to the port and to `:core:datastore`:
+
+```kotlin
+// :core:model — SettingsRepository additions
+fun observeTheme(): Flow<ThemePreference>;          suspend fun setTheme(value: ThemePreference)
+fun observeSwipeMapping(): Flow<SwipeMapping>;      suspend fun setSwipeMapping(value: SwipeMapping)
+fun observeAllowMobileData(): Flow<Boolean>;        suspend fun setAllowMobileData(value: Boolean)
+fun observeMarkOldOlderThan(): Flow<OlderThan>;     suspend fun setMarkOldOlderThan(value: OlderThan)
+```
+
+`allowMobileData` is not only a settings value: it is the `NetworkType` constraint `WorkScheduler`
+puts on a download request, so it has a second reader.
+
+### 8.10 Two new dependencies — approved
+
+Both were CLAUDE.md §3 "ask first" items and both were **accepted on 2026-08-01** (ADR 0015). They
+still need pinning in `gradle/libs.versions.toml` and rows in `docs/third-party.md`:
+
+- **Coil** (`io.coil-kt.coil3:coil-compose`, Apache-2.0) for artwork. S1, S2 and S3 all render
+  `Feed.imageUrl`/episode images and nothing in the repo loads a remote image today. It sits on the
+  OkHttp already pinned rather than bringing a second HTTP stack, which is what decided it over
+  Glide.
+- **Lucide's Compose artifact** for icons — §17 makes the case; the alternative was 27
+  hand-converted `VectorDrawable`s kept in step with `UI.md` §18's table by hand.
+
+The third question — `kotlinx-datetime` — was answered by **not** adding anything: see §1 and
+ADR 0016.
 
 ---
 
@@ -632,7 +702,7 @@ backgrounds stay ≥ 3:1 and distinguishable in dark mode (darkening them is not
 
 ## 11. Motion — the Compose mapping
 
-The durations, easings and the three rules behind them are in **`docs/UI.md` §16**, which is canonical;
+The durations, easings and the three rules behind them are in **`UI.md` §16**, which is canonical;
 this table is only which API carries each one, so a reader implementing a screen does not have to
 guess.
 
@@ -656,7 +726,7 @@ setting, so read it (`AccessibilityManager`/`Settings.Global.ANIMATOR_DURATION_S
 
 ## 12. Consistency invariants
 
-The spacing and sizing contract is in **`docs/UI.md` §17** — one canonical list, including the single
+The spacing and sizing contract is in **`UI.md` §17** — one canonical list, including the single
 intentional asymmetry (leading-icon screens inset 14 dp, S1 16 dp). Two implementation notes that
 belong here rather than there:
 
@@ -674,15 +744,27 @@ Everything the state classes lean on, so no reader has to infer a shape. These l
 `:core:model` unless marked otherwise.
 
 ```kotlin
+// All four are built, in :core:model's `port` package beside SettingsRepository, which persists them.
 enum class SwipeDirection { LEFT, RIGHT }
 enum class ThemePreference { LIGHT, DARK, SYSTEM }
+
+// OlderThan carries its own Period and computes the cutoff: `cutoffMillis(now, zone)`. Calendar
+// arithmetic, not `now - 90 days`, so "3 months" means what the label says. Two callers need it (the
+// preview dialog and FeedRefresher), which is why it is on the type rather than at a call site.
 enum class OlderThan { OFF, MONTH_1, MONTH_3, MONTH_6, YEAR_1 }
-enum class BulkScope { OLDER_THAN, ALL_UNDECIDED }
+
+// SwipeMapping enforces "the two directions never hold the same action" in `with(direction, action)`,
+// which swaps rather than rejects. NONE is exempt — both directions may be disabled.
+data class SwipeMapping(val right: SwipeAction, val left: SwipeAction)
 enum class LogCategory { SYNC, FEED, DOWNLOAD, STORAGE, AUTH }
 enum class WaitReason { WIFI, NETWORK, FOLDER, RESUMING }
 enum class BlockedReason { OFFLINE, NOT_CONFIGURED, SYNC_IN_FLIGHT }
 
-/** DownloadFolderAccess.State, as built in Tier 4b — used verbatim, not re-modelled. */
+/**
+ * NOT a new type: this is `DownloadFolderAccess.State`, as built in Tier 4b, reproduced here only
+ * so the state classes above read. It lives in `:core:download`; if `:feature:settings` cannot see
+ * it from there, promote that one enum to `:core:model` rather than declaring a parallel copy.
+ */
 enum class FolderState { NOT_CHOSEN, GRANTED, REVOKED }
 
 /**
@@ -714,7 +796,7 @@ data class NewLogEntry(
 )
 ```
 
-`EpisodeAction` (§1) is the full affordance vocabulary; `Route` (§9) is the full destination set.
+`EpisodeUiAction` (§1) is the full affordance vocabulary; `Route` (§9) is the full destination set.
 Neither is extended anywhere else — a new affordance or destination is an edit to those two
 declarations, so the compiler finds every `when` that needs updating.
 
@@ -733,7 +815,7 @@ The cases below are where a plausible implementation is wrong. Each is a test, n
 | Remote action arrives for an already-`DOWNLOADED` episode | **no-op.** No state change, no animation, no snackbar. This is the "triage durability" property and it must be observable as *nothing happening*. |
 | A feed is unsubscribed on the server while S2 for that feed is open | the screen stays up with its episodes (they are still in Room until the next refresh prunes them) and shows a one-line inline notice that the podcast is no longer in Nextcloud. It does **not** pop the backstack — yanking a screen out from under a reader is worse than a stale one. Triage actions stay enabled: the ledger is keyed by episode, not by current subscription (architecture §6). |
 | A feed's title arrives from its first successful fetch while S1 is on screen | the row's primary line swaps from URL to title **in place**, without re-sorting (§2's frozen ordering). |
-| The download folder grant is revoked while S2 is open | the paused banner appears above the list; `QUEUED` rows stay `QUEUED` and read *paused*; new download requests are still accepted (§12.12). |
+| The download folder grant is revoked while S2 is open | the paused banner appears above the list; `QUEUED` rows stay `QUEUED` and read *paused*; new download requests are still accepted (§12.11). |
 
 ### 14.2 Lifecycle and process death
 
@@ -743,7 +825,7 @@ The cases below are where a plausible implementation is wrong. Each is a test, n
 | Process death in selection mode | selection is **dropped**, not restored. A restored set of checkboxes the user cannot remember choosing is a bulk action waiting to be confirmed by accident. |
 | Process death with the S5 dialog open mid-poll | the flow is abandoned and the app password discarded. On return the dialog is closed and S4 shows the previous instance (or none). An abandoned flow is written to the log (`AUTH`). |
 | Rotation with a dialog or sheet open | preserved, via `SavedStateHandle` — but one-shot `UiEffect`s must not replay (rule §0.7). |
-| Rotation into landscape | no state consequence — every screen stays one scrolling column (`docs/UI.md` §19). The four short-window adjustments there are layout-only: no `UiState` field describes orientation, and no ViewModel reads a window size class. If one ever needs to, that is a design change first. |
+| Rotation into landscape | no state consequence — every screen stays one scrolling column (`UI.md` §19). The four short-window adjustments there are layout-only: no `UiState` field describes orientation, and no ViewModel reads a window size class. If one ever needs to, that is a design change first. |
 | Cold start while a sync is already running from a previous process | S1 shows the refresh indicator for the live work; it does not start a second pass. `WorkScheduler` uses unique work, so this is a query, not a guard. |
 
 ### 14.3 Data shapes that break naive rendering
@@ -754,7 +836,7 @@ The cases below are where a plausible implementation is wrong. Each is a test, n
 | `durationSeconds` and `pubDate` both absent | meta line renders neither part and shows nothing — never "unknown", never a fabricated value. The row is still fully triageable. |
 | Episode has no enclosure | `hasEnclosure = false` → `actions` contains only `OPEN_IN_BROWSER`; the row is dimmed with a **no audio** badge. Download must be *absent*, not present-and-failing. |
 | Two episodes in one feed share a `guid` | the ledger is keyed by `episodeKey`, so they are one row and one decision. The list must not show a duplicate — dedup by key when projecting, and do not assume the DAO did it. |
-| A title long enough to overflow at the largest font scale | the title truncates first; the decision affordances never do (§12.13). |
+| A title long enough to overflow at the largest font scale | the title truncates first; the decision affordances never do (§12.12). |
 | A feed with 500+ episodes under `All` | paging or a keyed `LazyColumn` with stable `episodeKey`s — the sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them. |
 | `writtenFileName` present but the file is gone | the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists — the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (§8.2). |
 
@@ -780,7 +862,7 @@ already half-built (`DownloadNotifications`, Tier 4b).
 
 | Notification | Content | Tap target |
 |---|---|---|
-| Foreground service, while downloads run | "Downloading n episodes", current title, determinate progress, **Cancel all**. Shows *Paused* rather than progress when the queue is paused (§12.12). | S7 |
+| Foreground service, while downloads run | "Downloading n episodes", current title, determinate progress, **Cancel all**. Shows *Paused* rather than progress when the queue is paused (§12.11). | S7 |
 | Completion, one per batch | the count only; silent by default | S7 |
 | Failure, only after retries are exhausted | the plain-language cause | S8 |
 | Sync | **never.** No notification for sync, ever. | — |
@@ -814,7 +896,7 @@ These are state and semantics decisions, so they belong here rather than in a st
 
 ## 17. Icons — the technical half
 
-Which icon carries which meaning is a UX decision and lives in **`docs/UI.md` §18**, the single
+Which icon carries which meaning is a UX decision and lives in **`UI.md` §18**, the single
 canonical mapping; do not restate it here or the two will drift. What belongs here is how they get
 into the app.
 
@@ -862,7 +944,7 @@ Three real caveats, none about screen density:
   ones are inline markers beside text, and if any read weakly on a real device, raise the size rather
   than thinning the stroke.
 - **Icons do not scale with font scale, deliberately.** At large accessibility font sizes the text
-  grows and the icons hold at 24 dp; the title truncates first (`docs/UI.md` §12.13). An icon that
+  grows and the icons hold at 24 dp; the title truncates first (`UI.md` §12.12). An icon that
   grows with the type breaks every row height in the app.
 - **The glyph is not the target.** 24 dp drawn inside a ≥ 48 dp touch target (§12) — the padding is
   part of the control, not decoration.

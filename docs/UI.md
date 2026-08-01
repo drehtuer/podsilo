@@ -7,9 +7,9 @@ gesture does*, so that Tier 4c can be built without re-litigating UX mid-code.
 Companion documents: [`docs/architecture.md`](architecture.md) (modules, schema, sync semantics) and
 [`TODO.md`](../TODO.md) (build order). Where this document adds a screen or a rule that the
 architecture implies but does not state, it is marked **[gap]** and listed again in
-[§12](#12-coverage-check-against-the-architecture). Two decisions here **change** the architecture
-and need an ADR before implementation — both are collected in
-[§13](#13-decisions-that-need-an-adr).
+[§13](#13-coverage-check-against-the-architecture). Three decisions here **change** the architecture
+or the README and need an ADR before implementation — all three are collected in
+[§14](#14-decisions-that-need-an-adr).
 
 **Vocabulary:** the user-facing word for the "I don't want this file" decision is **Mark as played**
 (never "Skip"). The ledger state behind it is still `SKIPPED` and the emitted GPodder action is still
@@ -192,10 +192,10 @@ error log (S8), leaving the previously loaded list on screen — refresh never c
 - *Configured, zero subscriptions*: empty state explaining subscriptions are managed in Nextcloud,
   with a **Refresh** button. No add-feed affordance.
 - *Filter hides everything*: "Nothing new. All caught up." + a link to switch to *All podcasts*.
-- *Downloads paused* (folder missing/revoked, or storage full — §12.12): persistent inline banner
+- *Downloads paused* (folder missing/revoked, or storage full — §12.11): persistent inline banner
   above the list with the reason and the fix (**Choose folder** / **Free up space**). Never a crash,
   never a silent failure.
-- *Offline*: see §12.11 — a pull-to-refresh with no connectivity fails immediately with an
+- *Offline*: see §12.10 — a pull-to-refresh with no connectivity fails immediately with an
   "No network connection" banner; it does not attempt, and does not time out against, any feed.
 
 **First-run checklist** — until the app can actually complete a download, S1 shows a checklist card
@@ -299,7 +299,7 @@ episodes the size is not estimated and no warning is shown. Free space is read o
 opens.
 
 **Filter** — chips: `To decide` (default) / `Downloaded` / `Played / handled` / `All`. Mapping to
-`LedgerFilter` (architecture §5/§12 item 11):
+`LedgerFilter` (architecture §5):
 
 | Chip | Ledger predicate |
 |---|---|
@@ -313,7 +313,7 @@ start.
 
 **No backlog cutoff in the query.** Old episodes are *not* filtered by `pubDate` at read time; the
 "hide old episodes" feature works by **writing** `SKIPPED` rows, so old episodes leave `To decide`
-and appear under `Played` like any other handled episode (§12.6, and the ADR in §14). This keeps the
+and appear under `Played` like any other handled episode (§12.6, ADR 0013). This keeps the
 list query to a single predicate and makes the state visible and reversible.
 
 **Also pull-to-refresh** here, scoped to this feed (conditional GET; a 304 shows "Already up to
@@ -370,7 +370,7 @@ at an audio file rather than a page — so a feed that omits it simply has no ro
 It opens a Custom Tab (falling back to `ACTION_VIEW`) and the sheet **stays open behind it**: leaving
 to read show notes is not a triage decision, and coming back must not cost the user their place. The
 same action is in the row overflow on S2. Requires `Episode.link`, which did not exist — see
-architecture §12 item 16.
+architecture §4 (schema v2).
 
 Deciding closes the sheet and animates the row into its new state (§16).
 
@@ -468,8 +468,9 @@ second note in the preview states it plainly rather than warning against it. Fur
   - each episode remains individually downloadable via **Download** in S3 or the row overflow;
   - when the *older than* value is not `off`, the rule is also applied to newly-parsed episodes after
     each feed refresh (an episode arriving already older than the cutoff is marked immediately,
-    without a preview — the user consented once by setting the rule). See §14 — this replaces the
-    architecture's read-time `pubDate >= firstSeenAt` backlog cutoff and needs an ADR.
+    without a preview — the user consented once by setting the rule). This **replaces** the
+    architecture's read-time `pubDate >= firstSeenAt` backlog cutoff rather than composing with it
+    — ADR 0013, which also amends CLAUDE.md §5.
 
 **Appearance group** — **Theme**: 3-option segmented control **Light / Dark / System** (default
 `System`), persisted in DataStore, applied immediately without an activity restart (§12.7).
@@ -566,10 +567,16 @@ block-beta
   bar["‹  File naming"]
   f1["Folder template\n[ {podcast} ]"]
   f2["File template\n[ {date}_{title} ]"]
-  ph["Available: {podcast} {title} {date} {guid} {episodeNumber}\n(tap to insert)"]
+  ph["Available: {podcast} {title} {date} {description} {guid_short}\n(tap to insert)"]
   pv["PREVIEW\nDer Podcast/20260714_Warum-Hamburg-immer-regnet.mp3\nDer Podcast/00000000_Folge-ohne-Datum.mp3"]
   r["[ Reset to default ]"]
 ```
+
+The placeholder chips are exactly the set `DefaultNamingTemplateEngine` resolves — `{podcast}`,
+`{title}`, `{description}`, `{date}` (also `{date:pattern}`) and `{guid_short}`. `{ext}` is
+deliberately absent: the extension is appended after resolution and is not resolved as a variable
+(CLAUDE.md §6). Offering a chip the engine does not know would render it as literal text in a
+filename.
 
 Live preview calls the already-tested `NamingTemplateEngine.resolve()` against a real recent episode
 plus synthetic worst cases (missing date → `00000000` per ADR 0004; over-long title → truncation;
@@ -599,7 +606,7 @@ block-beta
   d4["✓ 20260630_Hafen-Kran-Kaffee.mp3\nSD card / Podcasts / Der Podcast"]
 ```
 
-Groups: a **paused** banner when the queue is held (§12.12), sync status (last sync, outbox depth,
+Groups: a **paused** banner when the queue is held (§12.11), sync status (last sync, outbox depth,
 **Sync now** — disabled and labelled "No network connection" when offline), downloading (determinate
 progress + bytes), queued (with the reason it is waiting — Wi-Fi, folder missing, resuming after
 restart), failed (`lastError` as a human sentence + `attempts`, with **Retry**, **Mark as played**,
@@ -766,7 +773,7 @@ request's "number of available episodes for download". Notes:
 - `QUEUED`/`DOWNLOADING` episodes are **not** counted (already decided); they show as
   "n downloading" instead.
 - A feed never fetched shows `–`, not `0` — unknown is not zero.
-- Counts come from the same SQL join as the list (architecture §12 item 11), never a second code
+- Counts come from the same SQL join as the list (architecture §5), never a second code
   path, so a badge can never disagree with the list it opens.
 
 ### 12.6 Ledger state → row treatment (single source of truth for the UI)
@@ -818,7 +825,7 @@ it returns 200 and the local ledger is authoritative.
 - **Failure notification** only after retries are exhausted; tapping opens S8.
 - No notification for sync, ever.
 
-### 12.11 Offline handling
+### 12.10 Offline handling
 
 Connectivity is checked **before** any network work is started, so the user never waits on a timeout
 they could have been told about instantly:
@@ -834,7 +841,7 @@ they could have been told about instantly:
 
 Browsing is fully available offline: everything on S1, S2, S3 and S8 comes from Room.
 
-### 12.12 One "downloads paused" state
+### 12.11 One "downloads paused" state
 
 Folder-missing, permission-revoked and disk-full are three causes of **one** user-visible condition:
 **Downloads paused**. It is a queue-level state, not a per-episode one.
@@ -853,7 +860,7 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
   must not offer a bare **Retry** — the action is **Choose folder**. Retry only appears on failures
   where retrying can plausibly work (network, 5xx, truncated body).
 
-### 12.13 Accessibility & density
+### 12.12 Accessibility & density
 
 - Tap targets ≥ 48 dp; row height ≥ 72 dp with 3 lines of text. **This includes filter chips and
   segmented options** — they read as labels and are easy to leave at their text height, which is
@@ -882,8 +889,8 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 | Episode list with image/title/description/date | S2, S3 | ✔ (raw HTML forces S3 — **added**) |
 | Download triage → `QUEUED` (§10) | S2 swipe right, S3, overflow | ✔ |
 | Skip triage → `SKIPPED`/`PLAY` (§10) | S2 swipe left ("Mark as played"), S3, overflow | ✔ |
-| Filter decided/undecided (§12 item 11) | S2 chips (To decide · Downloaded · Played · All) | ✔ |
-| Backlog handling (`firstSeenAt` cutoff) | replaced by S4's *Mark old episodes as played* write | ⚠ **changed — ADR needed (§14.2)** |
+| Filter decided/undecided (architecture §5) | S2 chips (To decide · Downloaded · Played · All) | ✔ |
+| Backlog handling (`firstSeenAt` cutoff) | replaced by S4's *Mark old episodes as played* write | ✔ **changed — ADR 0013, accepted (§14.2)** |
 | Theme light/dark/system, persisted | S4 Appearance, §12.7 | ✔ |
 | Nextcloud instance display + change + auth (§8) | S4, S5 (Login Flow v2 only) | ✔ |
 | **SAF download-folder grant + re-grant (§8)** | S4 Download folder row + S1 banner | **added — downloads cannot work without it** |
@@ -893,37 +900,42 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 | **`HANDLED_REMOTELY` visibility (§6 inbound)** | §12.6 badge "handled elsewhere", greyed out | **added** |
 | **Outbox depth / unsynced actions (§5, §10)** | S4 "Last sync", S7 sync row | **added** |
 | **Failure diagnostics** | S8 error log | **added** |
-| Re-download of a handled episode | §12.3 Download again + duplicate-file guard | ⚠ **changed — ADR 0012 drafted, not accepted (§14.1)** |
+| Re-download of a handled episode | §12.3 Download again + duplicate-file guard | ✔ **changed — ADR 0012, accepted (§14.1)** |
 | Feed titles unknown before first fetch (§4) | S1 falls back to URL | ✔ |
 | Episodes without enclosure (§7) | S2 dimmed "no audio" row | ✔ |
 | Foreground service notification (TODO 4b) | §12.9 | ✔ |
-| No auto-download invariant (§7 item 6) | no rules, no background triage; *Download all* / selection mode are explicit user actions behind a counted confirmation | ⚠ **narrowed — ADR needed (§14.3)** |
+| No auto-download invariant (§7 item 6) | no rules, no background triage; *Download all* / selection mode are explicit user actions behind a counted confirmation | ✔ **narrowed — ADR 0014, accepted (§14.3)** |
 | Setup completeness before first download | S1 first-run checklist (§4) | **added** |
-| Offline / metered behaviour (§8 "never throw") | §12.11 | **added** |
-| Folder-missing + disk-full as one condition | §12.12 downloads-paused state | **added** |
+| Offline / metered behaviour (§8 "never throw") | §12.10 | **added** |
+| Folder-missing + disk-full as one condition | §12.11 downloads-paused state | **added** |
 | Progress across process death | §12.2 *resuming* rule | **added** |
 | Failure-log flooding | §11 collapsed repeated entries | **added** |
 | Batch triage / long backlog ergonomics | S2 selection mode, *Download all*, sticky headers, fast-scroll | **added** |
-| Episode page link (`<item><link>`) | S3 *Open in browser* (§6), §18's `external-link` | **added — needs `Episode.link`, architecture §12 item 16** |
+| Episode page link (`<item><link>`) | S3 *Open in browser* (§6), §18's `external-link` | **added — needs `Episode.link`, architecture §4 (schema v2)** |
 | Motion / transitions | §16 | **added** |
 | Spacing consistency across screens | §17 | **added** |
 | Icon set and per-affordance mapping | §18 | **added — nothing recorded it before** |
 | Landscape / orientation | §19 | **added** |
-| UI ↔ app-logic contract | `UI_interface.md` | **added — the handover surface for Tier 4c** |
+| UI ↔ app-logic contract | `docs/UI_interface.md` | **added — the handover surface for Tier 4c** |
 | Not a player / not a file manager | no playback controls; S7 shows filenames only, never deletes | ✔ |
 
 ---
 
-## 14. Decisions that need an ADR
+## 14. Decisions that needed an ADR — all three accepted
 
-Three UX decisions here contradict statements in `docs/architecture.md` or in code that now exists,
-and must be recorded before Tier 4c, not settled in code review.
+Three UX decisions here contradicted statements in `docs/architecture.md`, in CLAUDE.md, or in code
+that now exists. **All three were accepted by the author on 2026-08-01** and the documents holding
+the old rules were amended in the same pass, so nothing below is still a proposal.
 
-> **Status (2026-08-01):** §14.1 is drafted as
-> `docs/decisions/0012-terminal-states-reopenable-by-user.md` — **draft, not accepted**; its
-> "Still to settle" section lists what remains. §14.2 and §14.3 are still unwritten. Architecture §9
-> and §12 items 15–18 now carry the resolved parts. [§15](#15-adaptations-to-the-code-as-built-tier-4b)
-lists the smaller, non-contentious adaptations.
+| Here | ADR | What it changed |
+|---|---|---|
+| §14.1 | [0012](decisions/0012-terminal-states-reopenable-by-user.md) | Terminal states re-open on a UI event only; a re-decision behaves exactly like a first one |
+| §14.2 | [0013](decisions/0013-backlog-cutoff-is-written-skipped-rows.md) | Written `SKIPPED` rows **replace** the read-time `firstSeenAt` cutoff — CLAUDE.md §5 amended |
+| §14.3 | [0014](decisions/0014-bulk-user-initiated-download-is-allowed.md) | Bulk download allowed as a *command*, never a *rule* — CLAUDE.md §1 and README amended |
+
+The subsections below are kept as the design rationale that fed each ADR; where a detail differs,
+the ADR is current. [§15](#15-adaptations-to-the-code-as-built-tier-4b) lists the smaller,
+non-contentious adaptations.
 
 ### 14.1 Terminal ledger states are re-openable **by explicit user action**
 
@@ -940,25 +952,22 @@ stateDiagram-v2
     QUEUED --> DOWNLOADED : target file already exists (aborted, informational)
 ```
 
-Implications to nail down in the ADR: whether a second successful download re-posts a `DOWNLOAD`
-action (proposed: yes, `syncedToServer = false` again — it is a true event), whether `attempts`
-resets (proposed: yes), and that `writtenFileName` is reused as the pre-flight existence check
-target — which must remain the *only* use of it as an existence check, since architecture §11 calls
-"never use `writtenFileName` as an existence check" its single most important invariant. The
-distinction to preserve: the guard runs **because the user asked for this file**, never to decide
-whether an episode is new.
+**Settled by ADR 0012**, which is where the detail now lives. In short: a re-decision behaves
+exactly like a first one — the new row re-posts its action (`syncedToServer = false`), `attempts`
+resets to 0, `lastError` clears, and *Mark as played* over a terminal row follows the identical
+rules. The one field that survives a re-decision is `writtenFileName`, because §12.3's duplicate
+guard depends on it.
 
-⚠ **This now contradicts shipped code.** Tier 4b's `DownloadWorker` "refuses to act on an
-already-terminal ledger row" (`DownloadWorkerTest`), which is exactly the guard that makes the
-no-auto-download invariant provable — but it also means **Download again would silently do nothing**.
-The ADR must decide the mechanism, not just the intent. Proposed: an explicit
-`forceRedownload`/`userRequested` input on the work request, defaulting to `false`, that is the only
-way past the terminal-state guard; the invariant test keeps asserting that nothing *without* that
-flag can create a file. The flag must be set only from a UI event, never from a worker or sync path.
+The mechanism is `KEY_USER_REQUESTED` on the work request, set **only** from a UI event: Tier 4b's
+`DownloadWorker` refuses terminal ledger rows, and that refusal is what makes the no-auto-download
+invariant structural rather than a matter of care. The flag opens the door for the user without
+removing it. `writtenFileName` as a pre-flight existence check stays the *single* licensed exception
+to architecture §11's "never use `writtenFileName` as an existence check" — the guard runs **because
+the user asked for this file**, never to decide whether an episode is new.
 
 ### 14.2 The backlog cutoff moves from read-time filter to a written `SKIPPED` state
 
-Architecture §4/§12 item 11 defines "New" as `no ledger row AND pubDate >= Feed.firstSeenAt`, with
+Architecture §4/§5 define "New" as `no ledger row AND pubDate >= Feed.firstSeenAt`, with
 the cutoff resolved in SQL. This design instead **writes** `SKIPPED` rows for old episodes (S4's
 *Mark old episodes as played*, §7), which means:
 
@@ -966,17 +975,18 @@ the cutoff resolved in SQL. This design instead **writes** `SKIPPED` rows for ol
   the episode-list or badge query;
 - the state is visible (`Played` filter), per-episode reversible (`Download`), and shared with other
   clients as `PLAY` actions — the read-time filter was none of those;
-- it is a bulk write of hundreds of rows plus hundreds of outbox entries; the ADR should decide
-  whether the outbox pushes them in batches and whether the rule runs automatically after each feed
-  refresh (proposed: yes to both, batched);
+- it is a bulk write of hundreds of rows plus hundreds of outbox entries — **batched on both sides**
+  (one `upsertAll` transaction, batched outbox POSTs), and the rule **does** run automatically
+  against newly-parsed episodes after a feed refresh once an *older than* value is set;
 - `Feed.firstSeenAt` stays in the schema — it is the natural default for the cutoff on a
   newly-appearing feed.
 
-⚠ **The cutoff is already implemented** — Tier 4a resolves it in SQL inside
-`EpisodeLedgerDao.observeNewEpisodes`. Nothing needs deleting: the recommendation is that the UI
-simply stops requesting the cutoff variant (the `To decide` filter asks for "no ledger row", full
-stop) and leaves the DAO capability in place. The ADR should say which of the two mechanisms is
-authoritative, so a future reader doesn't find both and assume they compose.
+**Settled by ADR 0013: this mechanism is authoritative, and the read-time cutoff is retired.**
+Tier 4a's SQL cutoff inside `EpisodeLedgerDao.observeNewEpisodes` is **removed**, parameter and all,
+rather than left in place unused — an unused capability is one flag away from becoming a second
+mechanism, which is the exact confusion this decision exists to end. CLAUDE.md §5, which forbade
+writing ledger rows for the backlog, is amended; the reason it gave — that a bulk write to a shared
+log cannot be taken back — survives as the justification for the preview dialog being mandatory.
 
 ### 14.3 Bulk, user-initiated download is allowed — README's "no download all" is narrowed
 
@@ -994,9 +1004,13 @@ exists:
 
 The no-auto-download invariant test (CLAUDE.md §7 item 6 / `NoAutoDownloadInvariantTest`) is
 unaffected: it asserts that sync and parsing create **zero** ledger rows and post **zero** actions,
-and nothing here changes that — the new rows only ever originate from a UI event. The ADR should
-record the wording change to README. *Download all* is **not** capped by count: the only guard is a
-non-blocking warning when the estimated total exceeds free space in the download volume (§5).
+and nothing here changes that — the new rows only ever originate from a UI event. *Download all* is
+**not** capped by count: the only guard is a non-blocking warning when the estimated total exceeds
+free space in the download volume (§5).
+
+**Settled by ADR 0014.** README's "Not automatic" bullet and CLAUDE.md §1's non-goal are reworded to
+the rule-versus-command distinction above; the rest of the non-goal — no auto-download setting, no
+per-feed rules, no global bulk scope — stands exactly as it was.
 
 ---
 
@@ -1008,13 +1022,13 @@ where this document meets that code — recorded so Tier 4c doesn't rediscover t
 | This design needs | Status in the built code | Action |
 |---|---|---|
 | Download progress, cancel, foreground notification | `DownloadWorker` + `DownloadNotifications`, progress throttled to 1 Hz | UI adopts the same 1 Hz throttle (§12.2) |
-| Folder states for the checklist and the paused banner | `DownloadFolderAccess` → `NotChosen` / `Granted` / `Revoked` | used verbatim (§4, §12.12) |
+| Folder states for the checklist and the paused banner | `DownloadFolderAccess` → `NotChosen` / `Granted` / `Revoked` | used verbatim (§4, §12.11) |
 | "File still there?" for the duplicate guard | `DownloadTarget.existingNames(folder)` (ADR 0011) | reuse; **no new port method** (§12.3) |
-| Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.12) |
+| Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.11) |
 | Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; `SyncTrigger` in `:core:download` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
 | Credential change takes effect immediately after S5 | `SyncOrchestratorFactory` builds the client per pass from current credentials | nothing to do; no restart needed after connecting |
-| Re-download of a terminal episode | `DownloadWorker` **refuses** terminal rows | needs the `forceRedownload` flag decided in §14.1 |
-| "To decide" list + counts | `EpisodeLedgerRepository.observeEpisodes(filter)` → `EpisodeListItem` | matches §12.5; see §14.2 on the `firstSeenAt` variant |
+| Re-download of a terminal episode | `DownloadWorker` **refuses** terminal rows | add `KEY_USER_REQUESTED`, the only way past that refusal (ADR 0012) |
+| "To decide" list + counts | `EpisodeLedgerRepository.observeEpisodes(filter)` → `EpisodeListItem` | matches §12.5; the `firstSeenAt` cutoff variant is retired (ADR 0013) |
 | **S8 error log** | — **no data source exists** | see below |
 
 **The error log is the one screen with no backend.** Failures are currently returned as values
@@ -1084,13 +1098,13 @@ being drawn.
   *groups*. Artwork is 56 dp on S1, 52 dp on S2, 76 dp on S3.
 - **Group labels** — `15dp / 16dp / 7dp` padding, 11 sp at the heading weight, `.12em` tracking, accent
   role, preceded by a 2 px rule. Identical on S4 and S7.
-- **Tap targets** — ≥ 48 dp on everything interactive, chips and segmented options included (§12.13).
+- **Tap targets** — ≥ 48 dp on everything interactive, chips and segmented options included (§12.12).
 - **Badges** — `5dp 7dp` padding, ≥ 26 dp wide; accent fill for a count, outlined for a state word.
 - **Dialogs** — 18 dp padding on every edge, 2 px border, no radius, actions flush left.
 - **Status bar** — `7dp / 16dp`, muted role.
 
 The per-screen state contract, corner cases, notifications and the accessibility semantics behind
-§12.13 live in **`UI_interface.md`** alongside these.
+§12.12 live in **`docs/UI_interface.md`** alongside these.
 
 ---
 
@@ -1106,8 +1120,8 @@ has no call site, and adding an affordance means adding a row before adding a gl
 
 **How they ship:** Android renders no SVG at runtime, so these become `VectorDrawable`/`ImageVector`.
 Preferred route is Lucide's own Compose artifact rather than hand-converting, per CLAUDE.md's
-"use existing libraries" rule — a new dependency, so it needs approval. Sizing, the conversion
-fallback and the reason there is no per-density work to do are in `UI_interface.md` §17.
+"use existing libraries" rule; approved as a dependency in ADR 0015. Sizing, the conversion
+fallback and the reason there is no per-density work to do are in `docs/UI_interface.md` §17.
 
 | Icon | Used for |
 |---|---|
@@ -1123,7 +1137,7 @@ fallback and the reason there is no per-density work to do are in `UI_interface.
 | `check-check` | "all caught up" and "nothing has failed" empty states |
 | `cloud-check` | **handled elsewhere** — the state the user did not create |
 | `x` | leave selection mode |
-| `square` / `square-check` | selection-mode checkboxes, including the accessibility affordance (§12.13) |
+| `square` / `square-check` | selection-mode checkboxes, including the accessibility affordance (§12.12) |
 | `triangle-alert` | downloads-paused banner, failure badge, the free-space warning line |
 | `circle-alert` | inline field and feed errors |
 | `refresh-cw` | sync in progress on S1 |
@@ -1161,7 +1175,7 @@ re-arrange — a triage worklist is a list, and a list in a wider window is the 
 
 **Orientation is not locked.** `screenOrientation` stays unset. Locking would break a device in a car
 mount, a keyboard case, or a foldable, and Podsilo has no reason to — nothing here depends on aspect
-ratio. Rotation preserves state (`UI_interface.md` §14.2): scroll position, filter, open sheet and open
+ratio. Rotation preserves state (`docs/UI_interface.md` §14.2): scroll position, filter, open sheet and open
 dialog all survive; one-shot effects do not replay.
 
 Four things genuinely break in a short window, all with cheap fixes. Nothing below justifies a second

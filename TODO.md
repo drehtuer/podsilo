@@ -6,8 +6,13 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-Repo state as of writing: all modules are scaffolded but empty (CLAUDE.md §10 step 1 — dev
-container + Gradle skeleton — is done; nothing else is built).
+**Repo state (2026-08-01): Tiers 1–4b are complete and green — 269 tests, 3 skipped.** Everything
+below the UI is built: model, naming, sync, feed parse + fetch + refresh worker, the download
+pipeline, the GPodder client, Room, DataStore, the three workers and the Hilt graph. **Tier 4c (the
+Compose UI) is designed but not written**, and is blocked on four decisions rather than on code —
+see `docs/architecture.md` §12. Nothing in this project has ever run on a device.
+
+Each tier's completion note below is kept as written at the time, in build order.
 
 **Update (2026-07-30): Tier 1 is complete.** `:core:model`, `:core:naming`, and `:core:sync` are
 implemented and tested — 114 tests total, `./gradlew ktlintCheck detekt test` green across the
@@ -181,32 +186,58 @@ was the service locator CLAUDE.md §3 forbids.
 
 **Update (2026-08-01): designed, not yet built.** All eight screens and every state
 `docs/UI.md` enumerates are drawn (light and dark), and the UI↔logic contract is written down in
-**`UI_interface.md`** — per-screen state classes, events, effects, the corner cases (state changes
+**`docs/UI_interface.md`** — per-screen state classes, events, effects, the corner cases (state changes
 arriving under the user, process death, data shapes that break naive rendering), notifications,
 accessibility, motion, and the spacing invariants. Read it before writing a Composable; it also
 carries the gap list the tasks below are derived from. Two design decisions were promoted into
-`docs/architecture.md` (§4/§5/§7/§9 and §12 items 15–18).
+`docs/architecture.md` (§4/§5/§7/§9 and §12).
 
 The order matters: the `:core:model` declarations come first so the four feature tasks can then be
 built in parallel, and the one genuinely blocking item is an **ADR, not code**.
 
-- [ ] **Accept `docs/decisions/0012-terminal-states-reopenable-by-user.md`** — architecture §12
-  item 15. **Drafted, not accepted:** the mechanism (`KEY_USER_REQUESTED`) is decided and recorded in
-  §9, but the ADR's "Still to settle" section has four points that need the author. Blocks
-  `:core:download` below, and therefore *Download again*, *Retry* and the whole S3 action bar for
-  terminal episodes.
-- [ ] **`:core:model` additions** — `Episode.link`; `LogRepository` + `LogEntry`/`NewLogEntry`/
-  `LogCategory`; `ConnectivityMonitor` + `Connectivity`; `NextcloudLoginFlowClient`;
-  `EpisodeLedgerRepository.upsertAll`/`previewUndecided`; `DownloadTarget.freeBytes`. Pure
-  declarations, no behaviour — do these first.
+- [x] **Decisions settled (2026-08-01)** — ADRs 0012 (terminal states re-openable), 0013 (backlog
+  cutoff is written `SKIPPED` rows), 0014 (bulk download allowed as a command), 0015 (Coil +
+  Lucide), 0016 (`java.time` behind `EpochTime`, no new dependency). Nothing below is blocked on a
+  decision any more. Three of those amended CLAUDE.md (§1, §5, §10 step 8) and one amended README.
+- [x] **`gradle/libs.versions.toml`** — Coil 3.5.0 (`coil-compose` + `coil-network-okhttp`, so it
+  reuses the pinned OkHttp rather than bringing a second HTTP stack) and
+  `com.composables:icons-lucide-android` 2.2.1. Versions and licences checked against Maven Central
+  metadata, not recalled; `docs/third-party.md` updated. Neither is *used* yet — that lands with the
+  first screen.
+- [x] **`:core:model` additions** — all of them, plus the implementations the widened ports forced.
+  19 new tests (288 total, 3 skipped); `ktlintCheck detekt test` green.
+  - `Episode.link` (nullable, defaulted — not yet mapped in `:core:feed` or stored; that needs
+    schema v2), `EpochTime` (ADR 0016), `LogRepository` + `LogEntry`/`NewLogEntry`/`LogCategory`,
+    `ConnectivityMonitor` + `Connectivity`, `NextcloudLoginFlowClient` + `LoginFlow`/`LoginResult`,
+    `EpisodeLedgerRepository.upsertAll`/`previewUndecided`, `DownloadTarget.freeBytes`, and the four
+    `SettingsRepository` values with `ThemePreference`/`SwipeMapping`/`SwipeAction`/`OlderThan`.
+  - **Not purely declarations, in the end.** Three of these carry logic that has two callers each
+    and would otherwise be duplicated: `EpochTime`'s unit-naming, `SwipeMapping.with`'s
+    "the two directions never hold the same action" swap, and `OlderThan.cutoffMillis`'s calendar
+    arithmetic. All three are table-tested.
+  - Widening the ports also required implementing them: `:core:datastore` persists the four new
+    settings (unknown enum names fall back to the default rather than throwing), `:core:database`
+    implements `upsertAll`/`previewUndecided`, `SafDownloadTarget` implements `freeBytes` via
+    `fstatvfs` on the tree URI, and five test fakes grew the new members.
+  - **The DAO was split**: `EpisodeLedgerDao` (ledger + outbox) and `EpisodeListDao` (the joins and
+    `countUndecidedByFeed`). detekt's `TooManyFunctions` flagged it, and the old KDoc had already
+    confessed to two jobs in one sentence — worth splitting rather than suppressing.
 - [ ] **`:core:database`** — `error_log` table + DAO, with the collapse-on-identity rule (category +
   affected feed/episode + normalised message) and eviction (200 collapsed entries or 7 days,
   whichever is larger) **as queries**, not as UI logic or an app-start sweep. Plus the `link` column
-  and the project's **first migration — schema v2** — with a `MigrationTest`.
+  and the project's **first migration — schema v2** — with a `MigrationTest`. **And remove the
+  `firstSeenAt` cutoff** from `EpisodeLedgerDao.observeNewEpisodes` (ADR 0013) — parameter, SQL
+  clause and its tests, so it cannot become a second mechanism.
 - [ ] **`:core:download`** — `KEY_USER_REQUESTED` on the work request, and the pre-flight
   duplicate-file guard behind it (reuses the existing `DownloadTarget.existingNames`, no new port
   method). Test that the flag is the *only* path past the terminal-row refusal, so the
-  no-auto-download invariant stays provable.
+  no-auto-download invariant stays provable. Per ADR 0012 a re-decision resets `attempts` and
+  `lastError` and re-posts its action, but **keeps `writtenFileName`** — that field is what the
+  guard checks, and a test should pin it.
+- [ ] **`:core:feed`** — apply the *mark old as played* rule to newly-parsed episodes after a
+  refresh when the setting is on (ADR 0013). `FeedRefresher` becomes the first non-UI component that
+  writes ledger rows: extend `NoAutoDownloadInvariantTest` to assert it writes `SKIPPED` only, never
+  `QUEUED`, and still enqueues no download work.
 - [ ] **`:core:gpodder`** — `NextcloudLoginFlowClient` (`POST /index.php/login/v2` + poll). Stays a
   JVM module, MockWebServer-testable; success is only claimed after an authenticated
   `GET /subscriptions` returns 200, because a completed login flow is not proof gpoddersync is
@@ -241,8 +272,19 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
   `DownloadWorkerTest` proves the only path to a file is an explicit per-episode enqueue that also
   refuses to act on an already-terminal ledger row.
 
-## Open question
+## Decisions — all settled
 
-Decide whether to create `docs/decisions/` ADR stubs for all five open decisions in
-architecture.md §12 now (as placeholders to fill in as each tier resolves them), or write each
-ADR only when that decision is actually resolved.
+Tier 4c was blocked on four author decisions between 2026-08-01's design pass and now. All four are
+resolved and recorded; `docs/architecture.md` §12 is the index:
+
+| Was blocking | Settled as |
+|---|---|
+| ADR 0012 draft — the four open points | Accepted: a re-decision behaves exactly like a first one; *Mark as played* follows the same rules; `writtenFileName` survives; the "already in folder" outcome is counted nowhere |
+| Backlog cutoff: filter or written rows | **ADR 0013** — written `SKIPPED` rows; the read-time cutoff is removed; CLAUDE.md §5 amended |
+| *Download all* vs. "no download all" | **ADR 0014** — allowed as a *command*, never as a *rule*; CLAUDE.md §1 and README amended |
+| Three unapproved dependencies | **ADR 0015** — Coil and Lucide Compose accepted; **ADR 0016** — no time dependency at all, `java.time` behind an `EpochTime` seam |
+
+A pattern worth keeping: ADRs 0001–0011 were each written when the decision was actually made, and
+all are "Accepted". 0012 was written *ahead* of its decision and spent a week as a draft blocking
+code. Write the ADR when the decision happens — not before, to reserve a number, and not after, to
+document what shipped.

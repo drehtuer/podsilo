@@ -2,14 +2,12 @@
 
 ## Status
 
-**DRAFT — not accepted.** Written from the UI design work (see `UI_interface.md` §8.2 and
-`docs/UI.md` §12.3/§14.1); the author has not reviewed it. Everything under
-[Decision](#decision) is a *proposal* and the open points in
-[Still to settle](#still-to-settle) are genuinely undecided — do not treat any of it as agreed. The
-next agent should resolve those points with the author, delete this paragraph, and set the status to
-`Accepted` (recording the date) before writing code against it.
+**Accepted 2026-08-01.** Drafted from the UI design work (`docs/UI_interface.md` §8.2,
+`docs/UI.md` §12.3/§14.1); the four points it left open were settled by the author on that date and
+are folded into the [Decision](#decision) below. The guiding answer to all four was **consistency**:
+a re-opened episode behaves exactly like a first decision, with no special cases.
 
-Resolves `docs/architecture.md` §12 open decision #15, and the ADR `docs/UI.md` §14.1 asks for.
+Resolves the ADR `docs/UI.md` §14.1 asks for.
 
 ## Context
 
@@ -80,6 +78,22 @@ A re-download is a new attempt chain, not a continuation of the old one. Leaving
 would make a fresh download render as *attempt 3 of 3* in S7 and immediately look exhausted.
 `lastError` is cleared at the same time.
 
+### 3a. *Mark as played* over a terminal row follows the identical rules
+
+Settled with §2 and §3, for the same reason: a decision is a decision, and the two triage verbs must
+not diverge. Marking an already-`DOWNLOADED`, `SKIPPED` or `HANDLED_REMOTELY` episode as played
+writes the row exactly as a first-time skip does — `state = SKIPPED`, fresh `actionedAt`,
+`syncedToServer = false` (so a new `PLAY` is posted), `attempts = 0`, `lastError = null`.
+
+No work-request flag is involved: this path never reaches `DownloadWorker`, so there is nothing for
+`KEY_USER_REQUESTED` to unlock. The flag guards *file creation*; this writes only the ledger.
+
+**One field is deliberately preserved across the transition: `writtenFileName`.** A `SKIPPED` row
+written over a `DOWNLOADED` one keeps the name that download wrote. Losing it would quietly disarm
+§4's guard — a later *Download again* would have no target to check and would write a second copy of
+a file already in the folder. This is the one place where "reset everything for consistency" is
+wrong, and it is why the question was worth asking.
+
 ### 4. The pre-flight duplicate guard, and the one licensed use of `writtenFileName`
 
 When — and **only** when — `userRequested` is true and the row already carries a
@@ -131,24 +145,27 @@ The four new edges in §9's diagram are all user-initiated; none are reachable f
   download work at all, which is already close to what it proves.
 - `EpisodeDownloader` gains one branch and one new outcome value (the informational "already
   present" case, distinct from both success and failure). Its 11 existing cases stay valid.
-- The UI must render that third outcome. `UI_interface.md`'s `SnackbarText.AlreadyInFolder(fileName)`
+- The UI must render that third outcome. `docs/UI_interface.md`'s `SnackbarText.AlreadyInFolder(fileName)`
   exists for it.
 - ADR 0011's KDoc on `existingNames` should be amended to name this one licensed caller, so a future
   reader does not find the guard and conclude the rule was abandoned.
 
-## Still to settle
+## The four open points, as settled (2026-08-01)
 
-Open points for the next agent — each needs the author, not a judgement call:
+1. **Re-posting `DOWNLOAD` on a re-download: yes** (§2 stands). Consistent with a first download,
+   and honest — the device did fetch the episode again. That it is inert against a current Nextcloud
+   (ADR 0008) does not make it wrong to send; it makes the server wrong to drop it.
+2. **`attempts` resets: yes** (§3 stands).
+3. ***Mark as played* uses the same rules** — new §3a. No flag (it writes no file), but the same
+   fresh row, the same re-posted action, the same `attempts` reset — and `writtenFileName` survives,
+   which is the non-obvious part.
+4. **The "already in your folder" outcome is not counted anywhere.** It stays an informational
+   snackbar and status line: not an `ERROR`, not an error-log entry, and no counter in S7. If it
+   turns out to be common in real use, that is evidence of a different bug and should be
+   investigated as one rather than absorbed into a statistic.
 
-1. **Is §2 right?** Re-posting `DOWNLOAD` is defensible but invisible against real Nextcloud
-   (ADR 0008). Worth confirming the author wants the honest-but-inert action rather than nothing.
-2. **Does *Mark as played* on a `DOWNLOADED` episode need the same flag?** `docs/UI.md` §12.3 allows
-   it and it touches only the ledger — no file is written, so `DownloadWorker` is not involved and
-   the flag looks unnecessary. Confirm there is no path where a `SKIPPED` row over a `DOWNLOADED`
-   one loses the `writtenFileName` that the guard later depends on.
-3. **What does S7's *Retry* on an `ERROR` row use?** `ERROR → QUEUED` was always a legal edge, so it
-   arguably needs no flag. But if `attempts` resets per §3, *Retry* and *Download again* stop being
-   distinguishable in the ledger — decide whether that matters for diagnostics.
-4. **Should the "already in your folder" outcome be counted anywhere?** It is deliberately not an
-   error and not logged. If it turns out to happen often, silence makes it invisible; a counter in
-   S7 would be the cheapest fix. Left out for now on the grounds that it should be rare.
+**S7's *Retry* on an `ERROR` row** needs no flag — `ERROR → QUEUED` was always a legal edge and
+`ERROR` is not a terminal state. It does reset `attempts` like everything else, so *Retry* and
+*Download again* leave indistinguishable ledger rows. Accepted: the ledger records what the user
+decided, not which button they used, and S8's error log already holds the failure history that
+distinguishing them would have been for.

@@ -1,0 +1,64 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+# Third-party code and dependencies
+
+Required by CLAUDE.md §2: every dependency's licence, and every place code was adapted from another
+project, recorded here rather than only in a commit message.
+
+Podsilo is **GPL-3.0-or-later**, so everything below must be GPL-3-compatible. Nothing AGPL, SSPL,
+or carrying a non-commercial / field-of-use restriction is permitted (CLAUDE.md §2).
+
+## Adapted code
+
+**None so far.** No source file in this repository is copied or adapted from another project.
+
+AntennaPod (GPL-3.0) has been *read* as the reference implementation for gpodder-sync conventions —
+its `SynchronizationQueueImpl.enqueueEpisodePlayed` is quoted in
+`docs/decisions/0002-skip-as-play-encoding.md` and its behaviour is what our skip encoding matches.
+Reading an implementation and matching its wire behaviour is not derivation, so no attribution
+header is required; the ADR names the file and commit anyway, which is what makes the claim
+checkable. If any AntennaPod code is ever pasted or transliterated, it needs a header naming the
+project, file, version and licence — and a row in the table below.
+
+## Runtime dependencies
+
+Versions are pinned in `gradle/libs.versions.toml`; this table records *why the licence is
+acceptable*, not the current version, so it does not need touching on a version bump.
+
+| Dependency | Licence | GPL-3 compatible | Notes |
+|---|---|---|---|
+| Kotlin stdlib, coroutines, kotlinx.serialization | Apache-2.0 | ✅ | |
+| AndroidX (Core, Activity, Lifecycle, Compose, Room, DataStore, WorkManager, DocumentFile) | Apache-2.0 | ✅ | |
+| Hilt / Dagger | Apache-2.0 | ✅ | |
+| Retrofit, OkHttp, MockWebServer | Apache-2.0 | ✅ | OkHttp pinned above Retrofit's transitive version deliberately — see the catalog's header comment |
+| `com.prof18.rssparser:rssparser` | Apache-2.0 | ✅ | Chosen over Stalla — `docs/decisions/0005` |
+| `com.github.Adonai:jaudiotagger` | LGPL-2.1-or-later | ✅ | Android-compatible fork of `net.jthink:jaudiotagger`; original copyright (Paul Taylor) retained. Distributed via **JitPack**, which builds from GitHub source rather than a reviewed registry release — a different trust model, recorded in `docs/decisions/0006` |
+| Coil (`io.coil-kt.coil3:coil-compose` + `:coil-network-okhttp`) | Apache-2.0 (confirmed in the 3.5.0 POM) | ✅ | Feed/episode artwork. `coil-network-okhttp` is what makes it reuse the OkHttp already pinned instead of bringing a second HTTP stack — the reason it was chosen over Glide. `docs/decisions/0015` |
+| `com.composables:icons-lucide-android` | MIT (the artifact, per its POM); the Lucide icon set itself is ISC | ✅ | Icons; `docs/UI.md` §18 is the allow-list — `docs/decisions/0015` |
+| JUnit 4 | EPL-1.0 | ✅ (test-only) | Not linked into the shipped app |
+| Robolectric | Apache-2.0 | ✅ (test-only) | Downloads an `android-all` jar at first use |
+| MockK, Turbine, Truth/AssertJ | Apache-2.0 | ✅ (test-only) | |
+| ktlint, detekt | MIT / Apache-2.0 | ✅ (build-only) | |
+
+## Assets
+
+| Asset | Origin | Licence |
+|---|---|---|
+| `assets/icons/*.svg` | [Lucide](https://lucide.dev) | ISC — attribution retained here; the set is the allow-list in `docs/UI.md` §18 |
+| `assets/art/*.svg` | Generated placeholder cover art for the design mock-ups | Ours; **never shipped in the app** — real feeds supply their own artwork |
+
+## Considered and deliberately not added
+
+- **`kotlinx-datetime`** — would have been a third time vocabulary in a codebase that already uses
+  `java.time` throughout, for a multiplatform benefit this project does not want. `java.time` is free
+  at `minSdk 33`; the conversion to the `Long`s in storage lives in one `EpochTime` object.
+  `docs/decisions/0016`.
+- **`androidx.security:security-crypto`** (`EncryptedSharedPreferences`) — deprecated by Jetpack, and
+  it would have put a second settings store beside the DataStore already in use.
+  `docs/decisions/0010`.
+- **Glide** — brings its own HTTP stack where Coil reuses the pinned OkHttp. `docs/decisions/0015`.
+- **`net.jthink:jaudiotagger`** (upstream) and **`RouHim/jaudiotagger`** — the first has no confirmed
+  Android support and no release since 2021, the second explicitly removed Android compatibility.
+  `docs/decisions/0006`.
+- **`dev.stalla:stalla`** — CLAUDE.md's original primary pick; no release since 2021.
+  `docs/decisions/0005`.

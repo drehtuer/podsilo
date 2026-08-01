@@ -6,9 +6,10 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: early.** The Gradle/Android project skeleton exists (all modules from the architecture
-> below, a CI workflow, and a hello-world screen proving the toolchain builds), but none of the
-> actual features — feed sync, downloads, triage — are implemented yet.
+> **Status: no UI yet.** Everything underneath the screens is built and tested — subscription
+> mirroring, feed refresh, the download pipeline, GPodder sync, naming and tagging (269 JVM tests,
+> green). The Compose UI is fully designed (`docs/UI.md`) and not yet written, so the app builds and
+> installs but does nothing you can look at. Nothing here has run on a real device.
 
 ## The idea
 
@@ -31,7 +32,10 @@ isn't.
 - **Not a player.** No playback, no playlists, no speed control.
 - **Not a feed manager.** The subscription list is read-only — you add and remove feeds in Nextcloud.
   There is no add-feed UI and never will be.
-- **Not automatic.** No auto-download rules, no "download all".
+- **Not automatic.** Nothing is ever downloaded that you didn't ask for. No auto-download rules, no
+  background triage, nothing queued by a sync or a refresh. You can tell it to fetch a whole
+  podcast's worth of undecided episodes in one go — that's a command you issue, not a rule that runs
+  behind you.
 - **Not a file manager.** Once a file lands in your folder it belongs to you and your player.
   Podsilo does not delete it, track it, or care whether it still exists.
 
@@ -39,10 +43,12 @@ Personal project, single user, no cloud service, no telemetry, no ads.
 
 ## Technologies
 
-Kotlin, Jetpack Compose and Material 3 on the surface; Room, WorkManager, DataStore, Hilt,
-Retrofit/OkHttp and Paging 3 underneath. Feeds are parsed with [Stalla](https://github.com/mpetuska/stalla),
-audio tags rewritten with [jaudiotagger](https://bitbucket.org/ijabz/jaudiotagger), and downloads
-written through the Storage Access Framework so you can point them at an SD card.
+Kotlin, Jetpack Compose and Material 3 on the surface; Room, WorkManager, DataStore, Hilt and
+Retrofit/OkHttp underneath. Feeds are parsed with
+[rssparser](https://github.com/prof18/RSS-Parser), audio tags rewritten with the Android-compatible
+[jaudiotagger fork](https://github.com/Kaned1as/jaudiotagger), and downloads written through the
+Storage Access Framework so you can point them at an SD card. Both library choices deviate from the
+first pick and say why in `docs/decisions/`.
 
 The codebase is split into small modules (`:core:model`, `:core:feed`, `:core:naming`,
 `:core:download`, `:core:gpodder`, `:core:sync`, `:feature:*`) so the interesting logic — sync
@@ -59,9 +65,12 @@ for instrumented runs, and an emulator on the Windows host driven over TCP for i
 Sync is tested against a disposable [opodsync](https://codeberg.org/kd2/opodsync) server, never
 against a real Nextcloud.
 
-Setup instructions will live in `docs/dev-environment.md`. Architecture decisions land in
-`docs/decisions/`, and `docs/journal.md` keeps a running log — this project doubles as an experiment
-in agent-driven development, so the process is recorded alongside the result.
+Setup instructions are in [`docs/dev-environment.md`](docs/dev-environment.md), which is also honest
+about which tiers have actually been run (tier 1 has; the two emulator tiers have not). The module
+design, schema and sync semantics are in [`docs/architecture.md`](docs/architecture.md), the screen
+design in [`docs/UI.md`](docs/UI.md). Architecture decisions land in `docs/decisions/`, and
+`docs/journal.md` keeps a running log — this project doubles as an experiment in agent-driven
+development, so the process is recorded alongside the result.
 
 ## Licence
 

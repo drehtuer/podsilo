@@ -1,19 +1,23 @@
 # Handover — Tier 4c Compose UI
 
 For the agent implementing the screens in Kotlin/Jetpack Compose and wiring them to the app logic.
-Written 2026-08-01, after the UI design pass. **Nothing has been pushed to `drehtuer/podsilo`** — the
-docs below are edited local copies awaiting review (see `github.md`).
+Written 2026-08-01 after the UI design pass; reviewed for consistency the same day.
+
+This file is a reading order and a trap list — it holds no decisions of its own. Every claim below
+lives somewhere canonical: `docs/UI.md` for UX, `docs/UI_interface.md` for the code seam,
+`docs/architecture.md` §12 for the decision record. If this file and one of those
+disagree, they win.
 
 ## Read in this order
 
 1. **`docs/UI.md`** — what the screens are, what every gesture does, and every state each screen has.
    §§4–11 are the eight screens; §12 the cross-cutting rules; §16 motion; §17 spacing; §18 icons;
    §19 orientation. This is the canonical UX document — when it and anything else disagree, it wins.
-2. **`UI_interface.md`** — the code seam: per-screen `UiState`/`UiEvent`/`UiEffect`, the eight ports
+2. **`docs/UI_interface.md`** — the code seam: per-screen `UiState`/`UiEvent`/`UiEffect`, the ports
    that do not exist yet (§8), corner cases (§14), notifications (§15), accessibility (§16). Start at
    §0's seven rules; they are what the rest is derived from.
 3. **`docs/architecture.md`** §3 (data flow), §5 (ports), §9 (ledger state machine) — the contracts you
-   are binding to. §12 items 15–18 record what this design changed.
+   are binding to. §12 is the decision index — ADRs 0012–0016 are the ones this design produced.
 4. **`TODO.md`** Tier 4c — the task order, which is dependency-ordered rather than screen-ordered on
    purpose.
 5. The visual reference lives in the design project, not the repo: `Podsilo Screens.dc.html` (all
@@ -21,17 +25,20 @@ docs below are edited local copies awaiting review (see `github.md`).
 
 ## Start here, in this order
 
-The order is not cosmetic — steps 1 and 2 unblock everything, and step 1 is a conversation, not code.
+The order is not cosmetic: steps 1 and 2 are what let the four feature tasks run in parallel.
 
-1. **Get `docs/decisions/0012` accepted.** It is a *draft*. Its "Still to settle" section has four
-   points needing the author. Until it is accepted, *Download again*, *Retry* and S3's action bar for
-   terminal episodes cannot be built — `DownloadWorker` refuses terminal rows, and
-   `DownloadWorkerTest` asserts that refusal, so the affordance would silently do nothing and no test
-   would catch it.
-2. **Declare the `:core:model` additions** (`UI_interface.md` §8, all eight). Pure declarations, no
-   behaviour. Doing these first is what lets the four feature tasks proceed in parallel.
-3. Then `:core:database` (error-log table + schema v2 migration), `:core:download`
-   (`KEY_USER_REQUESTED`), `:core:gpodder` (Login Flow v2), `FeedRefreshWorker`'s `KEY_FEED_URL`.
+**Nothing is blocked on a decision any more** — the four open items were settled on 2026-08-01 as
+ADRs 0012–0016. Read those five before starting; three of them changed a rule in CLAUDE.md or README
+rather than filling a hole.
+
+1. **Pin Coil and Lucide Compose** in the version catalog (ADR 0015) and add them to
+   `docs/third-party.md`. First, because no screen renders a row without them.
+2. **Declare the `:core:model` additions** (`docs/UI_interface.md` §8, all ten, plus `EpochTime` and
+   the four `SettingsRepository` values). Pure declarations, no behaviour. Doing these first is what
+   lets the four feature tasks proceed in parallel.
+3. Then `:core:database` (error-log table, schema v2 migration, **and removing the `firstSeenAt`
+   cutoff** per ADR 0013), `:core:download` (`KEY_USER_REQUESTED`), `:core:feed` (the mark-old rule
+   after refresh), `:core:gpodder` (Login Flow v2), `FeedRefreshWorker`'s `KEY_FEED_URL`.
 4. Then the screens: `:feature:settings` (S4/S5/S6), `:feature:episodes` (S1/S2/S3), `:app`
    (navigation, theme, S7, S8).
 
@@ -56,7 +63,7 @@ working around it in code.
   `docs/UI.md` §19 explains why that is a decision and not an omission.
 - **Dynamic colour off.** One seed, two schemes, so both can actually be verified.
 - **Lucide icons**, one weight, per `docs/UI.md` §18's table. Prefer the Lucide Compose artifact over
-  hand-converting SVGs (`UI_interface.md` §17) — a new dependency, so it needs approval.
+  hand-converting SVGs (`docs/UI_interface.md` §17). Approved as a dependency — ADR 0015.
 
 ## The traps
 
@@ -66,7 +73,7 @@ Things a reasonable implementation gets wrong. Each is a test, not a note.
    hold the key order, re-project updated values into it. Recomputing the sort inside the `Flow`
    combine is the bug — rows must not move under the user's finger.
 2. **Never show a stale download percentage.** A percentage is only ever drawn from a progress update
-   received *in this process* (`UI_interface.md` §7). After process death a `DOWNLOADING` row is
+   received *in this process* (`docs/UI_interface.md` §7). After process death a `DOWNLOADING` row is
    indeterminate and reads *resuming*.
 3. **The 400 ms triage hold survives reduced motion.** Implement it as a `delay`, not an animation.
    With no undo it is the only feedback the decision hit the intended row.
@@ -86,11 +93,10 @@ Things a reasonable implementation gets wrong. Each is a test, not a note.
 
 ## Known gaps, stated plainly
 
-- **`docs/UI.md` §14.2 and §14.3 still have no ADR.** §14.2 (the backlog cutoff moving from a read-time
-  `pubDate` filter to written `SKIPPED` rows) genuinely affects implementation: it must *replace* the
-  architecture's `pubDate >= firstSeenAt` cutoff, not compose with it, and a future reader who finds
-  both will assume they compose. §14.3 (bulk download narrowing README's "no download all") is a
-  product decision that does not block code.
+- **`FeedRefresher` becomes a ledger writer** (ADR 0013's mark-old rule after refresh). It has never
+  written a ledger row before, and "the refresher has no ledger dependency at all" was previously
+  what made *refreshing never downloads* structural. It writes `SKIPPED` only — extend
+  `NoAutoDownloadInvariantTest` rather than trusting the reading.
 - **`SafDownloadTarget` and `KeystoreAppPasswordCipher` remain untested** (ADRs 0011, 0010) — device-only.
   They are also the two things most likely to be what is actually broken when a download or a login
   fails on real hardware, so check them before suspecting the UI.
@@ -104,7 +110,12 @@ Things a reasonable implementation gets wrong. Each is a test, not a note.
 
 ## Ready?
 
-Yes for the screens: every state is specified, every state class is declared, every referenced type
-exists in §13, and the corner cases are written down. **No for two of them** — S8 has no data source
-until §8.1's `LogRepository` lands, and S3's action bar for terminal episodes is blocked on ADR 0012.
-Both are named above with what unblocks them.
+Yes. Every state is specified, every state class is declared, every referenced type exists in
+`docs/UI_interface.md` §13, the corner cases are written down, and as of 2026-08-01 no decision is
+outstanding. Two screens still need their foundation built first, and both are steps 2–3 above: S8
+has no data source until `LogRepository` lands, and S3's action bar for terminal episodes needs
+`KEY_USER_REQUESTED`.
+
+The remaining risk is not design and not decisions — it is that **none of this has run on a device**,
+and the two pieces most likely to be broken (`SafDownloadTarget`, `KeystoreAppPasswordCipher`) are
+the two that no test can reach.

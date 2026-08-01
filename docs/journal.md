@@ -1029,3 +1029,191 @@ app 3. Counts read from the JUnit XML, not the console.
 - Cancellation mid-download is tested at the `EnclosureDownloader` level (the partial file survives)
   but not through the worker, where the `NonCancellable` ledger write back to `QUEUED` lives.
 - No `:feature:*` UI yet, so nothing enqueues a download except a test. That is Tier 4c.
+
+---
+
+## 2026-08-01 — UI/UX design pass (recorded retrospectively)
+
+**No journal entry was written when this happened**, which CLAUDE.md §9/§12 require of every
+session. Recorded here on the same day by the following session, from the commits and the documents
+themselves — so it is second-hand, and thinner than it would have been written live. That gap is
+itself the lesson: the entry is part of the work, not the write-up afterwards.
+
+**Attempted:** design the whole Compose UI before writing any of it — screens, states, gestures,
+motion, spacing, icons, orientation — and write down the seam between the screens and the code that
+already exists.
+
+**Produced:** `docs/UI.md` (eight screens S1–S8, every state each has, the cross-cutting rules),
+`UI_interface.md` (per-screen `UiState`/`UiEvent`/`UiEffect`, the gap list, the corner cases),
+`HANDOVER.md`, `assets/icons/` (27 Lucide SVGs) and `assets/art/` (placeholder cover art), plus
+amendments to `docs/architecture.md` §4/§5/§7/§9/§12 and a draft ADR 0012.
+
+**What the design surfaced that the architecture had not:** S8's error log has no data source at all
+(nothing persists failures — they are returned as values and discarded once handled); `Episode.link`
+does not exist, so *Open in browser* has nothing to open; `DownloadWorker`'s refusal of terminal
+ledger rows — the thing that makes the no-auto-download invariant provable — also makes *Download
+again* a silent no-op. That last one is the useful kind of finding: a UI requirement colliding with a
+deliberately-built guard, where the answer is a mechanism (`KEY_USER_REQUESTED`) rather than removing
+the guard.
+
+**Left open, and still open:** ADR 0012 drafted but not accepted; the backlog cutoff contradiction
+(§14.2); the *Download all* narrowing of a stated non-goal (§14.3).
+
+## 2026-08-01 — Documentation consistency pass
+
+**Attempted:** read CLAUDE.md, `docs/architecture.md`, all twelve ADRs, `docs/dev-environment.md`,
+`docs/UI.md`, `HANDOVER.md` and `TODO.md` together, then fix what disagreed and condense what was
+said three times.
+
+**What was actually wrong** — the interesting half, since most of the corpus held up:
+
+- **A name collision that would not have compiled.** `UI_interface.md` §1 declared
+  `enum class EpisodeAction` in `:core:model` for the UI's affordance set. `:core:model` already has
+  `port.EpisodeAction` — the GPodder wire type. Renamed to `EpisodeUiAction` in the design doc, with
+  the reason in its KDoc so it is not "fixed" back.
+- **S6 advertised template variables the engine does not have.** `docs/UI.md` §9's placeholder chips
+  listed `{guid}` and `{episodeNumber}`; `DefaultNamingTemplateEngine` resolves `{podcast}`,
+  `{title}`, `{description}`, `{date}` and `{guid_short}`. A chip for an unknown variable renders as
+  literal text in a filename — a defect that would have shipped and looked like a naming bug.
+- **`architecture.md` §7 contradicted itself in two adjacent paragraphs** — "Not yet built: the
+  HTTP-fetch layer" immediately above "Built (Tier 3 + Tier 4b): the whole sequence."
+- **Four things the UI needs that no gap list mentioned:** an image loader (nothing in the repo
+  loads a remote image, and three screens render artwork), four `SettingsRepository` values that do
+  not exist (theme, swipe mapping, mobile-data, mark-old cutoff), `kotlinx-datetime` implied by the
+  state classes but absent from the version catalog, and the Lucide artifact.
+- **`docs/backlog.md` and `docs/third-party.md` never existed** despite CLAUDE.md §1/§2/§9/§12
+  referring to both throughout. Created; the licence table is the one that mattered, since GPLv3
+  compatibility is a hard constraint and nothing had recorded it.
+- Smaller: `UI_interface.md` sat at the repo root while every other document is in `docs/` (moved);
+  it linked to two design files that are not in the repository; `HANDOVER.md` referenced a
+  `github.md` that does not exist; `docs/UI.md` §12 skipped from 12.9 to 12.11 and its introduction
+  pointed at §12/§13 for things in §13/§14; `dev-environment.md` §6 still said 212 tests where §1
+  and §5 say 269; README described the project as a skeleton with no features and credited Stalla
+  and upstream jaudiotagger, both of which ADRs 0005/0006 replaced.
+
+**Condensed:** `architecture.md` §12 was 18 numbered items of which 15 read "Resolved" and restated
+their ADR — replaced by an eleven-row ADR index, four short notes on decisions that follow from an
+accepted ADR, and the four items that are genuinely open. `TODO.md`'s header claimed all modules
+were empty scaffolding, and its trailing "Open question" had answered itself three tiers ago.
+`HANDOVER.md` was demoted to what it actually is — a reading order and a trap list that holds no
+decisions of its own.
+
+**Deliberately not done:** the three product-level contradictions were *not* resolved. Two of them
+(the backlog cutoff writing `SKIPPED` rows; *Download all*) contradict explicit CLAUDE.md §1/§5
+rules, and one commits the project to a new dependency. Those are the author's to decide, so they
+were consolidated into one list in `architecture.md` §12 rather than settled quietly — which is the
+whole point of the section existing.
+
+**Verified:** `./gradlew ktlintCheck detekt test` — documentation-only changes, no source touched,
+but run rather than assumed.
+
+## 2026-08-01 (later) — Five decisions settled, three rules amended
+
+**Attempted:** put the four open items from the consistency pass to the author, and record whatever
+came back — as ADRs, and as amendments to the documents holding the rules that changed.
+
+**Settled:**
+
+- **ADR 0012** accepted. The author's answer to all four of its open points was *consistency*: a
+  re-decision behaves exactly like a first one — the action is re-posted, `attempts` resets,
+  `lastError` clears — and *Mark as played* over a terminal row follows the identical rules. Writing
+  it up surfaced one thing none of the four questions asked: `writtenFileName` must **survive** a
+  re-decision, or a `SKIPPED` row written over a `DOWNLOADED` one quietly disarms the duplicate
+  guard and a later *Download again* writes a second copy. "Reset everything for consistency" was
+  right in four places and wrong in one, which is the kind of thing that only shows up when you try
+  to write the rule down as a rule.
+- **ADR 0013** — the backlog cutoff is written `SKIPPED` rows; the UI mechanism wins. This one
+  **amends CLAUDE.md §5**, which forbade exactly this and gave a good reason: a bulk write to a
+  shared action log cannot be taken back. That reason survives in the amendment as the justification
+  for the preview dialog being mandatory rather than nice — the rule changed, the reasoning behind
+  it did not. Also decided: the Tier 4a SQL cutoff gets *removed*, not left unused, because an
+  unused capability is one flag away from becoming a second mechanism.
+- **ADR 0014** — bulk download allowed as a *command*, never as a *rule*. Amends CLAUDE.md §1 and
+  README. `NoAutoDownloadInvariantTest` is untouched and stays exactly as strict, which is the
+  evidence that the narrowing is real rather than a loophole.
+- **ADR 0015** — Coil and the Lucide Compose artifact approved.
+- **ADR 0016** — and the one that added nothing. The draft assumed `kotlinx-datetime` for the UI's
+  `Instant`; the author asked for the difference and for consistency over new dependencies. Two
+  facts decided it: `minSdk = 33`, so `java.time` is free, and `java.time` is *already* in main
+  source in four modules while `kotlin.time` is in none. So storage keeps its `Long`s, UI state uses
+  `java.time`, and the author's suggested conversion class became `EpochTime` — five one-line
+  functions whose entire value is their names, since `ofServerSeconds` cannot be handed a millis
+  value by accident the way one overloaded `Long` parameter could.
+
+**Also amended:** CLAUDE.md §10 step 8, which still said "two destinations is the target" against a
+design with eight screens. The author's reasoning is worth keeping verbatim — the extra six aren't
+decoration, they cover states the app can actually be in that had nowhere to live (raw-HTML
+descriptions, download progress, the outbox, `ERROR`, failure diagnostics). "Minimal UI" survives as
+a principle: every screen earns its place, and there is still no player, no queue editor, no feed
+form.
+
+**The lesson worth recording** is about ADR timing. 0001–0011 were each written when the decision
+was actually made and are all "Accepted". 0012 was written *ahead* of its decision, to capture design
+intent — and then sat as a draft blocking four pieces of code, with a "Still to settle" section that
+no amount of agent work could close. Writing the record early does not accelerate the decision; it
+just creates a document that looks authoritative and isn't. Write it when the decision happens.
+
+**Verified:** `./gradlew ktlintCheck detekt test` — documentation-only, no source touched, run
+rather than assumed. `docs/architecture.md` §12's "Still open" section now says "Nothing", which is
+true for the first time since it was written.
+
+## 2026-08-01 (later) — Tier 4c step 1: dependencies pinned, `:core:model` widened
+
+**Attempted:** the first two unchecked items in `TODO.md` Tier 4c — pin the two approved
+dependencies, then declare everything the UI needs in `:core:model`.
+
+**Verified:** `./gradlew ktlintCheck detekt test` — exit 0. **288 tests, 3 skipped** (up from 269;
+the skips are still `OpodsyncIntegrationTest` self-skipping without a server). `:core:model` went
+from 4 tests to 23.
+
+**"Pure declarations, no behaviour" did not survive contact.** Two things broke that framing, both
+correctly:
+
+1. **Three of the new types carry logic**, because each has two callers and would otherwise be
+   duplicated: `EpochTime`'s millis-vs-seconds naming, `SwipeMapping.with`'s swap invariant, and
+   `OlderThan.cutoffMillis`'s calendar arithmetic. The last is the interesting one — `Period`
+   subtraction preserves the *wall clock*, so a month back from 31 March in Europe/Berlin lands on
+   28 February at 10:00 UTC, not 09:00, because the DST boundary falls between them. My hand-written
+   expectation said 09:00; the code was right and the test was wrong. Fixed the expectation and kept
+   the case, since it documents the semantics better than the one I meant to write.
+2. **Widening a port means implementing it.** Adding four `SettingsRepository` methods and two
+   `EpisodeLedgerRepository` methods broke `:core:datastore`, `:core:database`, `SafDownloadTarget`
+   and five hand-written test fakes. That is the honest cost of hand-written fakes over mocks, and
+   still the right trade — but it means "declare the ports first so feature work can parallelise"
+   understates the size of the step.
+
+**detekt earned its keep twice.**
+
+- `TooManyFunctions` on `EpisodeLedgerDao` (11, threshold 11). The fix was not a suppression: the
+  DAO's own KDoc opened with "DAO for the ledger table **and** the UI-facing episode-list joins" —
+  it had been confessing to two responsibilities in its first sentence. Split into
+  `EpisodeLedgerDao` and `EpisodeListDao`. The list queries and `countUndecidedByFeed` stayed
+  together deliberately: they must resolve the same "no ledger row" predicate or a badge can
+  disagree with the list it opens.
+- `SwallowedException` ×4 on `SafDownloadTarget.freeBytes`, which had four `catch` clauses each
+  returning `null`. Restructured to reuse the file's existing `runCatchingSaf` helper, which carries
+  every message into a `Result` instead of discarding it.
+
+Two suppressions were added rather than designed away, each with its reason in the KDoc:
+`TooManyFunctions` on `SettingsRepository` (the method count *is* the setting count — it grows
+linearly with the settings screen and says nothing about complexity) and `MagicNumber` on
+`OlderThan` (each constant's name states its own number).
+
+**One thing I built and then deleted.** I added a `undecidedKeys` DAO query alongside
+`countUndecidedByFeed`, anticipating the bulk-write path. It had no caller — the port only needs the
+preview — and CLAUDE.md §3 names exactly that as an anti-pattern. Removing it also happened to be
+what brought the DAO back under the function threshold, which is a neat coincidence and not the
+reason.
+
+**Deviations from what the design documents said**, both recorded in `docs/UI_interface.md`:
+`previewUndecided` returns `List<FeedUndecidedCount>` rather than `List<Pair<String, Int>>`
+(`first`/`second` says nothing about which is which), and `BulkScope` is a data class rather than an
+enum, because "older than" has to carry its cutoff and both scopes need the optional per-feed
+narrowing *Download all* uses.
+
+**Not done, stated plainly:** Coil and Lucide are pinned but unused — nothing renders yet.
+`Episode.link` exists on the domain type but is not mapped in `:core:feed` and not stored; that
+needs schema v2, which is the next step along with the `error_log` table and removing the retired
+`firstSeenAt` cutoff. `LogRepository`, `ConnectivityMonitor` and `NextcloudLoginFlowClient` are
+declarations with no implementation behind them. `SafDownloadTarget.freeBytes` is as untested as the
+rest of that class — it needs a real `DocumentsProvider`.
