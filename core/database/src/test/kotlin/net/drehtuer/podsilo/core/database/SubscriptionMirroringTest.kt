@@ -24,7 +24,7 @@ import org.junit.Test
 class SubscriptionMirroringTest : RoomTestBase() {
     private val feeds by lazy { FeedRepositoryImpl(db.feedDao()) }
     private val episodes by lazy { EpisodeRepositoryImpl(db.episodeDao()) }
-    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao()) }
+    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao(), db.episodeListDao()) }
 
     @Test
     fun `feed removed then re-added keeps the ledger, so the episode never returns as new`() =

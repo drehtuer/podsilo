@@ -15,6 +15,9 @@ class FakeDownloadTarget(
     /** Set to simulate a revoked grant / removed SD card on the next call. */
     var unavailable: DownloadFolderUnavailableException? = null
 
+    /** What [freeBytes] reports; `null` is the "provider doesn't say" case the UI must tolerate. */
+    var freeSpace: Long? = null
+
     val deliveries = mutableListOf<String>()
 
     override suspend fun existingNames(folder: String): Result<Set<String>> {
@@ -40,6 +43,8 @@ class FakeDownloadTarget(
         deliveries += "$folder/$fileName"
         return Result.success(Unit)
     }
+
+    override suspend fun freeBytes(): Long? = freeSpace
 
     fun delivered(
         folder: String,

@@ -20,7 +20,7 @@ Diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders natively i
 9. [Episode ledger state machine](#9-episode-ledger-state-machine)
 10. [Key flows](#10-key-flows)
 11. [Naming & tagging pipeline](#11-naming--tagging-pipeline)
-12. [Open decisions — resolve before/while implementing](#12-open-decisions--resolve-beforewhile-implementing)
+12. [Decision record — resolved, and still open](#12-decision-record--resolved-and-still-open)
 13. [Build-order checklist](#13-build-order-checklist)
 
 ---
@@ -254,7 +254,7 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 | `url` | `String` | No (PK) | GPodder `subscriptions.add[i]` | Also the value written into `EpisodeAction.podcast` on outbound actions. |
 | `title` | `String` | No | RSS `<channel><title>` | GPodder API has no titles — only known after the first successful feed fetch; use the URL as a placeholder until then. |
 | `imageUrl` | `String` | Yes | RSS `<itunes:image>` / `<image><url>` | |
-| `firstSeenAt` | `Long` | No | Local clock, set once when the URL first appears in `add[]` | Drives the backlog cutoff (§5's "New" filter: `pubDate >= firstSeenAt`). Never updated after first write. |
+| `firstSeenAt` | `Long` | No | Local clock, set once when the URL first appears in `add[]` | **No longer a query predicate** (ADR 0013): the "New" filter is `no ledger row`, full stop. It is now the default cutoff date offered for a newly-appearing feed in S4's *Mark old episodes as played*. Never updated after first write. |
 | `lastRefreshedAt` | `Long` | Yes | Local clock, after a successful (200, not 304) feed fetch | |
 | `httpEtag` | `String` | Yes | Response `ETag` header | For conditional `GET`. |
 | `httpLastModified` | `String` | Yes | Response `Last-Modified` header | For conditional `GET`. |
@@ -265,7 +265,7 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 |---|---|---|---|---|
 | `episodeKey` | `String` | No (PK) | `guid ?: enclosureUrl` | Mirrors the server's identification rule exactly (CLAUDE.md §5) — this is not a free choice. |
 | `feedUrl` | `String` | No | Parent `Feed.url` | |
-| `guid` | `String` | Yes | RSS `<guid>` | Frequently missing, reused, or changed — see [§12](#12-open-decisions--resolve-beforewhile-implementing). |
+| `guid` | `String` | Yes | RSS `<guid>` | Frequently missing, reused, or changed — see [§12](#12-decision-record--resolved-and-still-open). |
 | `enclosureUrl` | `String` | No | RSS `<enclosure url="">` | Used as `episodeKey` fallback and as `EpisodeAction.episode`. |
 | `link` | `String` | Yes | RSS `<item><link>` | The episode's own page, for the UI's *Open in browser* affordance (`docs/UI.md` §6). `null` for feeds that omit it — the affordance is then absent, never a dead tap. **Not** derivable from `enclosureUrl`, which points at an audio file. Added in schema v2. |
 | `title` | `String` | No | RSS `<title>` | Stored **raw**; cleanup regex rules (§6) and sanitisation apply at naming time, not storage time. |
@@ -308,6 +308,12 @@ and wipe an existing feed's cache on every refresh). Tests are Robolectric in-me
 emulator — CLAUDE.md §4). `:core:datastore` implements `SettingsRepository` over DataStore
 Preferences, app password encrypted via `AppPasswordCipher` (`docs/decisions/0010`).
 
+**Built (Tier 4c, first step):** the DAO layer was split — `EpisodeLedgerDao` owns the ledger table
+and the outbox, `EpisodeListDao` owns the joins against `episodes` that the UI list and its count
+badges read. Keeping the list queries and `countUndecidedByFeed` together is what guarantees a badge,
+its list, and a bulk-confirmation dialog all resolve the same "no ledger row" predicate. `:core:model`
+also gained `EpochTime` (`docs/decisions/0016`) and the four settings S4 persists.
+
 **Built (Tier 4b):** all three workers (`DownloadWorker`, `FeedRefreshWorker`, `:app`'s
 `SyncWorker`) and the Hilt graph that constructs them — `:app`'s `di/` package provides every port
 its adapter, so the repositories stay plain constructor-injectable classes with no DI annotations
@@ -322,6 +328,16 @@ forbids.
 All of the following live in `:core:model`. Structure shown as a Mermaid class diagram; exact
 signatures follow in Kotlin (mermaid's generic syntax gets unreadable fast, so treat the diagrams as
 "what talks to what" and the code blocks as the actual contract).
+
+> **Built vs. proposed.** Everything below is implemented, including the Tier 4c additions the UI
+> needs. `LogRepository`, `ConnectivityMonitor` and `NextcloudLoginFlowClient` are **declared but
+> have no implementation yet** (marked in place); `Episode.link` exists on the domain type but is
+> not yet mapped in `:core:feed` or stored — that needs schema v2.
+> The built ports also carry read-side methods this listing elides for brevity
+> (`FeedRepository.getAll`/`get`/`updateRefreshMetadata`, `EpisodeRepository.get`,
+> `EpisodeLedgerRepository.get`/`observeEpisodes`, plus `SettingsRepository` and
+> `GpodderClientFactory`, which this listing does not show at all). The source in
+> `core/model/.../port/` is the contract; this section is the map.
 
 ```mermaid
 classDiagram
@@ -417,6 +433,19 @@ sealed interface SyncOutcome {
 
 data class SyncState(val lastEpisodeActionSyncTs: Long, val deviceId: String)
 
+// Every stored timestamp above is a Long. The UI renders java.time values (docs/UI_interface.md
+// §0.6), and this is the ONLY conversion between the two — see docs/decisions/0016. Its value is
+// the function names: everything here is epoch MILLIS except SyncState.lastEpisodeActionSyncTs,
+// which is Unix SECONDS verbatim from the server and must never be computed locally (CLAUDE.md §11).
+// No now(): a Clock is injected where the current time is needed (CLAUDE.md §7).
+object EpochTime {
+    fun ofMillis(millis: Long): Instant
+    fun ofMillisOrNull(millis: Long?): Instant?
+    fun ofServerSeconds(seconds: Long): Instant
+    fun toMillis(instant: Instant): Long
+    fun durationOfMillis(millis: Long?): Duration?
+}
+
 // :core:model — ports (implemented in Android modules, consumed by :core:sync)
 interface FeedRepository {
     fun observeAll(): Flow<List<Feed>>
@@ -431,15 +460,22 @@ interface EpisodeRepository {
 
 interface EpisodeLedgerRepository {
     fun observe(filter: LedgerFilter): Flow<List<EpisodeLedgerRow>>
+    // "New" is the ABSENCE of a ledger row (§9), so it can't be an EpisodeLedgerRow — the UI list is
+    // EpisodeListItem(episode, ledger?), resolved in one SQL join. Since ADR 0013 the "to decide"
+    // predicate is exactly `no ledger row`: no date clause, and the same query backs S1's count
+    // badge, so a badge can never disagree with the list it opens.
+    fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>>
     suspend fun upsert(row: EpisodeLedgerRow)
     suspend fun getUnsynced(): List<EpisodeLedgerRow>
     suspend fun markSynced(episodeKeys: List<String>)
-    // Bulk triage (docs/UI.md §7's "mark old/all as played"): one transaction and one Flow emission,
-    // not 412 of each.
+    // Bulk triage (docs/UI.md §7's "mark old/all as played"): one transaction and one Flow
+    // emission, not 412 of each. Both scopes select only episodes with no ledger row.
     suspend fun upsertAll(rows: List<EpisodeLedgerRow>)
-    suspend fun previewUndecided(scope: BulkScope): List<Pair<String, Int>> // per-feed counts for the preview dialog
+    suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> // per-feed counts for the dialog
 }
 
+// Declared; no implementation yet — S8 has no data source until `:core:database` grows an
+// `error_log` table.
 interface LogRepository {
     fun observe(category: LogCategory?): Flow<List<LogEntry>>
     suspend fun record(entry: NewLogEntry) // collapses on identity: category + feed/episode + normalised message
@@ -447,12 +483,12 @@ interface LogRepository {
     suspend fun exportPlainText(): String
 }
 
-// Connectivity is checked BEFORE a request is started, never inferred from a timeout — so a
-// pull-to-refresh with no network fails instantly instead of hanging (docs/UI.md §12.11).
+// Declared; Android implementation pending. Connectivity is checked BEFORE a request is started,
+// never inferred from a timeout — so a pull-to-refresh with no network fails instantly (docs/UI.md §12.10).
 interface ConnectivityMonitor { fun observe(): Flow<Connectivity> }
 data class Connectivity(val online: Boolean, val metered: Boolean)
 
-// Nextcloud Login Flow v2. Implemented in :core:gpodder, which stays a JVM module (ADR 0007) —
+// Declared; implementation pending. Nextcloud Login Flow v2, to live in :core:gpodder, which stays a JVM module (ADR 0007) —
 // nothing here touches an Android API; the browser launch is the UI's concern.
 interface NextcloudLoginFlowClient {
     suspend fun start(baseUrl: String): Result<LoginFlow>
@@ -628,11 +664,10 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 | `Episode.durationMs` | `<itunes:duration>` | none → `null`, never invented |
 | `Episode.link` | `<item><link>` / Atom `<link rel="alternate">` | none → `null` |
 
-**Built so far (Tier 2):** `FeedXmlParser`/`decodeFeedXml`/`RssMapping.kt` in `:core:feed` implement
+**Built (Tier 2):** `FeedXmlParser`/`decodeFeedXml`/`RssMapping.kt` in `:core:feed` implement
 this table's mapping from raw bytes to `ParsedFeed` (episodes + feed title/image) — see
-`docs/decisions/0005` for why rssparser, not Stalla. **Not yet built:** the HTTP-fetch layer this
-section's sequence diagram shows (conditional `GET`, `FeedRefreshWorker`, `FeedRepository`/
-`EpisodeRepository` wiring) — that's Tier 3/4b. `decodeFeedXml` also rewrites the XML prolog's
+`docs/decisions/0005` for why rssparser, not Stalla. The one row **not** yet mapped is
+`Episode.link`, which needs schema v2 (§4). `decodeFeedXml` also rewrites the XML prolog's
 declared encoding to `UTF-8` after decoding, not just the characters — rssparser re-serialises the
 string as UTF-8 bytes before re-parsing it, so a stale non-UTF-8 declaration left in the text causes
 a double-decode of non-ASCII characters; discovered via the "wrong encoding" fixture test failing.
@@ -790,7 +825,7 @@ four extra edges above. The mechanism is an explicit `userRequested` flag on the
 or a sync path — that is what keeps `DownloadWorker`'s refusal of terminal rows intact as the thing
 that makes the no-auto-download invariant provable. The same flag is the only thing that enables the
 pre-flight duplicate-file guard, so `writtenFileName` never becomes the general "have I downloaded
-this?" test; that stays the ledger (§11's central invariant). See §12 item 15.
+this?" test; that stays the ledger (§11's central invariant). See §12's first open item — ADR 0012 is still a draft, so these four edges are designed but not yet buildable.
 
 ---
 
@@ -803,7 +838,7 @@ the download path — it's a trigger. `DownloadWorker` writes the durable ledger
 an expedited `SyncWorker` run, which performs the actual outbox drain (the same code path §6's sync
 sequence already covers). This keeps `:core:download` free of any GPodder-client dependency and
 means there is exactly one piece of code that POSTs episode actions, not two — see
-[§12](#12-open-decisions--resolve-beforewhile-implementing) for the rationale flagged as a decision
+[§12](#12-decision-record--resolved-and-still-open) for the rationale flagged as a decision
 to confirm.
 
 ```mermaid
@@ -890,113 +925,64 @@ Two things the flowchart doesn't show, both discovered by building it:
 
 ---
 
-## 12. Open decisions — resolve before/while implementing
+## 12. Decision record — resolved, and still open
 
-CLAUDE.md is explicit that some of these must be **verified against AntennaPod's source**, not
-guessed, because gpodder-sync semantics beyond the four endpoints are convention, not specification.
-Recording them here so they don't get silently decided mid-implementation; each should graduate to a
-short ADR in `docs/decisions/` once resolved.
+Every architectural choice this project has had to make is either an accepted ADR in
+`docs/decisions/` or one of the four open items at the end. Nothing lives only in prose here: this
+section is the index, the ADR is the record.
 
-1. **Resolved** — Skip-as-`PLAY` when duration is unknown. See
-   `docs/decisions/0002-skip-as-play-encoding.md`: matches AntennaPod's own convention
-   (`started = 0`, `position = total`, `total = duration` if known else `0`, never fabricated).
-   Implemented and tested in `:core:sync` (`toOutboundAction()`, `OutboundEpisodeActionTest`).
-2. **Resolved** — Subscriptions `add`/`remove` response shape. See
-   `docs/decisions/0009-gpodder-api-wire-contract.md`: `gpodder_subscriptions` is a state table,
-   not an append-only log, so without `since`, `add` is the **complete current set** and is
-   **disjoint** from `remove` by construction. CLAUDE.md §5's `set = add − remove` is correct as
-   specified; `SyncOrchestrator.pullSubscriptions()` needed no change. Verified by reading both
-   servers' source **and confirmed against a live `opodsync` 0.5.3 container** (2026-07-31) —
-   `.devcontainer/docker-compose.yml` now works and `OpodsyncIntegrationTest` passes against it.
-3. **Resolved** — `:core:gpodder` is now `kotlin("jvm")`, not `com.android.library`. See
-   `docs/decisions/0007-core-gpodder-is-a-jvm-module.md`: nothing in the module touches an Android
-   API, so a JVM module compiles that property in rather than leaving it to review, and its
-   MockWebServer tests run on the plain `test` task with no Robolectric.
-4. **Resolved (Tier 4b).** "Trigger a sync pass" vs. "download worker POSTs directly" — settled as
-   §10 documents it: `DownloadWorker` writes the durable ledger row and then asks for a pass through
-   the `SyncTrigger` interface (`:core:download`), which `:app`'s `WorkScheduler` implements by
-   enqueueing an expedited `SyncWorker`. Exactly one piece of code posts episode actions, and
-   `:core:download` has no GPodder dependency at all. `DownloadWorkerTest` asserts the trigger fires
-   once on a delivery and never on a failure; `SyncOrchestratorTest`'s "download, failed POST, app
-   restart" case still covers the durability property behind it.
-5. **Resolved** — Fallback for `pubDate`'s device timezone. See
-   `docs/decisions/0004-naming-date-timezone-and-missing-date-fallback.md`: `ZoneId` is injected
-   into `DefaultNamingTemplateEngine` at construction (never re-resolved mid-call); the "same
-   episode, same date across retries" guarantee is upheld by reusing `EpisodeLedgerRow.writtenFileName`
-   on retry (§6/§11), not by anything inside `:core:naming` itself. A genuinely missing `pubDate`
-   formats as the sortable placeholder `"00000000"`, never an empty string.
-6. **New, resolved** — `EpisodeLedgerRow` needed two more denormalised fields than originally
-   specified in §4. See `docs/decisions/0001-episode-ledger-row-denormalized-fields.md`: `feedUrl`,
-   `enclosureUrl`, and `durationSeconds` are captured at write time so the outbox can build a valid
-   `EpisodeAction` even if the originating `Episode` row has since been pruned (feed unsubscribed
-   before a failed push retries). `:core:sync` still only depends on `FeedRepository`,
-   `EpisodeLedgerRepository`, `SyncStateRepository`, and `GpodderClient` — never `EpisodeRepository`
-   — exactly as §2/§5 originally specified.
-7. **New, resolved (and amended in Tier 3)** — Which clock the `EpisodeAction.timestamp` field
-   represents. See `docs/decisions/0003-gpodder-action-timestamp-as-utc.md`: Podsilo emits the bare
-   UTC form, and parses bare / `+HH:MM` / `Z` alike. The original assumption that servers only ever
-   send the offset-less form was **wrong** — see decision #8 below.
-8. **New, unresolvable — a real limitation, not a design choice.** `nextcloud-gpodder` >= 3.13.3
-   silently discards every posted episode action that isn't `PLAY` (`filterOnlyPlays` in
-   `EpisodeActionController`) and still returns HTTP 200. **`DOWNLOAD` actions therefore never reach
-   the shared log on a real Nextcloud**, making CLAUDE.md §1 requirement 9's cross-client half
-   unachievable there. Author-approved decision: keep emitting `DOWNLOAD` (honest, and correct
-   against `opodsync`/older servers), document the gap. Full analysis of what still works and what
-   doesn't: `docs/decisions/0008-nextcloud-gpodder-discards-download-actions.md`. **Do not** "fix"
-   this by emitting `PLAY` on download — CLAUDE.md §5 forbids it, and 0008 explains why.
-9. **New, resolved** — The rest of the wire contract (action-name casing, the `-1` absent-value
-   sentinel, bare-array POST body, auth headers, `since` boundary inclusivity, and where the two
-   reference servers disagree). See `docs/decisions/0009-gpodder-api-wire-contract.md`; handled at
-   the DTO boundary in `:core:gpodder` so no caller sees the differences.
-10. **New, resolved (Tier 4a)** — App-password encryption is abstracted behind an `AppPasswordCipher`
-    interface (production: `KeystoreAppPasswordCipher`, AES-256/GCM in the Android Keystore; tests: a
-    fake), so `:core:datastore`'s store/serialise logic is JVM-testable while the Keystore stays out
-    of the Robolectric path. See `docs/decisions/0010-app-password-cipher-behind-interface.md`. The
-    real Keystore round-trip is verified on-device only (Tier 4b) — stated as a known gap, not tested.
-11. **New, resolved (Tier 4a)** — `EpisodeLedgerRepository` needed an `observeEpisodes(filter):
-    Flow<List<EpisodeListItem>>` method in addition to the row-typed `observe(filter)`. "New" is the
-    *absence* of a ledger row (§9), so it can't be an `EpisodeLedgerRow`; the UI list is
-    `EpisodeListItem(episode, ledger?)`, and the Room impl resolves the filter — including the
-    `pubDate >= Feed.firstSeenAt` backlog cutoff — in one SQL join (`EpisodeLedgerDao.observeNewEpisodes`).
-    `:core:sync` is unaffected (it only reads the ledger via `getUnsynced`).
-12. **New, resolved (Tier 4b)** — the SAF write sits behind a `DownloadTarget` port
-    (`docs/decisions/0011`). A test seam, not a portability layer: a `DocumentFile` write needs a
-    real `DocumentsProvider`, so without it the entire download pipeline would be testable only on
-    an emulator this project has never booted. `SafDownloadTarget` is the sole implementation and is
-    itself unverified except by running the app.
-13. **New, resolved (Tier 4b)** — Hilt moved from Tier 4c into 4b. `@HiltWorker` is how a worker
-    gets its dependencies; the alternative was the hand-written service locator CLAUDE.md §3
-    forbids. Hilt 2.60.1 against AGP 9.3.1 was unproven here and was smoke-tested first — it works.
-14. **New, resolved (Tier 4b)** — the recurring ktlint-vs-detekt formatting fight is settled by
-    configuration rather than by reformatting code every tier: `ktlintCheck` is the sole authority
-    on formatting, detekt's duplicate copies of those rules (`Indentation`, `ParameterListWrapping`,
-    `ArgumentListWrapping`, `Wrapping`, `MaximumLineLength`) are off, and `.editorconfig` now sets
-    `max_line_length = 120` so ktlint stops producing lines detekt's own `MaxLineLength` rejects.
-    An annotated constructor (`class W @AssistedInject constructor`, i.e. every Hilt worker) is
-    formatted incompatibly by the two bundled ktlint versions, so no code shape satisfies both.
-15. **New, drafted — not yet accepted.** `docs/decisions/0012-terminal-states-reopenable-by-user.md`
-    exists as a **draft** and is no longer a design question: §9 above now records the mechanism (`KEY_USER_REQUESTED`, set
-    only from a UI event). What the ADR must still settle in writing is the two sub-questions §14.1
-    lists — whether a second successful download re-posts a `DOWNLOAD` action (proposed: yes,
-    `syncedToServer = false` again, since it is a true event) and whether `attempts` resets
-    (proposed: yes) — plus the explicit statement that the pre-flight existence check on
-    `writtenFileName` is permitted **only** behind that flag — plus the four points its
-    "Still to settle" section raises. Until it is accepted, *Download again* is a silent no-op against
-    shipped code (`DownloadWorkerTest` asserts terminal rows are refused).
-16. **New, resolved (UI design)** — `Episode.link`. The UI needs the episode's own page URL for
-    *Open in browser* (`docs/UI.md` §6); §7's mapping table had no such field and the enclosure URL is
-    not a substitute. Requires `:core:database`'s **first migration** — schema v2 — which is worth a
-    `MigrationTest` since the exported schema makes one cheap.
-17. **New, resolved (UI design)** — the UI↔logic seam. One `StateFlow<UiState>` per screen with sealed
-    content variants (never an `isLoading` flag beside a nullable payload), `UiEvent` upward, and a
-    `Channel<UiEffect>` for one-shot effects so snackbars and navigation cannot replay on rotation.
-    ViewModels call `WorkScheduler`, never `WorkManager`. Full contract, including the per-screen state
-    classes and the corner cases: `UI_interface.md`.
-18. **New, resolved (UI design)** — motion. Material 3 duration/easing tokens throughout, with one
-    non-obvious rule: a triaged row holds for **400 ms** before collapsing out of the list, and that
-    hold survives the *Remove animations* accessibility setting. With no undo (`docs/UI.md` §12.3) it
-    is the only feedback that the decision landed on the intended row, so it is implemented as a delay
-    rather than an animation. `UI_interface.md` §11.
+### Accepted ADRs
+
+| # | Decision | Where it bites |
+|---|---|---|
+| [0001](decisions/0001-episode-ledger-row-denormalized-fields.md) | `EpisodeLedgerRow` denormalises `feedUrl`, `enclosureUrl`, `durationSeconds` at write time | §4 schema; keeps `:core:sync` free of `EpisodeRepository` |
+| [0002](decisions/0002-skip-as-play-encoding.md) | Skip is `PLAY(started=0, position=total, total=duration ?: 0)` — AntennaPod's own convention | §6 outbound mapping |
+| [0003](decisions/0003-gpodder-action-timestamp-as-utc.md) | Per-action timestamps: emit bare UTC, parse bare/`+HH:MM`/`Z`, always via `OffsetDateTime` | §6 timestamp table |
+| [0004](decisions/0004-naming-date-timezone-and-missing-date-fallback.md) | `ZoneId` injected into the naming engine; a missing `pubDate` formats as the sortable `"00000000"` | §11 |
+| [0005](decisions/0005-rssparser-over-stalla-for-feed-parsing.md) | `com.prof18.rssparser`, not Stalla (unmaintained since 2021) — and why `:core:feed` needs Robolectric | §7 |
+| [0006](decisions/0006-jaudiotagger-android-fork-via-jitpack.md) | `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact | §11 |
+| [0007](decisions/0007-core-gpodder-is-a-jvm-module.md) | `:core:gpodder` is `kotlin("jvm")`, so "no Android" is compiled in rather than review-enforced | §2 |
+| [0008](decisions/0008-nextcloud-gpodder-discards-download-actions.md) | `nextcloud-gpodder` ≥ 3.13.3 silently discards `DOWNLOAD` on POST and still returns 200 — we emit it anyway | §6 — **a real limitation, not a choice** |
+| [0009](decisions/0009-gpodder-api-wire-contract.md) | The verified wire contract: `add − remove`, action-name casing, the `-1` sentinel, bare-array POST, Basic auth, `since` inclusivity | §6 |
+| [0010](decisions/0010-app-password-cipher-behind-interface.md) | The app password is encrypted behind `AppPasswordCipher`, keeping the Keystore out of the JVM test path | §2 `:core:datastore` |
+| [0011](decisions/0011-download-target-port-for-the-saf-write.md) | `DownloadTarget` in front of the SAF write — a test seam, not a portability layer | §8, §11 |
+| [0012](decisions/0012-terminal-states-reopenable-by-user.md) | Terminal states re-open **only** on a UI event (`KEY_USER_REQUESTED`); a re-decision behaves exactly like a first one | §9, §10 |
+| [0013](decisions/0013-backlog-cutoff-is-written-skipped-rows.md) | The backlog cutoff is **written `SKIPPED` rows**, not a read-time `firstSeenAt` filter — amends CLAUDE.md §5 | §4, §5 |
+| [0014](decisions/0014-bulk-user-initiated-download-is-allowed.md) | Bulk download is allowed as a *command*, never as a *rule* — amends CLAUDE.md §1 and README | §10 |
+| [0015](decisions/0015-coil-and-lucide-compose-for-the-ui.md) | Coil for image loading, Lucide's Compose artifact for icons | `docs/UI.md` §18 |
+| [0016](decisions/0016-time-is-java-time-behind-an-epochtime-seam.md) | Storage stays `Long` epoch millis; UI state is `java.time`; `EpochTime` is the only seam | §5 |
+
+Four further decisions were made while building and are recorded here rather than as ADRs, because
+each follows from an accepted one rather than being a choice with live alternatives:
+
+- **`SyncWorker` lives in `:app`** — a `CoroutineWorker` needs `androidx.work`, which the
+  Android-free `:core:sync` may not have (§2).
+- **`DownloadWorker` triggers a sync pass, it does not POST** — through the `SyncTrigger` port, so
+  exactly one piece of code posts episode actions and `:core:download` has no GPodder dependency at
+  all (§10).
+- **Hilt arrived in Tier 4b, not 4c** — `@HiltWorker` is how a worker gets its dependencies; the
+  alternative was the hand-rolled service locator CLAUDE.md §3 forbids.
+- **`ktlintCheck` is the sole authority on formatting** — detekt's duplicate formatting rules are
+  off and `.editorconfig` sets `max_line_length = 120`, because no code shape satisfies both
+  bundled ktlint versions on an annotated constructor. See `docs/dev-environment.md` §8.6.
+
+### Still open
+
+**Nothing.** The four items that blocked Tier 4c were settled by the author on 2026-08-01 and are
+ADRs 0012–0016 above. Three of them changed a rule rather than filling a hole, so the documents
+holding those rules were amended in the same pass rather than left to contradict the ADR:
+
+| Rule that changed | Was | Is | Amended in |
+|---|---|---|---|
+| The backlog cutoff | read-time `pubDate >= firstSeenAt` filter | written `SKIPPED` rows | CLAUDE.md §5, §4/§5 here |
+| Bulk download | "no download all" | no download *rules*; a scoped, confirmed *command* is allowed | CLAUDE.md §1, README |
+| UI scope | "two destinations is the target" | eight screens, each covering a state the app can be in | CLAUDE.md §10 step 8 |
+
+Three things remain **unverified rather than undecided**, and are not blockers — they are what the
+first device run will test: `SafDownloadTarget` (ADR 0011), `KeystoreAppPasswordCipher` (ADR 0010),
+and the foreground-service notification. None has ever run.
+
+When the next open decision appears, it goes here, and the section stops saying "nothing".
 
 ---
 
@@ -1006,16 +992,19 @@ Maps CLAUDE.md §10's build order to the sections above. Use this as the impleme
 check a step complete only once its linked section's diagrams/tables/interfaces are actually
 implemented and tested, per the Definition of Done (CLAUDE.md §12).
 
-| # | CLAUDE.md §10 step | Relevant section(s) here |
-|---|---|---|
-| 1 | Dev container + Gradle skeleton | *(done — see `docs/journal.md`)* |
-| 2 | `:core:model` + `:core:database` (+ `:core:datastore`) *(done — Tier 4a)* | [§4](#4-database-schema), [§5](#5-domain-model--repository-ports) |
-| 3 | `:core:feed` *(done — Tier 2/3 parsing + fetch, Tier 4b refresh worker)* | [§7](#7-external-interface-podcast-rssatom-feeds) |
-| 4 | `:core:naming` | [§5](#5-domain-model--repository-ports) (`NamingTemplateEngine`), [§11](#11-naming--tagging-pipeline) |
-| 5 | `:core:download` *(done — Tier 4b)* | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows) (download flow), [§11](#11-naming--tagging-pipeline) |
-| 6 | `:core:gpodder` | [§6](#6-external-interface-nextcloud-gpodder-api) |
-| 7 | `:core:sync` | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api) (sync-pass sequence), [§9](#9-episode-ledger-state-machine) |
-| 8 | UI (`:feature:settings`, `:feature:episodes`) | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework) (folder grant sequence) |
-| 9 | Polish (foreground service, error surfacing, per-feed counts) | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
+| # | CLAUDE.md §10 step | Status | Relevant section(s) here |
+|---|---|---|---|
+| 1 | Dev container + Gradle skeleton | ✅ done | `docs/dev-environment.md`, `docs/journal.md` |
+| 2 | `:core:model` + `:core:database` (+ `:core:datastore`) | ✅ done (Tier 1 / 4a) | [§4](#4-database-schema), [§5](#5-domain-model--repository-ports) |
+| 3 | `:core:feed` | ✅ done (Tier 2/3 parse + fetch, 4b refresh worker) | [§7](#7-external-interface-podcast-rssatom-feeds) |
+| 4 | `:core:naming` | ✅ done (Tier 1) | [§5](#5-domain-model--repository-ports) (`NamingTemplateEngine`), [§11](#11-naming--tagging-pipeline) |
+| 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
+| 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
+| 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
+| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ⬜ designed, not built (Tier 4c) | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
+| 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
-Before starting step 6 or 7, resolve open decisions #1, #2, and #4 from [§12](#12-open-decisions--resolve-beforewhile-implementing) — they change what the sync-pass sequence diagram actually does.
+**Everything below the UI is built and green** (269 tests, 3 skipped as of 2026-07-31); nothing has
+run on a device. Step 8 is blocked on the four open items in
+[§12](#12-decision-record--resolved-and-still-open) — one ADR to accept, two product decisions, and
+three dependency approvals — none of which are code.

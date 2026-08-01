@@ -4,6 +4,8 @@ package net.drehtuer.podsilo.core.download
 
 import android.content.Context
 import android.net.Uri
+import android.system.ErrnoException
+import android.system.Os
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.flow.first
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
@@ -58,6 +60,27 @@ class SafDownloadTarget(
             written.use { sink -> source.inputStream().use { it.copyTo(sink) } }
         }
 
+    /**
+     * Resolved by `fstatvfs` on a descriptor opened from the *tree URI*, not `StatFs`: a tree URI
+     * cannot be turned into a filesystem path (CLAUDE.md §11), and the tree may not be on a local
+     * volume at all.
+     *
+     * Every failure — no folder chosen, grant revoked, a provider that supplies no descriptor, a
+     * remote volume that cannot answer — collapses to `null`, which [DownloadTarget.freeBytes]
+     * documents as a normal outcome rather than an error. Nothing is swallowed silently that a
+     * caller could act on: the *only* consumer is a warning line the UI then omits.
+     */
+    override suspend fun freeBytes(): Long? =
+        runCatchingSaf {
+            context.contentResolver.openFileDescriptor(requireTree().uri, "r")?.use { descriptor ->
+                val stat = Os.fstatvfs(descriptor.fileDescriptor)
+                stat.f_bavail * stat.f_frsize
+            }
+        }.getOrNull()
+            // Some providers report 0 or a negative block count instead of failing; that is "unknown",
+            // not "the card is full", and must not produce a spurious "will not fit" warning.
+            ?.takeIf { it > 0 }
+
     private suspend fun requireTree(): DocumentFile {
         val uri =
             settingsRepository.observeDownloadFolderUri().first()
@@ -92,6 +115,9 @@ class SafDownloadTarget(
  * SAF surfaces a lost grant as [SecurityException] and a dead provider as [IllegalArgumentException]
  * or [IOException] depending on the OEM implementation — all of them mean "the folder isn't usable",
  * which the caller handles identically. Anything else is a real bug and propagates.
+ *
+ * Nothing is swallowed: every branch carries its message into a [DownloadFolderUnavailableException]
+ * inside a `Result`, which the pipeline reports as a non-retryable failure (`docs/decisions/0011`).
  */
 private inline fun <T> runCatchingSaf(block: () -> T): Result<T> =
     try {
@@ -104,4 +130,8 @@ private inline fun <T> runCatchingSaf(block: () -> T): Result<T> =
         Result.failure(DownloadFolderUnavailableException(badUri.message ?: "download folder URI is no longer valid"))
     } catch (io: IOException) {
         Result.failure(DownloadFolderUnavailableException(io.message ?: "could not write to the download folder"))
+    } catch (statFailed: ErrnoException) {
+        // `Os.fstatvfs` (freeBytes) reports through errno rather than an IOException, and a volume
+        // that cannot answer a statvfs is exactly as unusable as one that refuses a write.
+        Result.failure(DownloadFolderUnavailableException(statFailed.message ?: "could not query the download volume"))
     }

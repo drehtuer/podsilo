@@ -18,7 +18,7 @@ import org.junit.Test
 class EpisodeLedgerRepositoryTest : RoomTestBase() {
     private val feeds by lazy { FeedRepositoryImpl(db.feedDao()) }
     private val episodes by lazy { EpisodeRepositoryImpl(db.episodeDao()) }
-    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao()) }
+    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao(), db.episodeListDao()) }
 
     @Test
     fun `get is the durable already-handled lookup and outlives the episode row`() =

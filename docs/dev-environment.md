@@ -246,8 +246,8 @@ CLAUDE.md §4 defines three tiers. Their real status here differs sharply.
 ### Tier 1 — JVM unit tests ✅ supported
 
 No emulator, no network. Room via in-memory DB, HTTP via MockWebServer, Android framework bits via
-Robolectric. This is where CLAUDE.md §7 says the majority of tests must live, and where all 212
-currently-executing tests are.
+Robolectric. This is where CLAUDE.md §7 says the majority of tests must live, and where all 266
+currently-executing tests are (see [§5](#5-clean-checkout-to-green-tests) for the per-module split).
 
 Four modules need **Robolectric**:
 

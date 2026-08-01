@@ -14,20 +14,25 @@ import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.SyncState
+import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.EpisodeAction
 import net.drehtuer.podsilo.core.model.port.EpisodeActionPage
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
 import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
+import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.GpodderClient
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.NextcloudAccount
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
+import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SubscriptionDelta
+import net.drehtuer.podsilo.core.model.port.SwipeMapping
 import net.drehtuer.podsilo.core.model.port.SyncStateRepository
+import net.drehtuer.podsilo.core.model.port.ThemePreference
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -138,6 +143,22 @@ private class FakeSettingsRepository : SettingsRepository {
 
     override suspend fun setSyncIntervalMinutes(minutes: Long) = error("not needed by these tests")
 
+    override fun observeTheme(): Flow<ThemePreference> = MutableStateFlow(ThemePreference.SYSTEM)
+
+    override suspend fun setTheme(theme: ThemePreference) = error("not needed by these tests")
+
+    override fun observeSwipeMapping(): Flow<SwipeMapping> = MutableStateFlow(SwipeMapping())
+
+    override suspend fun setSwipeMapping(mapping: SwipeMapping) = error("not needed by these tests")
+
+    override fun observeAllowMobileData(): Flow<Boolean> = MutableStateFlow(false)
+
+    override suspend fun setAllowMobileData(allowed: Boolean) = error("not needed by these tests")
+
+    override fun observeMarkOldOlderThan(): Flow<OlderThan> = MutableStateFlow(OlderThan.OFF)
+
+    override suspend fun setMarkOldOlderThan(value: OlderThan) = error("not needed by these tests")
+
     override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = MutableStateFlow(credentials?.account)
 
     override suspend fun nextcloudCredentials(): NextcloudCredentials? = credentials
@@ -184,6 +205,10 @@ private class FakeEpisodeLedgerRepository : EpisodeLedgerRepository {
         val keys = episodeKeys.toSet()
         rows.value = rows.value.mapValues { (key, row) -> if (key in keys) row.copy(syncedToServer = true) else row }
     }
+
+    override suspend fun upsertAll(rows: List<EpisodeLedgerRow>) = rows.forEach { row -> upsert(row) }
+
+    override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> = emptyList()
 }
 
 private class FakeSyncStateRepository : SyncStateRepository {

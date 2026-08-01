@@ -55,10 +55,17 @@ consumed by something else entirely.
   or track whether the file still exists. Deletion and retention are the player's job.
 - No playback-position tracking. The user's player does not talk to gPodder, so we will never learn
   playback progress and must not pretend to.
-- **No automatic or bulk downloading.** No "auto-download new episodes" setting, no per-feed
-  auto-download rules, no "download all". Disk space on a phone is finite and the author wants to
-  decide episode by episode. A "download all visible" button is the kind of thing that looks helpful
-  and isn't — if you think it's needed, put it in `docs/backlog.md` and move on.
+- **No automatic downloading.** No "auto-download new episodes" setting, no per-feed auto-download
+  rules, nothing downloaded by a worker, a sync pass, a refresh, or app start. Disk space on a phone
+  is finite and the author wants to decide episode by episode.
+  - **Amended 2026-08-01 (`docs/decisions/0014`): the rule is "nothing downloads that the author
+    didn't ask for", not "never more than one at a time".** A *command* the user issues now, to a
+    set they can see, behind a confirmation naming the count, is allowed — that is S2's
+    *Download all (n)* overflow item and its selection mode, both scoped to one podcast. A *rule*
+    that downloads without being asked is still forbidden, and there is still no global "download
+    everything" anywhere. The original instinct — that a "download all visible" button usually looks
+    more helpful than it is — is still worth applying to anything new; the author has weighed it for
+    these two cases specifically.
 
 ### Context you should know
 
@@ -106,13 +113,16 @@ don't quietly hand-roll one.
 | Background work | WorkManager | own `AlarmManager`/`JobScheduler` scheduling, own retry/backoff |
 | HTTP | OkHttp (+ Retrofit for the GPodder REST API) | own HTTP client, own connection pool |
 | JSON | kotlinx.serialization or Moshi (pick one, be consistent) | own JSON parser |
-| Podcast feed parsing | `dev.stalla:stalla` (podcast-namespace aware) — evaluate `com.prof18.rssparser:rssparser` as fallback | **own XML/RSS parser, ever** |
+| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`docs/decisions/0005`) | **own XML/RSS parser, ever** |
 | DI | Hilt | own service locator |
 | Preferences | Jetpack DataStore (Preferences) | SharedPreferences wrappers, own config file format |
 | Folder access | `DocumentFile` / SAF APIs | `java.io.File` paths into external storage |
-| Audio tag writing | jaudiotagger (verify licence + Android support) | **hand-written ID3/MP4 frame code, ever** |
+| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`docs/decisions/0006`) | **hand-written ID3/MP4 frame code, ever** |
 | Filename sanitising | a small, well-tested internal util is acceptable here — see §6 | ad-hoc `replace()` calls scattered across the codebase |
 | Long lists | Paging 3 | manual offset/limit paging in the ViewModel |
+| Image loading | Coil (`docs/decisions/0015`) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
+| Icons | Lucide's Compose artifact (`docs/decisions/0015`); `docs/UI.md` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
+| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`docs/decisions/0016`) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
 | Logging | Timber (or plain `Log` — do not build an abstraction layer) | own logging framework |
 | Testing | JUnit5 or JUnit4 + Truth/AssertJ, Turbine (Flows), MockK, Robolectric, OkHttp `MockWebServer`, Room in-memory DB, Compose UI test | own test harness, own fakes where MockWebServer suffices |
 | Dev container / emulator | existing published images and scripts (see §4) | own from-scratch Dockerfile for the emulator |
@@ -381,15 +391,26 @@ episodes with no action in the log — most of them predating gpoddersync. Becau
 automatically**, this is no longer a disk-space or bandwidth hazard. It is a *list length* hazard: a
 "New" tab with 5,000 rows is useless for triage.
 
-Solve it in the view layer, not by writing ledger rows:
+**Amended 2026-08-01 — see `docs/decisions/0013`.** This section originally solved the problem with
+a read-time filter and explicitly forbade writing ledger rows for the backlog. The author has ruled
+the other way: the backlog is cleared by **writing `SKIPPED` rows**, because that state is visible in
+the UI, reversible per episode, and — the deciding reason — shared with the author's other clients,
+which a local filter never is. The current rules:
 
-- Record `Feed.firstSeenAt` when a feed first appears in the followed list.
-- The default "New" filter shows episodes with **no action anywhere** *and* `pubDate >= firstSeenAt`.
-- Provide an explicit **"show full archive"** toggle that lifts the date restriction, so old episodes
-  remain reachable and downloadable on purpose.
-- Do **not** auto-write ledger rows for the backlog, and do **not** emit any action for it. Untouched
-  episodes stay genuinely untouched; the author's other clients see nothing from us. Hiding by filter
-  is reversible, writing to the shared action log is not.
+- The default "New" filter shows episodes with **no ledger row**. That is the whole predicate: no
+  date clause, one SQL condition for both the list and the count badge.
+- Old episodes leave "New" via S4's *Mark old episodes as played* (`docs/UI.md` §7), which upserts
+  `SKIPPED` rows in one transaction and pushes the resulting `PLAY` actions through the normal
+  outbox in batches. They then appear under "Played / handled" and stay individually downloadable.
+- Record `Feed.firstSeenAt` when a feed first appears. It is no longer a query predicate — it is the
+  default cutoff date offered for a newly-appearing feed.
+- **The preview dialog is mandatory, not decoration.** A bulk `PLAY` write is *not* undoable: the
+  actions reach the shared log and other clients act on them. So the dialog names the exact count and
+  per-feed breakdown, and says in words that the state goes to Nextcloud, **before** anything is
+  written. That is the safeguard that replaced "don't write at all"; do not weaken it.
+- The rule may be applied automatically to newly-parsed episodes after a feed refresh **only** when
+  the user has set an *older than* value — consent given once, at the setting. It writes `SKIPPED`
+  rows only, never `QUEUED`, so the no-auto-download invariant is untouched.
 - Page or lazily load the episode list (Paging 3 or a `Flow` of a limited query). Do not load 5,000
   rows into memory to render 20.
 
@@ -645,10 +666,15 @@ Work in this order; each step should be green before moving on.
 6. **`:core:gpodder`.** Retrofit client against `MockWebServer`, then verified against `opodsync` in
    compose. Read AntennaPod's implementation first.
 7. **`:core:sync`.** Outbox draining, reconciliation, explicit conflict rules, heavy unit tests.
-8. **UI.** `:feature:settings` first (folder, credentials, naming templates + live preview), then
-   `:feature:episodes`: a filterable episode list with title, date, duration, expandable description,
-   per-row download/skip/retry actions, and a feed filter. Two destinations is the target — collapse
-   the feed list into filter chips rather than a separate screen if it has nothing else to do.
+8. **UI.** Designed in full before any of it was written: **`docs/UI.md` is the canonical UX
+   document** and `docs/UI_interface.md` the code seam. Build in dependency order, not screen order —
+   see `TODO.md` Tier 4c.
+   - **Amended 2026-08-01: eight screens, not two destinations.** This step originally said "two
+     destinations is the target". The design pass found that the missing six were not decoration —
+     an episode's description is raw HTML that no list row can render (S3), and download progress,
+     the outbox, the `ERROR` state and failure diagnostics had nowhere to live at all (S7, S8).
+     "Minimal UI" still holds as a principle: every screen earns its place by covering a state the
+     app can actually be in, and there is still no player, no queue editor and no feed form.
    - The empty state matters: with no subscriptions the screen must say *"No subscriptions found —
      add feeds in Nextcloud"*, **not** offer an add button. That empty state is the main place the
      read-only design becomes visible to the author, so get the wording right.
@@ -674,9 +700,14 @@ Work in this order; each step should be green before moving on.
   played-and-deleted episode gets downloaded again. The `EpisodeLedger` row is the only dedup
   authority, and it must outlive the file. This is the single most important invariant in the app.
 - **The API's two timestamp formats differ.** The `since` query parameter is **Unix seconds**, while
-  the `timestamp` field inside action objects is **ISO-8601 without a timezone offset**
-  (`2009-12-12T09:00:00`). Do not use one formatter for both. Test round-tripping explicitly; getting
-  this wrong silently breaks incremental sync in ways that look like "sync just doesn't work".
+  the `timestamp` field inside action objects is **ISO-8601**. Do not use one formatter for both.
+  Test round-tripping explicitly; getting this wrong silently breaks incremental sync in ways that
+  look like "sync just doesn't work".
+  - **Correction (verified Tier 3, `docs/decisions/0009`):** this file originally said the per-action
+    timestamp carries *no* timezone offset (`2009-12-12T09:00:00`). That is no longer true of either
+    reference server — `nextcloud-gpodder` emits `+00:00`, `opodsync` emits `Z`. Podsilo parses all
+    three forms and emits the bare one, which both servers read as UTC. Parse into an
+    `OffsetDateTime`, never a `LocalDateTime`, which silently discards the offset.
 - **Server `timestamp` values are the server's clock, not ours.** Persist the `timestamp` the server
   returns and send it back as the next `since`. Never compute the next `since` from local device
   time — clock skew will silently drop or duplicate actions.

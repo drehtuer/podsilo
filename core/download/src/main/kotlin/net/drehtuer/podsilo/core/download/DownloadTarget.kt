@@ -38,6 +38,18 @@ interface DownloadTarget {
         fileName: String,
         source: File,
     ): Result<Unit>
+
+    /**
+     * Free space on the volume the download folder lives on, or `null` when it cannot be
+     * determined — a tree URI can point at a provider that reports no space at all (a network
+     * share, some cloud providers), and that is normal rather than an error.
+     *
+     * Used only for the non-blocking warning line on the bulk-download confirmation
+     * (`docs/UI.md` §5). `null` means the warning is simply not shown: the estimate it feeds is
+     * derived from `itunes:duration`, which is unreliable enough that it must never *block* a
+     * decision — so being unable to compute it is not a failure worth surfacing.
+     */
+    suspend fun freeBytes(): Long?
 }
 
 /** Raised when the SAF grant is gone (revoked, card removed, app data cleared) — the user must re-pick the folder. */

@@ -17,3 +17,13 @@ data class EpisodeWithLedger(
     @Embedded val episode: EpisodeEntity,
     @Embedded(prefix = "l_") val ledger: EpisodeLedgerEntity?,
 )
+
+/**
+ * One row of `countUndecidedByFeed` — how many undecided episodes a feed contributes to a pending
+ * bulk operation. Maps straight to `FeedUndecidedCount` in `:core:model` at the repository
+ * boundary.
+ */
+data class FeedUndecidedCountRow(
+    val feedUrl: String,
+    val count: Int,
+)
