@@ -6,17 +6,17 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-01): Tiers 1–4b complete; Tier 4c's foundations complete, its screens not
-started. 339 tests, 3 skipped.**
+**Repo state (2026-08-01): Tiers 1–4b complete; Tier 4c's foundations and S2's logic layer
+complete, no Composable written. 357 tests, 3 skipped.**
 
 Everything the UI binds to now exists: schema v2 with the error log and the project's first
 migration, `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the
 mark-old rule, connectivity, the theme, and `sanitizeEpisodeHtml`.
 
-**What is not written: the screens themselves.** S1–S8, their `UiState`/`UiEvent` types, their
-ViewModels, and the `NavHost` that joins them. `MainActivity` renders a placeholder inside the real
-theme. That is the whole of what remains in 4c, and it is no longer blocked on anything — every port
-it needs is declared *and* implemented. Nothing in this project has ever run on a device.
+**What is not written: any Composable.** S2 has its state types, events, effects and view model —
+all tested — but no screen. S1, S3 and S4–S8 have neither. `MainActivity` renders a placeholder
+inside the real theme, and there is no `NavHost`. None of it is blocked on anything: every port the
+screens need is declared *and* implemented. Nothing in this project has ever run on a device.
 
 Each tier's completion note below is kept as written at the time, in build order.
 
@@ -256,8 +256,13 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
 - [~] **`:feature:episodes`** — S1 (podcast list), S2 (episode list), S3 (detail sheet). **S1 belongs
   here, not in `:app`:** it shares the ledger query and the `EpisodeUi` projection with S2, and a
   badge that disagrees with the list it opens is exactly the bug co-location prevents.
-  **Only `sanitizeEpisodeHtml` is built** (16 tests) — the module is otherwise still scaffolding.
-  The three screens, their `UiState`/`UiEvent` types and their ViewModels are **not written**.
+  - **Built:** `sanitizeEpisodeHtml` (16 tests); the `EpisodeUi` projection with its `actions` set;
+    `TriageWriter` (the one place a UI decision becomes a ledger row); and **S2's state types,
+    events, effects and `EpisodeListViewModel`** with 18 tests covering the traps — a tap never
+    triages, a swipe obeys the configured mapping, bulk writes are one transaction, and only
+    *Download again* carries `userRequested`.
+  - **Not built:** every Composable. S2 has no screen yet, and S1 and S3 have neither screen nor
+    view model.
 - [~] **`:app`** — Hilt wiring was **done in 4b**. Done now: `@AndroidEntryPoint` on `MainActivity`,
   `PodsiloTheme` (one seed, two schemes, **dynamic colour off**) applied at the root from the
   persisted preference, `AndroidConnectivityMonitor`, and `WorkScheduler`'s additions

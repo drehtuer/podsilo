@@ -1294,3 +1294,38 @@ which is what §8 now is.
 **Verified:** `./gradlew ktlintCheck detekt test` green — documentation-only, no source touched.
 Also checked every internal anchor and relative file link across the four long documents; two
 anchors were broken by heading renames in earlier sessions and are fixed.
+
+## 2026-08-01 (continued) — S2's logic layer, and two coroutine-test dead ends
+
+**Attempted:** the episode screens. **Delivered:** S2's state types, events, effects, the shared
+`EpisodeUi` projection, `TriageWriter`, and `EpisodeListViewModel` — 18 tests. **No Composable.**
+357 tests total, `ktlintCheck detekt test` green.
+
+**Two dead ends worth recording, both about testing a view model, neither about the product:**
+
+1. **An injected `CoroutineScope` looked like the clean seam and isn't.** I gave the view model a
+   `scope: CoroutineScope? = null` parameter so a test could pass `TestScope`. Passing `this` made
+   `runTest` hang forever — the `init`-launched collector never completes, and `runTest` waits for
+   its children. Passing `backgroundScope` stopped the hang and then silently ran *nothing*:
+   `advanceUntilIdle()` did not drive it, so every assertion saw the initial state. Two failed
+   attempts before I stopped patching the test and changed the design.
+2. **The fix was to delete the parameter.** `Dispatchers.setMain(UnconfinedTestDispatcher())` plus
+   the real `viewModelScope` is the standard seam, and it made the production class *simpler* —
+   no scope parameter at all, and an event is fully processed by the time `onEvent` returns.
+
+**The design changes that fell out of it were improvements, not concessions:**
+
+- `state` is now `stateIn(WhileSubscribed)` rather than a `MutableStateFlow` pushed from `init`. A
+  500-episode list should not be re-projected on every ledger write while the user is in settings,
+  and it removes the untestable init-launched job.
+- `onSwipe` used to read `state.value.swipeMapping`. That is wrong whenever nothing is collecting
+  `state` — it would silently use the *default* mapping. It now reads the setting directly. The bug
+  was invisible until `WhileSubscribed` made "nobody is subscribed" a real state.
+
+**A diagnostic worth reusing:** when the ViewModel tests all failed identically with empty state, I
+wrote a throwaway `DiagTest` that printed the fake's output directly and then the view model's. The
+fake was right and the view model's state never left `Loading`, which located the problem in the
+scope rather than the query in one run. Deleted afterwards.
+
+**Not done:** every Composable. S2 has a tested logic layer and no screen; S1 and S3 have neither.
+That is the next session, and it is now genuinely only rendering work.
