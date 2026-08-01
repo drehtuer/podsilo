@@ -9,8 +9,12 @@ import dagger.hilt.components.SingletonComponent
 import net.drehtuer.podsilo.core.feed.FeedFetcher
 import net.drehtuer.podsilo.core.feed.FeedRefresher
 import net.drehtuer.podsilo.core.feed.FeedXmlParser
+import net.drehtuer.podsilo.core.feed.MarkOldEpisodesRule
+import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
+import net.drehtuer.podsilo.core.model.port.LogRepository
+import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import okhttp3.OkHttpClient
 import java.time.Clock
 import javax.inject.Singleton
@@ -29,11 +33,33 @@ object FeedModule {
 
     @Provides
     @Singleton
+    fun provideMarkOldEpisodesRule(
+        ledgerRepository: EpisodeLedgerRepository,
+        settingsRepository: SettingsRepository,
+        clock: Clock,
+    ): MarkOldEpisodesRule = MarkOldEpisodesRule(ledgerRepository, settingsRepository, clock)
+
+    // A @Provides method for a composition root mirrors that root's dependency list; see
+    // FeedRefresher's own KDoc for why that list is what it is.
+    @Suppress("LongParameterList")
+    @Provides
+    @Singleton
     fun provideFeedRefresher(
         feedRepository: FeedRepository,
         episodeRepository: EpisodeRepository,
         feedFetcher: FeedFetcher,
         feedXmlParser: FeedXmlParser,
         clock: Clock,
-    ): FeedRefresher = FeedRefresher(feedRepository, episodeRepository, feedFetcher, feedXmlParser, clock)
+        logRepository: LogRepository,
+        markOldEpisodesRule: MarkOldEpisodesRule,
+    ): FeedRefresher =
+        FeedRefresher(
+            feedRepository = feedRepository,
+            episodeRepository = episodeRepository,
+            feedFetcher = feedFetcher,
+            feedXmlParser = feedXmlParser,
+            clock = clock,
+            logRepository = logRepository,
+            markOldEpisodesRule = markOldEpisodesRule,
+        )
 }

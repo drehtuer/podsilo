@@ -114,6 +114,8 @@ class FakeEpisodeLedgerRepository(
     override suspend fun upsertAll(rows: List<EpisodeLedgerRow>) = rows.forEach { row -> upsert(row) }
 
     override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> = emptyList()
+
+    override suspend fun undecided(scope: BulkScope): List<Episode> = emptyList()
 }
 
 class FakeSettingsRepository(

@@ -46,6 +46,16 @@ class FakeDownloadTarget(
 
     override suspend fun freeBytes(): Long? = freeSpace
 
+    /** Puts a file in the folder without going through [deliver] — i.e. "it was already there". */
+    fun seed(
+        folder: String,
+        fileName: String,
+    ) {
+        val directory = File(root, folder)
+        directory.mkdirs()
+        File(directory, fileName).writeText("previously delivered")
+    }
+
     fun delivered(
         folder: String,
         fileName: String,

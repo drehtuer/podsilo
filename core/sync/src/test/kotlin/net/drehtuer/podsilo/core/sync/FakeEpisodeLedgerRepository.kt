@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.core.sync
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
@@ -45,4 +46,6 @@ class FakeEpisodeLedgerRepository(
 
     // Bulk triage is a UI path; SyncOrchestrator never previews or writes in batches.
     override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> = emptyList()
+
+    override suspend fun undecided(scope: BulkScope): List<Episode> = emptyList()
 }

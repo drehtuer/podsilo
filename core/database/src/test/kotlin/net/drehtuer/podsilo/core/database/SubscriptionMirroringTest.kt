@@ -44,7 +44,7 @@ class SubscriptionMirroringTest : RoomTestBase() {
             episodes.replaceForFeed("f", listOf(episode("e", "f", pubDate = 100)))
 
             // The episode must NOT show up as new — its ledger row still marks it handled.
-            val new = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW, includeBacklog = true)).first()
+            val new = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
             assertTrue("re-subscribed episode must not reappear as new", new.none { it.episode.episodeKey == "e" })
 
             val downloaded = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.DOWNLOADED)).first()

@@ -62,6 +62,17 @@ interface EpisodeLedgerRepository {
      * backlog rows at all.
      */
     suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount>
+
+    /**
+     * The episodes a bulk operation would actually touch — same predicate as [previewUndecided], so
+     * the count a confirmation dialog promised is the set that gets written.
+     *
+     * Returns [Episode]s rather than keys because the caller has to build ledger rows from them, and
+     * a row needs the feed URL, enclosure URL and duration snapshotted at write time
+     * (`docs/decisions/0001`). It deliberately does not write anything itself: *what* state to write
+     * is the caller's decision — `SKIPPED` for the mark-old rule, `QUEUED` for *Download all*.
+     */
+    suspend fun undecided(scope: BulkScope): List<Episode>
 }
 
 /**
@@ -102,15 +113,12 @@ data class EpisodeListItem(
 enum class LedgerFilterState { NEW, DOWNLOADED, SKIPPED, ALL }
 
 /**
- * @property includeBacklog **Retired by `docs/decisions/0013` — do not build against it.** It lifts
- *   the `pubDate >= Feed.firstSeenAt` restriction that used to apply to [LedgerFilterState.NEW].
- *   That read-time cutoff has been replaced by *writing* `SKIPPED` rows, so "new" is now exactly
- *   "no ledger row" and this flag selects between two mechanisms that must not both exist. The
- *   parameter and its SQL clause are removed together with the `error_log` work; it is still here
- *   only because the Room implementation still reads it.
+ * The triage list filter. "New" is exactly "no ledger row" — there is no date clause and no
+ * backlog flag: the read-time `pubDate >= Feed.firstSeenAt` cutoff was retired by
+ * `docs/decisions/0013` in favour of writing `SKIPPED` rows, which is visible in the UI,
+ * reversible per episode, and shared with the author's other clients.
  */
 data class LedgerFilter(
     val state: LedgerFilterState = LedgerFilterState.NEW,
     val feedUrl: String? = null,
-    val includeBacklog: Boolean = false,
 )

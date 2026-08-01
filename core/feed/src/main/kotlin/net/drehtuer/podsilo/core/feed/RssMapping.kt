@@ -56,6 +56,9 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
         description = content?.takeIf(String::isNotBlank) ?: description,
         pubDate = parseRfc822Date(pubDate),
         durationMs = parseItunesDuration(itunesItemData?.duration),
+        // The item's own page, for "Open in browser" (docs/UI.md section 6). Never synthesised from
+        // the enclosure, which points at an audio file — a feed that omits it simply has no link.
+        link = link?.trim()?.takeIf(String::isNotEmpty),
     )
 }
 
