@@ -1264,3 +1264,33 @@ listed the foundations as a handful of bullets and the screens as four; the rati
 other way around. A plan's bullet count is not a size estimate, and "pure declarations, no
 behaviour" hid three modules' worth of implementation behind it. Next session starts with the
 screens and nothing else in front of them.
+
+## 2026-08-01 (last) — Documentation reconciled after the foundations landed
+
+**Attempted:** re-read every document against the two merged PRs and compact what the merges made
+redundant.
+
+**The big compaction:** `docs/UI_interface.md` §8 was a 178-line gap list — ten subsections each
+describing, in code, a port the UI needed and the repository did not have. All ten now exist. It is
+now a ten-row table saying what each became, plus the three places the built shape differs from the
+sketch (`previewUndecided`'s named return type, `BulkScope` as a data class, `Instant` as
+`java.time`) and the one thing still genuinely missing — the error-log write points outside
+`FeedRefresher`. The file went 873 → 813 lines while gaining information about what exists.
+
+**What was stale, and how it read:** four documents still said "269 tests"; `architecture.md` §5's
+callout listed `LogRepository`, `ConnectivityMonitor` and `NextcloudLoginFlowClient` as "declared but
+have no implementation yet" when all three had been implemented in the same PR that declared them;
+`UI.md` §15 still called S8 "the one screen with no backend"; `HANDOVER.md` opened with a four-step
+plan whose first three steps were done. `README.md`'s status paragraph said "no UI yet" where "no
+screens yet" is now the accurate distinction — the difference matters, because the theme, the
+sanitiser and every port *are* UI work.
+
+**A pattern worth naming:** every one of those was a document describing a *gap*, and gaps are the
+thing most likely to go stale, because closing one is exactly the work that makes the description
+wrong. Statements about what exists age slowly; statements about what is missing age the moment
+someone does the work. Worth writing gap lists as tables that can be flipped to "built" in one edit,
+which is what §8 now is.
+
+**Verified:** `./gradlew ktlintCheck detekt test` green — documentation-only, no source touched.
+Also checked every internal anchor and relative file link across the four long documents; two
+anchors were broken by heading renames in earlier sessions and are fixed.

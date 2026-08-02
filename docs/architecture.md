@@ -329,11 +329,11 @@ All of the following live in `:core:model`. Structure shown as a Mermaid class d
 signatures follow in Kotlin (mermaid's generic syntax gets unreadable fast, so treat the diagrams as
 "what talks to what" and the code blocks as the actual contract).
 
-> **Built vs. proposed.** Everything below is implemented, including the Tier 4c additions the UI
-> needs. `LogRepository`, `ConnectivityMonitor` and `NextcloudLoginFlowClient` are **declared but
-> have no implementation yet** (marked in place); `Episode.link` exists on the domain type but is
-> not yet mapped in `:core:feed` or stored — that needs schema v2.
-> The built ports also carry read-side methods this listing elides for brevity
+> **Everything below is implemented**, including every Tier 4c addition the UI needs — `LogRepository`
+> over the `error_log` table, `ConnectivityMonitor` over `ConnectivityManager`,
+> `NextcloudLoginFlowClient` over Login Flow v2, and `Episode.link` mapped in `:core:feed` and stored
+> in schema v2.
+> The ports also carry read-side methods this listing elides for brevity
 > (`FeedRepository.getAll`/`get`/`updateRefreshMetadata`, `EpisodeRepository.get`,
 > `EpisodeLedgerRepository.get`/`observeEpisodes`, plus `SettingsRepository` and
 > `GpodderClientFactory`, which this listing does not show at all). The source in
@@ -474,8 +474,8 @@ interface EpisodeLedgerRepository {
     suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> // per-feed counts for the dialog
 }
 
-// Declared; no implementation yet — S8 has no data source until `:core:database` grows an
-// `error_log` table.
+// S8's store. Implemented in :core:database over the error_log table (schema v2); collapse and
+// eviction are DAO queries, never UI logic or an app-start sweep.
 interface LogRepository {
     fun observe(category: LogCategory?): Flow<List<LogEntry>>
     suspend fun record(entry: NewLogEntry) // collapses on identity: category + feed/episode + normalised message
@@ -483,12 +483,12 @@ interface LogRepository {
     suspend fun exportPlainText(): String
 }
 
-// Declared; Android implementation pending. Connectivity is checked BEFORE a request is started,
+// Implemented as AndroidConnectivityMonitor. Connectivity is checked BEFORE a request is started,
 // never inferred from a timeout — so a pull-to-refresh with no network fails instantly (docs/UI.md §12.10).
 interface ConnectivityMonitor { fun observe(): Flow<Connectivity> }
 data class Connectivity(val online: Boolean, val metered: Boolean)
 
-// Declared; implementation pending. Nextcloud Login Flow v2, to live in :core:gpodder, which stays a JVM module (ADR 0007) —
+// Nextcloud Login Flow v2. Implemented in :core:gpodder, which stays a JVM module (ADR 0007) —
 // nothing here touches an Android API; the browser launch is the UI's concern.
 interface NextcloudLoginFlowClient {
     suspend fun start(baseUrl: String): Result<LoginFlow>
@@ -1001,10 +1001,10 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 | 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
-| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ⬜ designed, not built (Tier 4c) | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
+| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ◐ foundations built; **screens not written** | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
 | 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
-**Everything below the UI is built and green** (269 tests, 3 skipped as of 2026-07-31); nothing has
-run on a device. Step 8 is blocked on the four open items in
-[§12](#12-decision-record--resolved-and-still-open) — one ADR to accept, two product decisions, and
-three dependency approvals — none of which are code.
+**Everything below the UI is built and green** (339 tests, 3 skipped as of 2026-08-01), and so is
+everything the UI *binds to* — every port in `docs/UI_interface.md` §8 is now implemented, not just
+declared. What is missing is the screens: S1–S8, their state types, their ViewModels and the
+`NavHost`. Nothing blocks them. Nothing has run on a device.
