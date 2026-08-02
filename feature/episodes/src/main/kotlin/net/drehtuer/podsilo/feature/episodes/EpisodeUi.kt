@@ -35,8 +35,8 @@ data class EpisodeUi(
     val ledgerState: LedgerState?,
     val progress: DownloadProgress? = null,
     val writtenFileName: String? = null,
-    val lastError: String? = null,
-    val attempts: Int = 0,
+    /** The typed failure, so a row can tell *Retry* from *Choose folder* (`docs/decisions/0011`). */
+    val lastError: FailureUi? = null,
     val hasEnclosure: Boolean = true,
     val episodePageUrl: String? = null,
 ) {
@@ -137,8 +137,7 @@ fun EpisodeListItem.toUi(
         ledgerState = ledger?.state,
         progress = liveProgress,
         writtenFileName = ledger?.writtenFileName,
-        lastError = ledger?.lastError,
-        attempts = ledger?.attempts ?: 0,
+        lastError = ledger?.toFailureUi(),
         hasEnclosure = episode.enclosureUrl.isNotBlank(),
         episodePageUrl = episode.link,
     )

@@ -42,8 +42,13 @@ Package root for everything below: `net.drehtuer.podsilo`.
 
 ## 1. Shared types
 
+**Where these live, as built:** `ErrorCause` is in `:core:model` because the ledger stores it;
+everything else on this page is UI vocabulary and lives in `:feature:episodes`, which `:app` depends
+on for navigation anyway. Keeping `EpisodeUi` out of `:core:model` keeps that module what it is — the
+Android-free domain, not a place screens put their projections.
+
 ```kotlin
-// :core:model — additions the UI needs. Everything else already exists.
+// :feature:episodes, except ErrorCause (:core:model). Everything else already exists.
 
 /**
  * What a row/sheet may currently do. Computed by the ViewModel from the ledger row.
@@ -66,15 +71,24 @@ data class EpisodeUi(
     val ledgerState: LedgerState?,    // null == "to decide" (there is no NEW state — architecture §9)
     val progress: DownloadProgress?,  // non-null only while this process has seen an update
     val writtenFileName: String?,
-    val lastError: FailureUi?,
+    val lastError: FailureUi?,        // carries the cause, so Choose-folder vs Retry is decidable
     val hasEnclosure: Boolean,        // false → dimmed "no audio" row, download disabled
-    val actions: Set<EpisodeUiAction>,
+    val episodePageUrl: String?,      // Episode.link; null → no *Open in browser* row
+    val actions: Set<EpisodeUiAction>, // computed in an init, not passed in
 )
 
 /** Never reconstructed from a stale ledger row — see §7 "resuming". */
 data class DownloadProgress(val bytesDownloaded: Long, val totalBytes: Long?, val percent: Int?)
 
-data class FailureUi(val cause: ErrorCause, val message: String, val attempts: Int, val retryable: Boolean)
+data class FailureUi(val cause: ErrorCause, val message: String, val attempts: Int, val retryable: Boolean) {
+    // What to offer *instead of* Retry when retrying cannot work: CHOOSE_FOLDER, FREE_UP_SPACE, or
+    // null for an ordinary Retry. This is docs/UI.md §12.11 made checkable.
+    val remedy: FailureRemedy?
+}
+
+// ErrorCause lives in :core:model and is **stored** on the ledger row (schema v3), not derived from
+// the message text — see its KDoc. `retryable` is stored alongside it, because a 404 and a 503 are
+// both SERVER and only one is worth retrying.
 
 enum class ErrorCause { NETWORK, SERVER, AUTH, FEED_PARSE, DISK_FULL, FOLDER_UNAVAILABLE, TAG_WRITE, UNKNOWN }
 
@@ -224,8 +238,8 @@ the ViewModel produce a `BulkPreview` (below) which the dialog renders; nothing 
 
 ```kotlin
 data class BulkPreview(
-    val count: Int,
-    val perFeed: List<Pair<String, Int>>,   // S4's mark-as-played preview reuses this exact type
+    val episodeKeys: List<String>,         // `count` is derived from this
+    val perFeed: List<FeedBreakdown>,      // named, not Pair: `first`/`second` says nothing about which is which
     val estimatedBytes: Long?,              // null when any duration is unknown → no size shown
     val freeBytes: Long?,                   // read ONCE when the dialog opens
     val exceedsFreeSpace: Boolean,          // warning line only; never disables the action

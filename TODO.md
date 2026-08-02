@@ -6,8 +6,8 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-01): Tiers 1–4b complete; Tier 4c's foundations and S2's logic layer
-complete, no Composable written. 357 tests, 3 skipped.**
+**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c's foundations and S2's logic layer
+complete, no Composable written. 372 tests, 3 skipped.**
 
 Everything the UI binds to now exists: schema v2 with the error log and the project's first
 migration, `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the
@@ -263,13 +263,10 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
     *Download again* carries `userRequested`.
   - **Not built:** every Composable. S2 has no screen yet, and S1 and S3 have neither screen nor
     view model.
-  - ⚠️ **`EpisodeUi` diverges from `docs/UI_interface.md` §1, and one divergence has teeth.** The doc
-    declares `lastError: FailureUi?` carrying a typed `ErrorCause` and a `retryable` flag; the built
-    type has a bare `lastError: String`. Without the flag a row **cannot** distinguish a retryable
-    failure from `FOLDER_UNAVAILABLE`, so ADR 0011's "that row offers *Choose folder*, never
-    *Retry*" is unenforceable as built. `QueueStatus` (the paused banner) and `MonthSection` (sticky
-    headers) are also undeclared. Settle these when the screen is written — the doc or the code has
-    to give, and right now the code silently drops a documented safety property.
+  - **`EpisodeUi` now matches `docs/UI_interface.md` §1.** `FailureUi` carries a stored `ErrorCause`
+    and `retryable` (schema v3), so ADR 0011's "that row offers *Choose folder*, never *Retry*" is
+    enforceable and tested rather than aspirational. `QueueStatus` (paused banner) and
+    `MonthSection` (sticky headers) are built too.
 - [~] **`:app`** — Hilt wiring was **done in 4b**. Done now: `@AndroidEntryPoint` on `MainActivity`,
   `PodsiloTheme` (one seed, two schemes, **dynamic colour off**) applied at the root from the
   persisted preference, `AndroidConnectivityMonitor`, and `WorkScheduler`'s additions

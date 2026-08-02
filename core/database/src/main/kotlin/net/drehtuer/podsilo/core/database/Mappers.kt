@@ -9,6 +9,7 @@ import net.drehtuer.podsilo.core.database.entity.FeedEntity
 import net.drehtuer.podsilo.core.database.entity.SyncStateEntity
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.SyncState
@@ -76,6 +77,8 @@ internal fun EpisodeLedgerEntity.toDomain(): EpisodeLedgerRow =
         syncedToServer = syncedToServer,
         attempts = attempts,
         lastError = lastError,
+        lastErrorCause = lastErrorCause?.let { runCatching { enumValueOf<ErrorCause>(it) }.getOrNull() },
+        lastErrorRetryable = lastErrorRetryable,
         writtenFileName = writtenFileName,
         durationSeconds = durationSeconds,
     )
@@ -90,6 +93,8 @@ internal fun EpisodeLedgerRow.toEntity(): EpisodeLedgerEntity =
         syncedToServer = syncedToServer,
         attempts = attempts,
         lastError = lastError,
+        lastErrorCause = lastErrorCause?.name,
+        lastErrorRetryable = lastErrorRetryable,
         writtenFileName = writtenFileName,
         durationSeconds = durationSeconds,
     )

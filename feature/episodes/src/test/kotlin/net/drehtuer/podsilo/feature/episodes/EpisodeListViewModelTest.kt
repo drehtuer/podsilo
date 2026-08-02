@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.SwipeAction
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
@@ -54,6 +55,7 @@ class EpisodeListViewModelTest {
     private val connectivity = FakeConnectivityMonitor()
     private val scheduler = RecordingScheduler()
     private val spaceProbe = FakeSpaceProbe()
+    private val folderStatus = FakeFolderStatus()
     private val clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC)
 
     /**
@@ -77,6 +79,8 @@ class EpisodeListViewModelTest {
                 triageWriter = TriageWriter(ledger, clock),
                 scheduler = scheduler,
                 spaceProbe = spaceProbe,
+                folderStatus = folderStatus,
+                zone = ZoneOffset.UTC,
             )
         backgroundScope.launch { vm.state.collect { } }
         return vm
@@ -393,6 +397,164 @@ class EpisodeListViewModelTest {
             scheduler.completeRefresh()
             runCurrent()
             assertFalse(vm.state.value.isRefreshing)
+        }
+
+    @Test
+    fun `a lost folder grant offers Choose folder, never a bare Retry`() =
+        runTest {
+            // The guarantee `docs/decisions/0011` and docs/UI.md §12.11 make, and the reason the cause
+            // is stored rather than parsed out of the message: retrying cannot possibly succeed until
+            // the user re-picks the folder, so a Retry button here would be a button that lies.
+            seed(episode("e1"))
+            ledger.seedRow(
+                ledgerRow(
+                    "e1",
+                    LedgerState.ERROR,
+                    lastError = "the download folder is no longer accessible",
+                    lastErrorCause = ErrorCause.FOLDER_UNAVAILABLE,
+                    lastErrorRetryable = false,
+                ),
+            )
+            val vm = viewModel()
+            runCurrent()
+
+            // An ERROR row is not "to decide" — it has a ledger row. The failure surfaces on All.
+            vm.onEvent(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL))
+            runCurrent()
+
+            val failure = checkNotNull(rows(vm.state.value).single().lastError)
+            assertFalse(failure.retryable)
+            assertEquals(FailureRemedy.CHOOSE_FOLDER, failure.remedy)
+        }
+
+    @Test
+    fun `a disk-full failure offers Free up space rather than Retry`() =
+        runTest {
+            seed(episode("e1"))
+            ledger.seedRow(
+                ledgerRow(
+                    "e1",
+                    LedgerState.ERROR,
+                    lastError = "No space left on device",
+                    lastErrorCause = ErrorCause.DISK_FULL,
+                    lastErrorRetryable = false,
+                ),
+            )
+            val vm = viewModel()
+            runCurrent()
+
+            // An ERROR row is not "to decide" — it has a ledger row. The failure surfaces on All.
+            vm.onEvent(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL))
+            runCurrent()
+
+            assertEquals(FailureRemedy.FREE_UP_SPACE, rows(vm.state.value).single().lastError?.remedy)
+        }
+
+    @Test
+    fun `a network failure is retryable and offers no special remedy`() =
+        runTest {
+            seed(episode("e1"))
+            ledger.seedRow(
+                ledgerRow(
+                    "e1",
+                    LedgerState.ERROR,
+                    lastError = "connection reset",
+                    lastErrorCause = ErrorCause.NETWORK,
+                    lastErrorRetryable = true,
+                ),
+            )
+            val vm = viewModel()
+            runCurrent()
+
+            // An ERROR row is not "to decide" — it has a ledger row. The failure surfaces on All.
+            vm.onEvent(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL))
+            runCurrent()
+
+            val failure = checkNotNull(rows(vm.state.value).single().lastError)
+            assertTrue(failure.retryable)
+            assertNull("an ordinary Retry is the right affordance here", failure.remedy)
+        }
+
+    @Test
+    fun `a row written before the classification existed defaults to retryable`() =
+        runTest {
+            // Schema v3 left historical rows unclassified. Offering a Retry that fails is
+            // recoverable; hiding the only useful button is not.
+            seed(episode("e1"))
+            ledger.seedRow(ledgerRow("e1", LedgerState.ERROR, lastError = "something went wrong"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL))
+            runCurrent()
+
+            val failure = checkNotNull(rows(vm.state.value).single().lastError)
+            assertEquals(ErrorCause.UNKNOWN, failure.cause)
+            assertTrue(failure.retryable)
+            assertNull(failure.remedy)
+        }
+
+    @Test
+    fun `no folder chosen pauses the queue without refusing anything`() =
+        runTest {
+            folderStatus.state = FolderState.NOT_CHOSEN
+            seed(episode("e1"))
+            ledger.seedRow(ledgerRow("e1", LedgerState.QUEUED))
+            val vm = viewModel()
+            runCurrent()
+
+            val paused = vm.state.value.queueStatus as QueueStatus.Paused
+            assertEquals(QueueStatus.PauseCause.FOLDER_NOT_CHOSEN, paused.cause)
+
+            // Paused is a queue condition, not a refusal: a new decision is still accepted.
+            vm.onEvent(EpisodeListEvent.Triage("e1", EpisodeUiAction.DOWNLOAD))
+            runCurrent()
+            assertEquals(1, scheduler.downloads.size)
+        }
+
+    @Test
+    fun `a revoked grant is a different pause cause than never having chosen one`() =
+        runTest {
+            // Same banner, different sentence and different fix — "choose a folder" versus "the one
+            // you chose is gone" are not the same message to a user.
+            folderStatus.state = FolderState.REVOKED
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+
+            assertEquals(
+                QueueStatus.PauseCause.FOLDER_REVOKED,
+                (vm.state.value.queueStatus as QueueStatus.Paused).cause,
+            )
+        }
+
+    @Test
+    fun `a granted folder with healthy rows leaves the queue running`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+
+            assertEquals(QueueStatus.Running, vm.state.value.queueStatus)
+        }
+
+    @Test
+    fun `episodes group into month sections, with undated ones in a trailing group`() =
+        runTest {
+            // Sections index into the rendered list, so a wrong grouping shows up as headers
+            // straddling the wrong rows rather than as a silent mismatch.
+            seed(
+                episode("jul-b", pubDate = Instant.parse("2026-07-20T00:00:00Z").toEpochMilli()),
+                episode("jul-a", pubDate = Instant.parse("2026-07-02T00:00:00Z").toEpochMilli()),
+                episode("jun", pubDate = Instant.parse("2026-06-11T00:00:00Z").toEpochMilli()),
+                episode("undated", pubDate = null),
+            )
+            val vm = viewModel()
+            runCurrent()
+
+            val sections = vm.state.value.sections
+            assertEquals(listOf(YearMonth(2026, 7), YearMonth(2026, 6), null), sections.map { it.label })
+            assertEquals(listOf(2, 1, 1), sections.map { it.count })
+            assertEquals(listOf(0, 2, 3), sections.map { it.firstIndex })
         }
 
     @Test

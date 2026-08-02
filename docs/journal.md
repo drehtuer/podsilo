@@ -1375,3 +1375,43 @@ a design question for when the screen exists, not something to paper over now, s
 `TODO.md` as a warning rather than silently fixed in one direction.
 
 **Verified:** `./gradlew ktlintCheck detekt test assembleDebug` — 363 tests, green.
+
+## 2026-08-02 (later) — Making the seam document true, and what that cost
+
+**Attempted:** findings 7–9 from the audit — the types `docs/UI_interface.md` §1 declares that the
+code did not have. The instruction was "fix them according to the documentation", so the doc was
+treated as authoritative and the code moved to meet it.
+
+**The interesting one was `FailureUi`, because it could not be built as a UI-only type.** The doc
+declares `FailureUi(cause: ErrorCause, message, attempts, retryable)`, and `cause` is what
+`docs/UI.md` §12.11 and ADR 0011 hang a real guarantee on: a row whose download failed because the
+folder grant is gone must offer **Choose folder** and never a bare **Retry**, because retrying cannot
+work until the user acts.
+
+The ledger stored only `lastError: String`. So there were two options: classify by pattern-matching
+the message in the UI, or store the classification where it is known. Matching prose would fail the
+first time a message was reworded — and it would fail *silently, into the unsafe direction*, showing
+a Retry button that cannot work. So: schema v3, two nullable columns
+(`lastErrorCause`, `lastErrorRetryable`), classified by the download pipeline that already knew.
+
+Both columns, not one derived from the other, because they genuinely differ: a 404 and a 503 are both
+`SERVER` and only one is worth retrying.
+
+**Historical rows get `null`, which reads as `UNKNOWN` and offers a plain Retry.** That is the safe
+default and the migration test says so: offering a Retry that fails is recoverable, hiding the only
+useful button is not. Guessing a cause from the stored sentence would have been the other way round.
+
+**Two smaller judgement calls, both recorded in the doc rather than left as silent divergence:**
+
+- `QueueStatus`'s `DISK_FULL` is inferred from a row that *actually failed for space*, not from
+  probing free space. A volume can be nearly full and still fit the next episode; "a download already
+  failed this way" is a fact, "space looks tight" is a guess.
+- The doc puts these types in `:core:model`. Only `ErrorCause` went there — because the ledger stores
+  it. The rest are UI vocabulary and stayed in `:feature:episodes`, which keeps `:core:model` the
+  Android-free domain rather than a place screens keep their projections. The doc now says so.
+
+**A test that was wrong in an instructive way:** four new failure tests asserted on the default *To
+decide* filter, and an `ERROR` row is not "to decide" — it *has* a ledger row. The code was right and
+the setup was wrong, which is the good version of a failing test.
+
+**Verified:** `./gradlew ktlintCheck detekt test assembleDebug` — 372 tests, green.

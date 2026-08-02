@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
@@ -166,7 +167,15 @@ class DownloadWorker
                 }
                 is DownloadOutcome.Failed -> {
                     ledgerRepository.upsert(
-                        rowFor(episode, LedgerState.ERROR, attempts, recordedFileName, outcome.reason),
+                        rowFor(
+                            episode,
+                            LedgerState.ERROR,
+                            attempts,
+                            recordedFileName,
+                            outcome.reason,
+                            outcome.cause,
+                            outcome.retryable,
+                        ),
                     )
                     // Genuinely transient failures go back to WorkManager's backoff; everything else
                     // stays in ERROR for the user to retry deliberately (CLAUDE.md §3: never
@@ -211,12 +220,15 @@ class DownloadWorker
          * (`docs/decisions/0001`). `syncedToServer` is always `false` on a local write — only a
          * confirmed 2xx flips it, and only the sync pass may do that.
          */
+        @Suppress("LongParameterList")
         private fun rowFor(
             episode: Episode,
             state: LedgerState,
             attempts: Int,
             writtenFileName: String?,
             lastError: String? = null,
+            lastErrorCause: ErrorCause? = null,
+            lastErrorRetryable: Boolean? = null,
         ): EpisodeLedgerRow =
             EpisodeLedgerRow(
                 episodeKey = episode.episodeKey,
@@ -227,6 +239,8 @@ class DownloadWorker
                 syncedToServer = false,
                 attempts = attempts,
                 lastError = lastError,
+                lastErrorCause = lastErrorCause,
+                lastErrorRetryable = lastErrorRetryable,
                 writtenFileName = writtenFileName,
                 durationSeconds = episode.durationMs?.let { (it / MILLIS_PER_SECOND).toInt() },
             )

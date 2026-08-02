@@ -73,4 +73,27 @@ class MigrationTest {
             assertEquals(0, cursor.getInt(0))
         }
     }
+
+    @Test
+    fun `migrate 2 to 3 classifies future failures without touching recorded ones`() {
+        helper.createDatabase(TEST_DB, 2).use { v2 ->
+            v2.execSQL(
+                "INSERT INTO episode_ledger (episodeKey, feedUrl, enclosureUrl, state, actionedAt, syncedToServer, " +
+                    "attempts, lastError, writtenFileName, durationSeconds) VALUES " +
+                    "('ep-1', 'https://example.com/feed.xml', 'https://example.com/ep1.mp3', 'ERROR', 2000, 0, " +
+                    "3, 'No space left on device', NULL, NULL)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3)
+
+        db.query("SELECT lastError, lastErrorCause, lastErrorRetryable FROM episode_ledger").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("the message a user already saw is untouched", "No space left on device", cursor.getString(0))
+            // Deliberately null rather than guessed from the sentence: the UI reads that as UNKNOWN
+            // and offers a plain Retry, which is the safe direction for a row we cannot classify.
+            assertNull(cursor.getString(1))
+            assertTrue(cursor.isNull(2))
+        }
+    }
 }
