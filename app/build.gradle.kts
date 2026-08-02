@@ -48,6 +48,7 @@ dependencies {
     implementation(project(":core:gpodder"))
     implementation(project(":core:naming"))
     implementation(project(":core:sync"))
+    implementation(project(":core:ui"))
     implementation(project(":feature:episodes"))
     implementation(project(":feature:settings"))
 
@@ -85,6 +86,9 @@ dependencies {
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
+    testImplementation(libs.turbine)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     testImplementation(libs.work.testing)
     testImplementation(libs.kotlinx.coroutines.test)
 }

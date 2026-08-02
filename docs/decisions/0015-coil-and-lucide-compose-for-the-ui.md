@@ -61,3 +61,33 @@ files that would be ours to maintain. R8 removes what is not referenced.
 - Coil's cache is not the download folder and has nothing to do with it. Artwork is app-private
   cache; CLAUDE.md §1's "no file lifecycle management" non-goal is about the user's episode files
   and is untouched by this.
+
+## Amendment (2026-08-02) — what the artifact actually ships
+
+Written before the dependency had ever been resolved, this ADR assumed
+`com.composables:icons-lucide-android` exposes `ImageVector` objects, as `Icons.Filled.*` does.
+
+It does not. Its `classes.jar` is **empty** (22 bytes); the artifact is a pack of ~1,700
+`VectorDrawable` **XML resources** under `res/drawable/lucide_ic_*.xml`, with package
+`com.composables.icons.lucide`. So the call site is
+
+```kotlin
+painterResource(LucideR.drawable.lucide_ic_arrow_left)
+```
+
+and the icon "constants" are `@DrawableRes Int`s rather than `ImageVector`s.
+
+**Every reason for the decision survives this** — it is still one dependency against 27
+hand-converted files we would maintain, still ISC/MIT, still one weight everywhere, and R8 still
+strips what is not referenced. Only the type at the call site differs.
+
+Two consequences that follow from it, both real:
+
+- **A wrong name is a runtime `0`, not a compile error**, because resource ids are looked up rather
+  than referenced as objects. `PodsiloIconsTest` asserts every entry resolves to a non-zero id, and
+  that the three pairs §18 calls non-interchangeable (`check`/`cloud-check`, `triangle-alert`/
+  `circle-alert`) are genuinely different glyphs.
+- The mapping lives in one object, `core.ui.PodsiloIcons`, which is what makes §18's "an icon not
+  listed here has no call site" enforceable rather than aspirational.
+
+The `assets/icons/` fallback path stays as written, and is now less likely to be needed.

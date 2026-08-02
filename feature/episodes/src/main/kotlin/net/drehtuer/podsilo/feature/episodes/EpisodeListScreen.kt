@@ -28,15 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.MaxContentWidth
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.ZoneId
-
-/** Spacing that must not drift between rows, per `docs/UI.md` §17. */
-internal val RowPadding = 16.dp
-internal val MinRowHeight = 72.dp
-internal val MinTouchTarget = 48.dp
-
-/** `docs/UI.md` §19: rows stop reading as one thing when they stretch, so cap and centre the column. */
-private val MaxContentWidth = 600.dp
 
 internal const val SNIPPET_LINES = 2
 internal const val TITLE_LINES = 2
@@ -114,6 +111,7 @@ private fun PausedBanner(
     ) {
         // weight, and the button unwrapped: without these the message takes the whole row and the
         // action wraps to one word per line ("Choos / e / folder"), seen on the first device run.
+        PodsiloIcon(PodsiloIcons.Warning, contentDescription = null)
         Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         TextButton(
             onClick = { onEvent(EpisodeListEvent.PausedBannerActionClicked) },
@@ -124,15 +122,18 @@ private fun PausedBanner(
 
 @Composable
 private fun OfflineBanner() {
-    Text(
-        text = "No network connection",
-        style = MaterialTheme.typography.bodyMedium,
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(RowPadding),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PodsiloIcon(PodsiloIcons.Offline, contentDescription = null)
+        Text("No network connection", style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable
@@ -183,6 +184,10 @@ private fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        PodsiloIcon(
+            icon = if (filter == EpisodeFilter.TO_DECIDE) PodsiloIcons.AllDone else PodsiloIcons.Empty,
+            contentDescription = null,
+        )
         Text(
             text =
                 if (filter == EpisodeFilter.TO_DECIDE) {

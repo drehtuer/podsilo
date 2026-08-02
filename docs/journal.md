@@ -1628,3 +1628,75 @@ tests green; S1 → S4 → S5 and S4 → S6 all navigated on the emulator with n
 **Still true:** nothing has been tested against a real Nextcloud — S5 has never completed a real
 login flow, only a scripted fake. S7 and S8 do not exist, so *Activity* and *Error log* still show
 a snackbar saying so.
+
+---
+
+## 2026-08-02 (night) — S7, S8, and the icons that were never there
+
+**Attempted:** the last two screens, plus the icons — the author noticed they were missing, which
+they were: ADR 0015 accepted Lucide, the dependency was pinned in the catalog, and no call site had
+ever used it. Every affordance was a text button.
+
+### The dependency was not what the ADR thought it was
+
+ADR 0015 was written during the design pass, before the artifact had ever been resolved, and assumed
+`com.composables:icons-lucide-android` exposes `ImageVector`s the way `Icons.Filled.*` does. Pulling
+it apart:
+
+```
+$ unzip -l icons-lucide-android-2.2.1.aar | tail -3
+     1045  res/drawable/lucide_ic_zoom_in.xml
+      844  res/drawable/lucide_ic_zoom_out.xml
+  1897574  1671 files
+$ ls -la classes.jar
+-rw-r--r-- 22 classes.jar        # empty
+```
+
+It is a **`VectorDrawable` resource pack**, not a Kotlin API. Every reason for the decision survives
+— one dependency against 27 files we would hand-convert and maintain, ISC/MIT, one weight, R8 strips
+the rest — but the call site is `painterResource(R.drawable.lucide_ic_*)` and the constants are
+`@DrawableRes Int`s. ADR 0015 now says so.
+
+**The consequence is the interesting part: a wrong name is a runtime `0`, not a compile error.** An
+invisible icon, silently. So `PodsiloIconsTest` asserts all 27 resolve non-zero — and asserts the
+three pairs §18 calls non-interchangeable really are different glyphs, because
+`HandledRemotely = PodsiloIcons.Check` would compile, pass every screen test, and quietly claim the
+user made a decision they did not.
+
+### `:core:ui` earned its place, but not on the first argument
+
+I created it for the icon mapping — one object making §18's "an icon not listed here has no call
+site" enforceable rather than aspirational. The better justification turned up while wiring it: the
+spacing constants (`RowPadding`, `MinTouchTarget`, `MinRowHeight`, `MaxContentWidth`) were
+**duplicated in both feature modules**, which is exactly the drift §17 exists to prevent. Two
+screens that disagree about a row height read as two apps. They live in one place now.
+
+### S7 reads the ledger, not WorkManager
+
+Worth stating because the opposite is the obvious implementation: the queued and failed groups come
+from the ledger, which is durable and survives process death, whereas `WorkInfo` does not. Live byte
+progress is the *only* thing that comes from the worker — and its absence renders as *resuming*
+rather than 0 %, the same rule as the row and the sheet.
+
+The other rule S7 has to keep is a negative one: it shows what was written and offers no delete, no
+open-file and no existence check. A test asserts the absence, because "not a file manager" is the
+kind of thing that erodes one helpful button at a time.
+
+### One device bug, again exactly one
+
+The paused banner clipped *Choose folder* to `Cl`. I had put `weight(1f, fill = false)` on the
+`Text` inside the icon-plus-message `Row` rather than on the `Row` itself, so the group still took
+the full width. Three sessions, three banners, three variations of the same layout mistake — the
+lesson is that a `Row` with a growing left side and a fixed right side needs the weight on the
+*group*, and I should reach for that shape deliberately instead of rediscovering it.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 502 tests, 3 skipped; six instrumented
+tests green; S1 → S7 → S8 driven on the emulator, icons rendering, no crashes.
+
+**All eight screens now exist.** `notBuiltYet` — the snackbar that named a missing screen — has no
+callers left and was deleted.
+
+**Still true, and now the only thing left:** nothing has ever run against a real Nextcloud. Every
+sync path is exercised by `MockWebServer` and `opodsync`; S5 has never completed a real login flow;
+no episode has been downloaded by the running app. That is the next thing worth doing, and it is
+not a coding task.

@@ -16,12 +16,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.ui.MinRowHeight
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -82,7 +88,17 @@ internal fun EpisodeRow(
         }
 
         episode.statusLine()?.let { status ->
-            Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                episode.statusIcon()?.let { PodsiloIcon(it, contentDescription = null) }
+                Text(
+                    status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         if (episode.ledgerState == LedgerState.DOWNLOADING) DownloadProgressBar(episode.progress)
@@ -150,11 +166,29 @@ internal fun EpisodeUi.statusLine(): String? =
         null -> null
         LedgerState.QUEUED -> "queued"
         LedgerState.DOWNLOADING -> null
-        LedgerState.DOWNLOADED -> "✓ downloaded"
-        LedgerState.SKIPPED -> "▸ played"
+        LedgerState.DOWNLOADED -> "downloaded"
+        LedgerState.SKIPPED -> "played"
         LedgerState.HANDLED_REMOTELY -> "handled elsewhere"
         // The message is passed through verbatim: it is the one string the UI does not re-word.
         LedgerState.ERROR -> lastError?.let { "failed — ${it.message} (attempt ${it.attempts})" } ?: "failed"
+    }
+
+/**
+ * The badge beside [statusLine].
+ *
+ * `HANDLED_REMOTELY` gets `cloud-check`, **not** `check`: rendering it as the same tick as a download
+ * this device performed would claim a decision the user did not make here, and the affordances differ
+ * (`docs/UI.md` §12.6, §18). `play` is the *played* marker and never playback — Podsilo has no player
+ * — which is why it only ever appears beside the word.
+ */
+internal fun EpisodeUi.statusIcon(): Int? =
+    when (ledgerState) {
+        null, LedgerState.DOWNLOADING -> null
+        LedgerState.QUEUED -> PodsiloIcons.Download
+        LedgerState.DOWNLOADED -> PodsiloIcons.Check
+        LedgerState.SKIPPED -> PodsiloIcons.Played
+        LedgerState.HANDLED_REMOTELY -> PodsiloIcons.HandledRemotely
+        LedgerState.ERROR -> PodsiloIcons.Warning
     }
 
 private fun Instant.formatDate(zone: ZoneId): String =

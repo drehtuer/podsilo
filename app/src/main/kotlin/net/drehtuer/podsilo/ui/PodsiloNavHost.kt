@@ -35,25 +35,18 @@ import net.drehtuer.podsilo.feature.episodes.PodcastListViewModel
 import net.drehtuer.podsilo.feature.episodes.SnackbarText
 
 /**
- * The screens that exist: S1, S2 and S3.
+ * All eight of `docs/UI.md`'s screens, and every route between them.
  *
- * S4–S8 are designed but unbuilt, so the events that would open them surface a snackbar naming the
- * missing screen rather than silently doing nothing — the difference between an app that is
- * unfinished and one that looks broken.
  */
 @Composable
 fun PodsiloNavHost(
     factory: EpisodeViewModelFactory,
-    onOpenUrl: (String) -> Unit,
-    onChooseFolder: () -> Unit,
+    actions: HostActions,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
     val snackbar = remember { SnackbarHostState() }
-    val host =
-        remember(navController, snackbar, onOpenUrl, onChooseFolder) {
-            Host(navController, snackbar, onOpenUrl, onChooseFolder)
-        }
+    val host = remember(navController, snackbar, actions) { Host(navController, snackbar, actions) }
 
     Box(modifier = modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = Routes.PODCASTS) {
@@ -71,6 +64,8 @@ fun PodsiloNavHost(
             // A dialog destination: S5 sits over S4 rather than replacing it (docs/UI_interface.md §9).
             dialog(Routes.CONNECT) { ConnectDestination(factory, host) }
             composable(Routes.NAMING) { NamingDestination(factory, host) }
+            composable(Routes.ACTIVITY) { ActivityDestination(factory, host) }
+            composable(Routes.ERROR_LOG) { ErrorLogDestination(factory, host) }
             composable(
                 Routes.EPISODE_DETAIL,
                 arguments = listOf(navArgument(Routes.ARG_EPISODE_KEY) { type = NavType.StringType }),
@@ -91,8 +86,22 @@ fun PodsiloNavHost(
 internal data class Host(
     val navController: NavHostController,
     val snackbar: SnackbarHostState,
-    val onOpenUrl: (String) -> Unit,
-    val onChooseFolder: () -> Unit,
+    val actions: HostActions,
+) {
+    val onOpenUrl: (String) -> Unit get() = actions.openUrl
+    val onChooseFolder: () -> Unit get() = actions.chooseFolder
+}
+
+/**
+ * Everything only an `Activity` can do: launch the SAF picker, open a link, reach the clipboard and
+ * the share sheet. Grouped because every one of them is the same kind of thing and they always
+ * travel together.
+ */
+data class HostActions(
+    val openUrl: (String) -> Unit,
+    val chooseFolder: () -> Unit,
+    val copy: (String) -> Unit,
+    val share: (String) -> Unit,
 )
 
 @Composable
@@ -110,7 +119,7 @@ private fun PodcastsDestination(
             PodcastListEffect.OpenSettings -> host.navController.navigate(Routes.SETTINGS)
             PodcastListEffect.OpenConnect -> host.navController.navigate(Routes.CONNECT)
             PodcastListEffect.OpenNaming -> host.navController.navigate(Routes.NAMING)
-            PodcastListEffect.OpenActivity -> host.snackbar.notBuiltYet("Activity")
+            PodcastListEffect.OpenActivity -> host.navController.navigate(Routes.ACTIVITY)
             is PodcastListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
         }
     }
@@ -151,7 +160,7 @@ private fun DetailDestination(
             EpisodeDetailEffect.Close -> host.navController.popBackStack()
             // Not navigation: the sheet stays open behind the browser (docs/UI.md §6).
             is EpisodeDetailEffect.OpenUrl -> host.onOpenUrl(effect.url)
-            EpisodeDetailEffect.OpenErrorLog -> host.snackbar.notBuiltYet("The error log")
+            EpisodeDetailEffect.OpenErrorLog -> host.navController.navigate(Routes.ERROR_LOG)
             is EpisodeDetailEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
         }
     }
@@ -172,10 +181,6 @@ internal fun <T> OnEffect(
     handle: suspend (T) -> Unit,
 ) {
     LaunchedEffect(effects) { effects.collect { handle(it) } }
-}
-
-internal suspend fun SnackbarHostState.notBuiltYet(screen: String) {
-    showSnackbar("$screen is not built yet.")
 }
 
 private suspend fun SnackbarHostState.showMessage(text: SnackbarText) {

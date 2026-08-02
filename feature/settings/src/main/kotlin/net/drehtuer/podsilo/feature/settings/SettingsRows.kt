@@ -18,6 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.Duration
 import java.time.Instant
 
@@ -39,6 +43,27 @@ internal fun GroupHeader(text: String) {
 
 @Composable
 internal fun SettingsRow(
+    title: String,
+    subtitle: String?,
+    onClick: (() -> Unit)?,
+    isWarning: Boolean = false,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            SettingsRowBody(title, subtitle, onClick, isWarning)
+        }
+        // The affordance, not a control — the whole row is the tap target (docs/UI.md §18).
+        if (onClick != null) PodsiloIcon(PodsiloIcons.ChevronRight, contentDescription = null)
+    }
+}
+
+@Composable
+private fun SettingsRowBody(
     title: String,
     subtitle: String?,
     onClick: (() -> Unit)?,

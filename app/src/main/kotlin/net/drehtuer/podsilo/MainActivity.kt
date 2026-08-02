@@ -3,6 +3,8 @@
 package net.drehtuer.podsilo
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -21,6 +23,7 @@ import net.drehtuer.podsilo.core.download.DownloadFolderAccess
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.ThemePreference
 import net.drehtuer.podsilo.ui.EpisodeViewModelFactory
+import net.drehtuer.podsilo.ui.HostActions
 import net.drehtuer.podsilo.ui.PodsiloNavHost
 import net.drehtuer.podsilo.ui.theme.PodsiloTheme
 import javax.inject.Inject
@@ -64,11 +67,32 @@ class MainActivity : ComponentActivity() {
             PodsiloTheme(preference = preference) {
                 PodsiloNavHost(
                     factory = viewModelFactory,
-                    onOpenUrl = ::openUrl,
-                    onChooseFolder = { folderPicker.launch(null) },
+                    actions =
+                        HostActions(
+                            openUrl = ::openUrl,
+                            chooseFolder = { folderPicker.launch(null) },
+                            copy = ::copyToClipboard,
+                            share = ::shareText,
+                        ),
                 )
             }
         }
+    }
+
+    /** S8's *copy all*. The log is plain text and never contains a credential — see `LogRepository`. */
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText("Podsilo error log", text))
+    }
+
+    /** S8's *share*. A chooser, so the destination is the user's choice and nothing is uploaded. */
+    private fun shareText(text: String) {
+        val intent =
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+        startActivity(Intent.createChooser(intent, "Share error log"))
     }
 
     /**

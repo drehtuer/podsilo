@@ -19,6 +19,8 @@ import net.drehtuer.podsilo.feature.settings.ConnectSyncTrigger
 import net.drehtuer.podsilo.feature.settings.ConnectViewModel
 import net.drehtuer.podsilo.feature.settings.NamingViewModel
 import net.drehtuer.podsilo.feature.settings.SettingsViewModel
+import net.drehtuer.podsilo.ui.activity.ActivityViewModel
+import net.drehtuer.podsilo.ui.errorlog.ErrorLogViewModel
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Named
@@ -55,6 +57,7 @@ class EpisodeViewModelFactory
         private val namingSample: NamingSampleSourceAdapter,
         private val loginFlowClient: NextcloudLoginFlowClient,
         private val syncTrigger: ConnectSyncTrigger,
+        private val logRepository: net.drehtuer.podsilo.core.model.port.LogRepository,
         @Named("appVersion") private val appVersion: String,
     ) {
         fun podcastList(): ViewModelProvider.Factory =
@@ -120,6 +123,24 @@ class EpisodeViewModelFactory
             factory { ConnectViewModel(loginFlowClient, settingsRepository, syncTrigger) }
 
         fun naming(): ViewModelProvider.Factory = factory { NamingViewModel(settingsRepository, namingSample) }
+
+        fun activity(): ViewModelProvider.Factory =
+            factory {
+                ActivityViewModel(
+                    ledgerRepository = ledgerRepository,
+                    episodeRepository = episodeRepository,
+                    feedRepository = feedRepository,
+                    settingsRepository = settingsRepository,
+                    connectivityMonitor = connectivityMonitor,
+                    folderStatus = folderStatus,
+                    syncStatus = syncStatus,
+                    scheduler = scheduler,
+                    triageWriter = triageWriter(),
+                    syncNow = { syncTrigger.requestSyncNow() },
+                )
+            }
+
+        fun errorLog(): ViewModelProvider.Factory = factory { ErrorLogViewModel(logRepository) }
 
         /**
          * A fresh instance per view model, which is fine — it is stateless. Sharing the *class* is
