@@ -11,6 +11,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.model.port.ArchiveContents
+import net.drehtuer.podsilo.core.model.port.ArchiveFailure
+import net.drehtuer.podsilo.core.model.port.ArchiveOutcome
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
@@ -45,6 +48,7 @@ class SettingsViewModelTest {
     private val lastSync = MutableStateFlow<Instant?>(null)
     private val now = Instant.parse("2026-08-02T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
+    private val archive = FakeDatabaseArchive()
 
     @Before
     fun setUp() {
@@ -66,6 +70,7 @@ class SettingsViewModelTest {
             counts = counts,
             namingSummary = { "Der Podcast/{date}_{title}.mp3" },
             syncStatus = { lastSync },
+            archive = archive,
             clock = clock,
             version = "0.1.0",
             zone = ZoneOffset.UTC,
@@ -239,6 +244,95 @@ class SettingsViewModelTest {
         assertEquals("10 min ago · 3 actions pending", lastSyncLine(connected.copy(outboxDepth = 3), now))
         assertEquals("never", lastSyncLine(NextcloudUi(), now))
     }
+
+    @Test
+    fun `export asks the host for a dated file and writes to whatever it picked`() =
+        runTest {
+            val viewModel = viewModel()
+
+            viewModel.effect.test {
+                viewModel.onEvent(SettingsEvent.ExportDatabaseClicked)
+                val effect = awaitItem() as SettingsEffect.CreateBackupFile
+                assertEquals("podsilo-backup-2026-08-02.zip", effect.suggestedName)
+
+                viewModel.onEvent(SettingsEvent.BackupDestinationChosen("content://docs/backup.zip"))
+                assertEquals(listOf("content://docs/backup.zip"), archive.exported)
+                assertEquals(
+                    "Backup saved — 2 podcasts, 7 handled episodes.",
+                    (awaitItem() as SettingsEffect.ShowMessage).text,
+                )
+            }
+        }
+
+    /**
+     * The safeguard, and the reason restore is two steps rather than one: a restore replaces the
+     * ledger, and nothing may be read from a file until the user has been told that in words.
+     */
+    @Test
+    fun `restore warns before the picker opens, and cancelling touches nothing`() =
+        runTest {
+            val viewModel = viewModel()
+
+            viewModel.state.test {
+                skipItems(1)
+                viewModel.onEvent(SettingsEvent.RestoreDatabaseClicked)
+                assertTrue(awaitItem().restoreConfirmationVisible)
+
+                viewModel.onEvent(SettingsEvent.RestoreCancelled)
+                assertFalse(awaitItem().restoreConfirmationVisible)
+            }
+            assertTrue("cancelling must not open a file", archive.imported.isEmpty())
+        }
+
+    @Test
+    fun `confirming the warning opens the picker and restores what comes back`() =
+        runTest {
+            archive.outcome = ArchiveOutcome.Imported(ArchiveContents(3, 90, 12))
+            val viewModel = viewModel()
+
+            viewModel.effect.test {
+                viewModel.onEvent(SettingsEvent.RestoreDatabaseClicked)
+                viewModel.onEvent(SettingsEvent.RestoreConfirmed)
+                assertEquals(SettingsEffect.OpenBackupFile, awaitItem())
+
+                viewModel.onEvent(SettingsEvent.BackupSourceChosen("content://docs/old.zip"))
+                assertEquals(listOf("content://docs/old.zip"), archive.imported)
+                assertEquals(
+                    "Restored 3 podcasts and 12 handled episodes.",
+                    (awaitItem() as SettingsEffect.ShowMessage).text,
+                )
+            }
+        }
+
+    /** Each failure has a different next step, so each gets its own sentence. */
+    @Test
+    fun `a failed restore says what to do about it and states that nothing changed`() =
+        runTest {
+            val viewModel = viewModel()
+
+            viewModel.effect.test {
+                archive.outcome = ArchiveOutcome.Failed(ArchiveFailure.NEWER_SCHEMA)
+                viewModel.onEvent(SettingsEvent.BackupSourceChosen("content://docs/new.zip"))
+                assertEquals(
+                    "That backup was made by a newer Podsilo. Update the app first.",
+                    (awaitItem() as SettingsEffect.ShowMessage).text,
+                )
+
+                archive.outcome = ArchiveOutcome.Failed(ArchiveFailure.UNREADABLE)
+                viewModel.onEvent(SettingsEvent.BackupSourceChosen("content://docs/broken.zip"))
+                assertEquals(
+                    "That backup couldn't be read. Nothing was changed.",
+                    (awaitItem() as SettingsEffect.ShowMessage).text,
+                )
+
+                archive.outcome = ArchiveOutcome.Failed(ArchiveFailure.NOT_AN_ARCHIVE)
+                viewModel.onEvent(SettingsEvent.BackupSourceChosen("content://docs/photos.zip"))
+                assertEquals(
+                    "That file isn't a Podsilo backup.",
+                    (awaitItem() as SettingsEffect.ShowMessage).text,
+                )
+            }
+        }
 }
 
 private suspend fun app.cash.turbine.ReceiveTurbine<SettingsUiState>.awaitUntil(

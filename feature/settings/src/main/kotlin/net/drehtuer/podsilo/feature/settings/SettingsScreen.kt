@@ -79,6 +79,7 @@ fun SettingsScreen(
                 DownloadsGroup(state, onEvent)
                 TriageGroup(state, onEvent)
                 AppearanceGroup(state.theme, onEvent)
+                BackupGroup(state, onEvent)
                 TroubleshootingGroup(state.errorLogCount, onEvent)
                 AboutGroup(state.version)
             }
@@ -86,6 +87,35 @@ fun SettingsScreen(
     }
 
     state.pendingBulk?.let { BulkPreviewDialog(it, onEvent) }
+    if (state.restoreConfirmationVisible) RestoreWarningDialog(onEvent)
+}
+
+/**
+ * Backup and restore of the local database (`docs/decisions/0018`).
+ *
+ * The subtitles name what is actually at stake. Most of the database can be rebuilt — feeds come
+ * from Nextcloud, episodes from the RSS — but the ledger is the app's own memory of what has been
+ * handled, and the parts of it Nextcloud never sees (`DOWNLOAD` actions, which the server discards,
+ * and anything still in the outbox) exist on this phone and nowhere else.
+ */
+@Composable
+private fun BackupGroup(
+    state: SettingsUiState,
+    onEvent: (SettingsEvent) -> Unit,
+) {
+    GroupHeader("BACKUP")
+    SettingsRow(
+        title = "Export database",
+        subtitle = "Save podcasts, episodes and download history as a zip",
+        enabled = !state.archiveBusy,
+        onClick = { onEvent(SettingsEvent.ExportDatabaseClicked) },
+    )
+    SettingsRow(
+        title = "Restore from backup",
+        subtitle = "Replaces everything currently on this device",
+        enabled = !state.archiveBusy,
+        onClick = { onEvent(SettingsEvent.RestoreDatabaseClicked) },
+    )
 }
 
 @Composable

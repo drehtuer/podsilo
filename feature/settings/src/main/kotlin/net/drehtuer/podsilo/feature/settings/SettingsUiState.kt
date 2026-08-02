@@ -30,6 +30,10 @@ data class SettingsUiState(
     val errorLogCount: Int = 0,
     val version: String = "",
     val pendingBulk: BulkConfirmation? = null,
+    /** Shown before the file picker opens, because a restore cannot be undone. */
+    val restoreConfirmationVisible: Boolean = false,
+    /** Zipping or restoring. Both backup rows disable while it runs, so neither can be re-entered. */
+    val archiveBusy: Boolean = false,
 )
 
 /**
@@ -117,6 +121,27 @@ sealed interface SettingsEvent {
     data class ThemeChanged(
         val theme: ThemePreference,
     ) : SettingsEvent
+
+    data object ExportDatabaseClicked : SettingsEvent
+
+    /** Opens the warning. The picker only follows once it is confirmed. */
+    data object RestoreDatabaseClicked : SettingsEvent
+
+    data object RestoreConfirmed : SettingsEvent
+
+    data object RestoreCancelled : SettingsEvent
+
+    /**
+     * The host came back from the SAF picker. [uri] is a document the user chose in *this* app
+     * session; a `null` would mean they cancelled, which the host swallows rather than sending on.
+     */
+    data class BackupDestinationChosen(
+        val uri: String,
+    ) : SettingsEvent
+
+    data class BackupSourceChosen(
+        val uri: String,
+    ) : SettingsEvent
 }
 
 sealed interface SettingsEffect {
@@ -130,6 +155,14 @@ sealed interface SettingsEffect {
 
     /** The SAF picker — an Activity result, so only the host can launch it. */
     data object ChooseFolder : SettingsEffect
+
+    /** `CreateDocument`, with the name the file should be offered under. */
+    data class CreateBackupFile(
+        val suggestedName: String,
+    ) : SettingsEffect
+
+    /** `OpenDocument`, filtered to zips. Only emitted after the restore warning is confirmed. */
+    data object OpenBackupFile : SettingsEffect
 
     data class ShowMessage(
         val text: String,

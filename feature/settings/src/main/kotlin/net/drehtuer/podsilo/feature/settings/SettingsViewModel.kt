@@ -13,13 +13,17 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.EpochTime
 import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.model.port.ArchiveFailure
+import net.drehtuer.podsilo.core.model.port.ArchiveOutcome
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
+import net.drehtuer.podsilo.core.model.port.DatabaseArchive
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
@@ -27,6 +31,7 @@ import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import java.time.Clock
+import java.time.LocalDate
 import java.time.ZoneId
 
 /** Matches the episode screens' grace period, so navigating away and back does not restart queries. */
@@ -52,11 +57,13 @@ class SettingsViewModel(
     private val counts: SettingsCounts,
     private val namingSummary: NamingSummary,
     private val syncStatus: SyncStatus,
+    private val archive: DatabaseArchive,
     private val clock: Clock,
     private val version: String,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : ViewModel() {
     private val pendingBulk = MutableStateFlow<BulkConfirmation?>(null)
+    private val archiveUi = MutableStateFlow(ArchiveUi())
 
     private val effects = Channel<SettingsEffect>(Channel.BUFFERED)
     val effect: Flow<SettingsEffect> = effects.receiveAsFlow()
@@ -87,8 +94,10 @@ class SettingsViewModel(
                 ::Preferences,
             ),
             counts.observeErrorLogCount(),
-            pendingBulk,
-        ) { nextcloud, folderAndNaming, preferences, logCount, bulk ->
+            // Paired rather than passed separately: `combine` tops out at five sources, and these
+            // two are both "a dialog is open / an operation is running" transient UI state.
+            combine(pendingBulk, archiveUi, ::Pair),
+        ) { nextcloud, folderAndNaming, preferences, logCount, transient ->
             SettingsUiState(
                 nextcloud = nextcloud,
                 downloadFolder = folderAndNaming.first,
@@ -99,7 +108,9 @@ class SettingsViewModel(
                 theme = preferences.theme,
                 errorLogCount = logCount,
                 version = version,
-                pendingBulk = bulk,
+                pendingBulk = transient.first,
+                restoreConfirmationVisible = transient.second.confirmingRestore,
+                archiveBusy = transient.second.busy,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -125,8 +136,51 @@ class SettingsViewModel(
             is SettingsEvent.BulkPreviewRequested -> viewModelScope.launch { preview(event.scope) }
             SettingsEvent.BulkConfirmed -> viewModelScope.launch { applyBulk() }
             SettingsEvent.BulkCancelled -> pendingBulk.value = null
+            SettingsEvent.ExportDatabaseClicked -> emit(SettingsEffect.CreateBackupFile(backupFileName()))
+            SettingsEvent.RestoreDatabaseClicked -> archiveUi.update { it.copy(confirmingRestore = true) }
+            SettingsEvent.RestoreCancelled -> archiveUi.update { it.copy(confirmingRestore = false) }
+            SettingsEvent.RestoreConfirmed -> {
+                archiveUi.update { it.copy(confirmingRestore = false) }
+                emit(SettingsEffect.OpenBackupFile)
+            }
+            is SettingsEvent.BackupDestinationChosen ->
+                viewModelScope.launch { runArchive { archive.exportTo(event.uri) } }
+            is SettingsEvent.BackupSourceChosen ->
+                viewModelScope.launch { runArchive { archive.importFrom(event.uri) } }
         }
     }
+
+    /**
+     * Dated, so successive backups sit next to each other in the file picker instead of one
+     * silently replacing the last. The picker still lets the user rename it.
+     */
+    private fun backupFileName(): String = "podsilo-backup-${LocalDate.now(clock.withZone(zone))}.zip"
+
+    private suspend fun runArchive(operation: suspend () -> ArchiveOutcome) {
+        archiveUi.update { it.copy(busy = true) }
+        val outcome = operation()
+        archiveUi.update { it.copy(busy = false) }
+        emit(SettingsEffect.ShowMessage(outcome.message()))
+    }
+
+    /**
+     * Failures name the next step rather than the exception: "not a Podsilo backup" and "update the
+     * app" are different instructions, and an error the user cannot act on is noise.
+     */
+    private fun ArchiveOutcome.message(): String =
+        when (this) {
+            is ArchiveOutcome.Exported ->
+                "Backup saved — ${contents.feeds} podcasts, ${contents.ledgerRows} handled episodes."
+            is ArchiveOutcome.Imported ->
+                "Restored ${contents.feeds} podcasts and ${contents.ledgerRows} handled episodes."
+            is ArchiveOutcome.Failed ->
+                when (reason) {
+                    ArchiveFailure.NOT_AN_ARCHIVE -> "That file isn't a Podsilo backup."
+                    ArchiveFailure.NEWER_SCHEMA -> "That backup was made by a newer Podsilo. Update the app first."
+                    ArchiveFailure.UNREADABLE -> "That backup couldn't be read. Nothing was changed."
+                    ArchiveFailure.WRITE_FAILED -> "The backup couldn't be written."
+                }
+        }
 
     /**
      * Clears the credentials and **keeps the ledger**.
@@ -253,3 +307,9 @@ fun interface SyncStatus {
 /** Kept next to [SyncStatus] because it is the same conversion, done once. */
 internal fun lastSyncInstant(epochMillis: Long): java.time.Instant? =
     EpochTime.ofMillisOrNull(epochMillis.takeIf { it > 0 })
+
+/** Transient backup state: the warning dialog, and whether a zip is being written or read. */
+private data class ArchiveUi(
+    val confirmingRestore: Boolean = false,
+    val busy: Boolean = false,
+)

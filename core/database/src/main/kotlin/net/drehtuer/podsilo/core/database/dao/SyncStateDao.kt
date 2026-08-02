@@ -14,4 +14,8 @@ interface SyncStateDao {
 
     @Upsert
     suspend fun upsert(entity: SyncStateEntity)
+
+    /** Restore only — see [EpisodeLedgerDao.deleteAll]. */
+    @Query("DELETE FROM sync_state")
+    suspend fun deleteAll()
 }

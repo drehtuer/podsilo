@@ -90,6 +90,8 @@ internal data class Host(
 ) {
     val onOpenUrl: (String) -> Unit get() = actions.openUrl
     val onChooseFolder: () -> Unit get() = actions.chooseFolder
+    val onCreateBackupFile: (String, (String) -> Unit) -> Unit get() = actions.createBackupFile
+    val onOpenBackupFile: ((String) -> Unit) -> Unit get() = actions.openBackupFile
 }
 
 /**
@@ -102,6 +104,13 @@ data class HostActions(
     val chooseFolder: () -> Unit,
     val copy: (String) -> Unit,
     val share: (String) -> Unit,
+    /**
+     * `CreateDocument`, then the chosen URI back to the caller. A callback rather than a plain
+     * launch because, unlike the download folder, the result belongs to a view model rather than to
+     * the activity — S4 has to report what happened to the file the user picked.
+     */
+    val createBackupFile: (suggestedName: String, onPicked: (String) -> Unit) -> Unit,
+    val openBackupFile: (onPicked: (String) -> Unit) -> Unit,
 )
 
 @Composable
