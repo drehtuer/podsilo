@@ -1933,3 +1933,48 @@ this API can be appended to and never pruned, which is the same reason `since=0`
 (CLAUDE.md §5).
 
 **Verified:** `ktlintCheck detekt test` green, 514 tests, 3 skipped.
+
+---
+
+## 2026-08-02 (very late) — the sync pass, on real subscriptions
+
+**Attempted:** the thing CLAUDE.md §7 ranks first for test priority — "sync reconciliation, the most
+complex, most breakable logic here" — which until now had only ever run against `MockWebServer` and
+`opodsync`. The production `SyncOrchestrator`, the production client, real subscriptions, a real
+episode.
+
+```
+→ sync() #1 (nothing to push)          Success, 4 subscriptions mirrored, since=1785686711
+→ real episode: guid=69af61b1b58ea3074ddfc173 from the Acast feed
+   local ledger row: SKIPPED, syncedToServer=false
+→ sync() #2 (one row in the outbox)    Success, syncedToServer=true, since=1785686715
+   server: PLAY guid=69af61b1b58ea3074ddfc173 position=1800 total=1800
+                at=2026-08-02T16:05:11+00:00
+→ sync() #3 (must change nothing)      Success, still SKIPPED, still synced, since=1785686720
+```
+
+Three things this settles that no fixture could:
+
+**The echo case.** CLAUDE.md §7 item 8 names "successful download + POST + remote echo of our own
+action" as part of the highest-value test in the project. Pass #3 pulls back the `PLAY` this device
+just wrote, and reconciliation leaves the row exactly as it was — it neither re-queues it nor flips
+it to something else. That is the actual scenario, against the actual server, rather than a canned
+response shaped the way we expected.
+
+**`since` comes from the server's clock.** 1785686711 → 715 → 720, advancing on each pass from the
+value the server returned. CLAUDE.md §11 warns that computing it locally silently drops or
+duplicates actions; this is the first time the real values have been watched move.
+
+**`guid` identification lines up.** The server stored our `guid` and returned it unchanged, so
+`episodeKey = guid ?: enclosureUrl` matches what comes back. If it had normalised or dropped the
+guid, every action from another client would fail to line up with our rows — the exact bug CLAUDE.md
+§5 says to match "exactly, or actions from AntennaPod won't line up".
+
+### On using real data
+
+The synthetic-feed probe answered *does the server keep a DOWNLOAD*, which needed nothing real. This
+one answers *does our reconciliation survive its own echo*, which needs a real feed, a real guid and
+a real server timestamp — a synthetic episode would have exercised the same code with none of the
+values that make it hard. Worth remembering which questions need which.
+
+The `PLAY` for that episode is permanent on the test account: gpoddersync has no delete.

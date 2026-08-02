@@ -99,7 +99,10 @@ fun main(args: Array<String>) {
         }
 
         listSubscriptions(http, result)
-        if (writeAs != null) verifyActionWrites(http, result)
+        if (writeAs != null) {
+            verifyActionWrites(http, result)
+            realDataSyncPass(http, result)
+        }
     }
 }
 
