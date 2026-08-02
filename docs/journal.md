@@ -1772,3 +1772,60 @@ against Nextcloud 33.0.5, both read-only, nothing written.
 **Still true:** `SafDownloadTarget` and `KeystoreAppPasswordCipher` have never executed, no episode
 has been downloaded by the running app, and ADR 0008 (Nextcloud discards `DOWNLOAD`) stays
 source-read-only — confirming it needs a *write*, which this probe deliberately cannot do.
+
+---
+
+## 2026-08-02 (later still) — the login screen could never have worked
+
+**Attempted:** drive the real S5 on the emulator against a live Nextcloud, using a test account.
+
+**Tapping *Request authorization* killed the app.**
+
+```
+FATAL EXCEPTION: main
+android.os.NetworkOnMainThreadException
+    at okhttp3.Dns$Companion$DnsSystem.lookup(Dns.kt:50)
+    at ...RetrofitNextcloudLoginFlowClient.start
+```
+
+`OkHttpClient.execute()` blocks. `ConnectViewModel` calls these `suspend` functions from
+`viewModelScope.launch`, which is `Dispatchers.Main.immediate`. The client had no `withContext`. So
+the DNS lookup ran on the main thread and StrictMode killed the process — **on any device, every
+time**. The screen has existed for two sessions and could never have completed a login.
+
+CLAUDE.md §8 says it in one line: *"No blocking calls on the main dispatcher. Inject dispatchers
+(`@IoDispatcher`) for testability."* I wrote a `suspend fun` and assumed that made it safe. It does
+not: `suspend` says "this can be paused", not "this is off the main thread". The function is only as
+safe as the dispatcher its caller happens to be on, which is precisely why the rule is phrased as
+*inject the dispatcher* rather than *use coroutines*.
+
+### Why 505 tests missed it
+
+A JVM has no main-thread policy. `Dispatchers.setMain(UnconfinedTestDispatcher())` runs the call on
+the test thread and MockWebServer answers cheerfully. **This is the same shape as the ICU regex bug
+two sessions ago** — a JVM-only truth that Android disagrees with — which is what ADR 0017 was
+written about. Two instances now, from different directions: one a library difference, one a
+platform policy.
+
+`LoginFlowDispatcherTest` asserts the property StrictMode exists to enforce: an OkHttp interceptor
+records the thread the call actually ran on, and the test asserts it is not the caller's. I checked
+it fails without the fix and passes with it, rather than trusting that it would.
+
+### The other fix, working
+
+The dialog reported **"Can't reach that address. Check the spelling and your network."** — which is
+this morning's error-mapping fix visibly doing its job on a device. Before it, the same failure said
+*"This doesn't look like a Nextcloud server."*
+
+### Still open
+
+The poll then failed with an `IOException` after roughly two minutes (the limit is 200 × 3 s = 10
+min, so not a timeout). The process survived — same PID — so it is not a crash. Unexplained;
+emulator NAT flakiness is the first suspect, but I have not proven it. Testing resumes there.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 507 tests, 3 skipped; the crash no
+longer reproduces on the device.
+
+**Note to self:** the temporary `Log.i` used to capture the login URL out of the app was reverted
+before committing. Worth having a real answer for "how do I see what URL the app opened" that is not
+a hand-edited log line.
