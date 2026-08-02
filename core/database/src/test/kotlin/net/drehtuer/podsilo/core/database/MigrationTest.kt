@@ -96,4 +96,42 @@ class MigrationTest {
             assertTrue(cursor.isNull(2))
         }
     }
+
+    @Test
+    fun `migrate 3 to 4 adds episode artwork and keeps the ledger and the episode cache intact`() {
+        helper.createDatabase(TEST_DB, 3).use { v3 ->
+            v3.execSQL(
+                "INSERT INTO feeds (url, title, imageUrl, firstSeenAt, lastRefreshedAt, httpEtag, httpLastModified) " +
+                    "VALUES ('https://example.com/feed.xml', 'Der Podcast', NULL, 1000, NULL, NULL, NULL)",
+            )
+            v3.execSQL(
+                "INSERT INTO episodes (episodeKey, feedUrl, guid, enclosureUrl, title, description, pubDate, " +
+                    "durationMs, link) VALUES ('ep-1', 'https://example.com/feed.xml', 'ep-1', " +
+                    "'https://example.com/ep1.mp3', 'Folge 1', NULL, 2000, NULL, NULL)",
+            )
+            v3.execSQL(
+                "INSERT INTO episode_ledger (episodeKey, feedUrl, enclosureUrl, state, actionedAt, syncedToServer, " +
+                    "attempts, lastError, lastErrorCause, lastErrorRetryable, writtenFileName, durationSeconds) " +
+                    "VALUES ('ep-1', 'https://example.com/feed.xml', 'https://example.com/ep1.mp3', 'DOWNLOADED', " +
+                    "3000, 1, 0, NULL, NULL, NULL, '20260714_Folge-1.mp3', 1800)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+
+        db.query("SELECT title, imageUrl FROM episodes").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("the cached episode survived", "Folge 1", cursor.getString(0))
+            // Null and unbackfilled on purpose: `episodes` is a disposable cache and the next feed
+            // refresh fills this in. Backfilling would mean network I/O inside a migration.
+            assertTrue("artwork starts unknown, not guessed", cursor.isNull(1))
+        }
+        db.query("SELECT state, writtenFileName FROM episode_ledger").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            // The table that must never be lost (CLAUDE.md §5) — an artwork column has no business
+            // disturbing a record of what the author already handled.
+            assertEquals("DOWNLOADED", cursor.getString(0))
+            assertEquals("20260714_Folge-1.mp3", cursor.getString(1))
+        }
+    }
 }

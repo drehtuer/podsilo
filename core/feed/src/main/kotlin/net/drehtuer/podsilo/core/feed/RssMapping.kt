@@ -59,6 +59,9 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
         // The item's own page, for "Open in browser" (docs/UI.md section 6). Never synthesised from
         // the enclosure, which points at an audio file — a feed that omits it simply has no link.
         link = link?.trim()?.takeIf(String::isNotEmpty),
+        // itunes:image first: it is the per-episode cover feeds actually use. A bare <image> on an
+        // item is rare but legal, and costs nothing to accept.
+        imageUrl = (itunesItemData?.image ?: image)?.trim()?.takeIf(String::isNotEmpty),
     )
 }
 

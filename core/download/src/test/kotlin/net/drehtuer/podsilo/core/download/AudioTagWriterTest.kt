@@ -4,7 +4,9 @@ package net.drehtuer.podsilo.core.download
 
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -95,4 +97,58 @@ class AudioTagWriterTest {
 
         assertTrue(outcome is TagWriteOutcome.Failure)
     }
+
+    private val cover = EpisodeArtwork(byteArrayOf(1, 2, 3, 4, 5), "image/jpeg", EpisodeArtwork.Source.PODCAST)
+
+    private fun File.embeddedArtwork() = AudioFileIO.read(this).tag?.firstArtwork
+
+    @Test
+    fun `artwork is embedded when the file has none`() {
+        // The feature: a file with no cover gets the episode's, or failing that the podcast's.
+        val file = copyOfSilenceFixture()
+        assertNull("fixture should start with no artwork", file.embeddedArtwork())
+
+        writer.writeTags(file, tagData().copy(artwork = cover))
+
+        assertArrayEquals(cover.bytes, file.embeddedArtwork()?.binaryData)
+    }
+
+    @Test
+    fun `artwork the publisher already embedded is never replaced`() {
+        // The explicit boundary of the request: fill a gap, do not normalise every file. A
+        // publisher who shipped per-episode art meant it.
+        val file = copyOfSilenceFixture()
+        val original = EpisodeArtwork(byteArrayOf(9, 9, 9), "image/png", EpisodeArtwork.Source.EPISODE)
+        writer.writeTags(file, tagData().copy(artwork = original))
+
+        writer.writeTags(file, tagData().copy(artwork = cover))
+
+        assertArrayEquals("the original cover was overwritten", original.bytes, file.embeddedArtwork()?.binaryData)
+    }
+
+    @Test
+    fun `no artwork supplied leaves the file without any`() {
+        val file = copyOfSilenceFixture()
+
+        writer.writeTags(file, tagData().copy(artwork = null))
+
+        assertNull(file.embeddedArtwork())
+    }
+
+    @Test
+    fun `the text fields are still written alongside artwork`() {
+        val file = copyOfSilenceFixture()
+
+        val outcome = writer.writeTags(file, tagData().copy(artwork = cover))
+
+        assertTrue(outcome is TagWriteOutcome.Success || outcome is TagWriteOutcome.PartialSuccess)
+        assertEquals("Warum Hamburg immer regnet", AudioFileIO.read(file).tag?.getFirst(FieldKey.TITLE))
+    }
+
+    private fun tagData() =
+        AudioTagData(
+            title = "Warum Hamburg immer regnet",
+            artist = "Der Podcast",
+            album = "Der Podcast",
+        )
 }

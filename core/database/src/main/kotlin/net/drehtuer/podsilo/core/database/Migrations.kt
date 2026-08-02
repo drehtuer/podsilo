@@ -62,5 +62,19 @@ val MIGRATION_2_3: Migration =
         }
     }
 
+/**
+ * Adds the per-episode artwork URL.
+ *
+ * Nullable and unbackfilled on purpose: `episodes` is "a disposable cache of parsed RSS, safe to
+ * wipe and rebuild" (CLAUDE.md §5), so the next feed refresh fills it in. Backfilling would mean
+ * re-fetching every feed inside a migration, which is the wrong place to do network I/O.
+ */
+val MIGRATION_3_4: Migration =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE episodes ADD COLUMN imageUrl TEXT")
+        }
+    }
+
 /** Every migration, in order — what `:app` hands to `Room.databaseBuilder().addMigrations(...)`. */
-val PODSILO_MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3)
+val PODSILO_MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)

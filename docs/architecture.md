@@ -913,6 +913,23 @@ fork), and `DownloadWorker` writes G. Tag writes are per-field best-effort
 container-level `Failure` for an unreadable file — never an exception, matching CLAUDE.md §6's
 "never lose a successful download because a tag write failed."
 
+**Cover art (2026-08-02).** When the downloaded file carries **no artwork of its own**,
+`ArtworkFetcher` supplies one: the episode's `<itunes:image>` if the feed named one, otherwise the
+podcast's channel image. Three rules make it safe:
+
+- **Existing artwork is never replaced.** A publisher who embedded per-episode art meant it, and the
+  request was to fill a gap rather than normalise every file. When the container will not say whether
+  art exists, that is treated as "it does" — overwriting a cover because we failed to read it is the
+  worse mistake.
+- **No size cap** (the author's decision). Real covers run ~300 KB against a 30 MB episode, so a cap
+  would complicate the pipeline to save about one percent, and would eventually drop some podcast's
+  art for a reason the user cannot see.
+- **Best-effort, like the rest of tagging.** A dead image host, an HTML error page served as 200, or
+  a feed with no image at all resolve to no artwork and the episode is delivered regardless.
+
+The per-episode URL is `Episode.imageUrl`, added in schema **v4** (`MIGRATION_3_4`) — nullable and
+unbackfilled, because `episodes` is a disposable cache the next refresh rebuilds.
+
 Two things the flowchart doesn't show, both discovered by building it:
 
 - **The cache file is renamed before tagging.** jaudiotagger picks its reader from the *file

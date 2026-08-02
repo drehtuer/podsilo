@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Per-episode artwork, in the three shapes real feeds use: itunes:image on the item, a bare <image>
+  on the item, and an item with neither (which must fall back to the channel's cover at download
+  time, not at parse time).
+-->
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Der Podcast</title>
+    <itunes:image href="https://example.org/podcast-cover.jpg"/>
+    <item>
+      <title>With itunes:image</title>
+      <guid>ep-itunes</guid>
+      <enclosure url="https://example.org/ep-itunes.mp3" type="audio/mpeg" length="1"/>
+      <itunes:image href="https://example.org/ep-itunes.jpg"/>
+    </item>
+    <item>
+      <title>With a bare image element</title>
+      <guid>ep-bare</guid>
+      <enclosure url="https://example.org/ep-bare.mp3" type="audio/mpeg" length="1"/>
+      <image>https://example.org/ep-bare.png</image>
+    </item>
+    <item>
+      <title>With no artwork of its own</title>
+      <guid>ep-none</guid>
+      <enclosure url="https://example.org/ep-none.mp3" type="audio/mpeg" length="1"/>
+    </item>
+  </channel>
+</rss>

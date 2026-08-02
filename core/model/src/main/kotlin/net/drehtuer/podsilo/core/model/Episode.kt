@@ -20,6 +20,9 @@ package net.drehtuer.podsilo.core.model
  *   here.
  * @property durationMs `itunes:duration` is notoriously unreliable — never block logic on this
  *   being present.
+ * @property imageUrl The item's own artwork (`<itunes:image href>`, or a plain `<image>` on the
+ *   item) — the episode-specific cover a feed may supply per episode. `null` is the common case;
+ *   the podcast's own [Feed.imageUrl] is the fallback when embedding artwork on download.
  */
 data class Episode(
     val episodeKey: String,
@@ -31,4 +34,5 @@ data class Episode(
     val pubDate: Long?,
     val durationMs: Long?,
     val link: String? = null,
+    val imageUrl: String? = null,
 )

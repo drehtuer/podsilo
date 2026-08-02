@@ -8,6 +8,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import net.drehtuer.podsilo.core.download.ArtworkFetcher
 import net.drehtuer.podsilo.core.download.AudioTagWriter
 import net.drehtuer.podsilo.core.download.DownloadFolderAccess
 import net.drehtuer.podsilo.core.download.DownloadNotifications
@@ -56,6 +57,8 @@ object DownloadModule {
         @ApplicationContext context: Context,
     ): DownloadNotifications = DownloadNotifications(context)
 
+    // A @Provides method mirrors its target's constructor; see FeedModule's provideFeedRefresher.
+    @Suppress("LongParameterList")
     @Provides
     @Singleton
     fun provideEpisodeDownloader(
@@ -64,6 +67,7 @@ object DownloadModule {
         downloadTarget: DownloadTarget,
         @ApplicationContext context: Context,
         clock: Clock,
+        artworkFetcher: ArtworkFetcher,
     ): EpisodeDownloader =
         EpisodeDownloader(
             enclosureDownloader = enclosureDownloader,
@@ -73,5 +77,11 @@ object DownloadModule {
             // The device's zone, fixed here rather than re-resolved per call, so one episode always
             // formats to the same date across retries (docs/decisions/0004).
             zoneId = clock.zone,
+            artworkFetcher = artworkFetcher,
         )
+
+    /** Shares the one OkHttp client, as everything else that speaks HTTP does (CLAUDE.md §3). */
+    @Provides
+    @Singleton
+    fun provideArtworkFetcher(okHttpClient: OkHttpClient): ArtworkFetcher = ArtworkFetcher(okHttpClient)
 }

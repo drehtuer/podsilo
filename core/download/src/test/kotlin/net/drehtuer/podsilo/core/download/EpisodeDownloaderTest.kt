@@ -7,10 +7,13 @@ import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.TitleCleanupRuleSetting
+import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
+import org.jaudiotagger.audio.AudioFileIO
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -47,13 +50,14 @@ class EpisodeDownloaderTest {
         server.shutdown()
     }
 
-    private fun downloader() =
+    private fun downloader(artworkFetcher: ArtworkFetcher? = null) =
         EpisodeDownloader(
             enclosureDownloader = EnclosureDownloader(),
             audioTagWriter = AudioTagWriter(),
             downloadTarget = target,
             cacheDir = cacheDir,
             zoneId = ZoneId.of("Europe/Berlin"),
+            artworkFetcher = artworkFetcher,
         )
 
     private fun feed() =
@@ -250,5 +254,87 @@ class EpisodeDownloaderTest {
                 "00000000_Warum Hamburg immer regnet.mp3",
                 (outcome as DownloadOutcome.Delivered).fileName,
             )
+        }
+
+    @Test
+    fun `a delivered episode carries the podcast cover when the feed names one`() =
+        runBlocking {
+            // The wiring the unit tests either side of it cannot see: that EpisodeDownloader
+            // actually asks the fetcher and hands the result to the tag writer.
+            enqueueMp3()
+            server.enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "image/jpeg")
+                    .setBody(Buffer().write(byteArrayOf(7, 7, 7, 7))),
+            )
+            val downloader = downloader(ArtworkFetcher(OkHttpClient()))
+
+            downloader.download(
+                DownloadRequest(
+                    feed = feed().copy(imageUrl = server.url("/cover.jpg").toString()),
+                    episode = episode(),
+                    naming = NamingSettings(),
+                ),
+            )
+
+            val delivered = target.delivered("Der Podcast", "20260714_Warum Hamburg immer regnet.mp3")
+            assertArrayEquals(
+                byteArrayOf(7, 7, 7, 7),
+                AudioFileIO
+                    .read(delivered)
+                    .tag
+                    ?.firstArtwork
+                    ?.binaryData,
+            )
+        }
+
+    @Test
+    fun `the episode's own cover is preferred over the podcast's`() =
+        runBlocking {
+            enqueueMp3()
+            server.enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "image/png")
+                    .setBody(Buffer().write(byteArrayOf(1, 1))),
+            )
+            val downloader = downloader(ArtworkFetcher(OkHttpClient()))
+
+            downloader.download(
+                DownloadRequest(
+                    feed = feed().copy(imageUrl = server.url("/podcast.jpg").toString()),
+                    episode = episode().copy(imageUrl = server.url("/episode.png").toString()),
+                    naming = NamingSettings(),
+                ),
+            )
+
+            val delivered = target.delivered("Der Podcast", "20260714_Warum Hamburg immer regnet.mp3")
+            assertArrayEquals(
+                byteArrayOf(1, 1),
+                AudioFileIO
+                    .read(delivered)
+                    .tag
+                    ?.firstArtwork
+                    ?.binaryData,
+            )
+        }
+
+    @Test
+    fun `a dead cover host still delivers the episode`() =
+        runBlocking {
+            // CLAUDE.md §6: a tagging problem must never lose a successful download, and artwork is
+            // the most optional part of tagging.
+            enqueueMp3()
+            val downloader = downloader(ArtworkFetcher(OkHttpClient()))
+
+            val outcome =
+                downloader.download(
+                    DownloadRequest(
+                        feed = feed().copy(imageUrl = "http://podsilo.invalid/cover.jpg"),
+                        episode = episode(),
+                        naming = NamingSettings(),
+                    ),
+                )
+
+            assertTrue("the episode was lost over a cover: $outcome", outcome is DownloadOutcome.Delivered)
         }
 }

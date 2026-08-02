@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.core.download
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import org.jaudiotagger.tag.Tag
+import org.jaudiotagger.tag.images.AndroidArtwork
 import java.io.File
 
 /**
@@ -20,6 +21,12 @@ data class AudioTagData(
     val genre: String = "Podcast",
     val trackNumber: String? = null,
     val comment: String? = null,
+    /**
+     * Embedded **only when the file carries none of its own**. A publisher who shipped per-episode
+     * art in the file meant it; replacing it would be us overruling them, and the request was to
+     * fill a gap rather than to normalise every file.
+     */
+    val artwork: EpisodeArtwork? = null,
 )
 
 sealed interface TagWriteOutcome {
@@ -60,7 +67,9 @@ class AudioTagWriter {
                 return TagWriteOutcome.Failure(reason)
             }
 
-        val skipped = writeFields(audioFile.tagOrCreateAndSetDefault, data)
+        val tag = audioFile.tagOrCreateAndSetDefault
+        val skipped = writeFields(tag, data)
+        data.artwork?.let { embedArtworkIfAbsent(tag, it) }
 
         return try {
             audioFile.commit()
@@ -103,3 +112,43 @@ private fun Tag.trySetField(
         // the whole write over one field this container can't hold.
         false
     }
+
+/**
+ * Adds [artwork] only when the tag has none.
+ *
+ * `getFirstArtwork()` throws on some containers rather than returning null, so the check is wrapped:
+ * "I could not tell whether art exists" must behave like "art exists" — writing over a publisher's
+ * cover because we failed to read it would be the worse mistake.
+ *
+ * Failure is silent by design. This is the most optional field in the most optional step of the
+ * pipeline (CLAUDE.md §6), and the caller already reports skipped *fields*; a missing cover is not
+ * worth turning a delivered episode into a partial success.
+ */
+private fun embedArtworkIfAbsent(
+    tag: Tag,
+    artwork: EpisodeArtwork,
+) {
+    val existing =
+        try {
+            tag.firstArtwork
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") unreadable: Exception,
+        ) {
+            return
+        }
+    if (existing != null) return
+
+    try {
+        tag.setField(
+            AndroidArtwork().apply {
+                binaryData = artwork.bytes
+                mimeType = artwork.mimeType
+                description = ""
+            },
+        )
+    } catch (
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") unsupported: Exception,
+    ) {
+        // This container cannot hold artwork. The audio is already written and correct.
+    }
+}

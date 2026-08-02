@@ -52,6 +52,7 @@ internal fun EpisodeEntity.toDomain(): Episode =
         pubDate = pubDate,
         durationMs = durationMs,
         link = link,
+        imageUrl = imageUrl,
     )
 
 internal fun Episode.toEntity(): EpisodeEntity =
@@ -65,6 +66,7 @@ internal fun Episode.toEntity(): EpisodeEntity =
         pubDate = pubDate,
         durationMs = durationMs,
         link = link,
+        imageUrl = imageUrl,
     )
 
 internal fun EpisodeLedgerEntity.toDomain(): EpisodeLedgerRow =
