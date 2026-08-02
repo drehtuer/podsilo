@@ -1329,3 +1329,49 @@ scope rather than the query in one run. Deleted afterwards.
 
 **Not done:** every Composable. S2 has a tested logic layer and no screen; S1 and S3 have neither.
 That is the next session, and it is now genuinely only rendering work.
+
+## 2026-08-02 — A consistency audit against the ADRs, and what it found
+
+**Attempted:** check the implementation against the sixteen accepted ADRs, rather than against my
+memory of them. All sixteen are Accepted; none open. The interesting part was the code.
+
+**The audit method that worked:** read each ADR's *Consequences* section as a checklist and grep for
+each item, instead of re-reading the code and asking "does this look right". Four of the ten findings
+were consequences an ADR explicitly asked for and nobody did — invisible to any amount of reading the
+code, obvious the moment you diff intent against reality.
+
+**The two that were actual bugs:**
+
+- **`DownloadAllRequested` emitted a "Queued (n)" snackbar and queued nothing.** A stub that lies is
+  worse than no stub: the user would tap *Download all*, be told twelve episodes were queued, and get
+  nothing. Replaced with the `BulkPreview` ADR 0014 actually requires — the count is named *before*
+  anything is written, and only `DownloadAllConfirmed` writes.
+- **`isRefreshing` was set and cleared on consecutive lines** around a synchronous enqueue, so it was
+  never observably true and a pull-to-refresh indicator could never appear. Fixing it properly meant
+  changing `EpisodeScheduler.requestFeedRefresh` to `suspend` and holding the flag for the duration —
+  which is what `docs/UI.md` §4 asked for all along.
+
+**Two stale KDocs, both in the exact place a reader would look for the truth:** `existingNames` still
+said "explicitly **not** a de-duplication check" with no mention of the one licensed exception —
+precisely the confusion ADR 0012 predicted and asked to be pre-empted. And `Feed.firstSeenAt` still
+documented the `pubDate >= firstSeenAt` cutoff that ADR 0013 retired. I had updated
+`architecture.md`'s field table and not the code comment, which is the wrong way round: the comment
+is what someone editing the field will read.
+
+**An ADR whose invariant was wrong, not the code.** ADR 0016 claimed `EpochTime` was "the only
+`Instant.ofEpochMilli` call site outside `:core:naming` and `:core:sync` — worth one grep in review".
+The grep found three, all correct: parsing an RSS date, formatting a tag, and calendar arithmetic
+inside `OlderThan`. The rule I meant was about the *storage↔UI boundary*, and I wrote it as a
+repo-wide textual rule because that was easier to state. Narrowed it to what it means, with a table
+of why each existing call site is fine — and the narrow version now actually holds.
+
+**Deleted:** `WorkScheduler.enqueueDownloads`, which had no caller. I deleted a speculative
+`undecidedKeys` query two sessions ago for exactly this reason and then added this one myself.
+
+**Left open deliberately:** `EpisodeUi` diverges from `docs/UI_interface.md` §1, and one divergence
+has teeth — the doc's `FailureUi` carries a `retryable` flag that the built bare-`String` `lastError`
+does not, so ADR 0011's "that row offers *Choose folder*, never *Retry*" cannot be enforced. That is
+a design question for when the screen exists, not something to paper over now, so it is recorded in
+`TODO.md` as a warning rather than silently fixed in one direction.
+
+**Verified:** `./gradlew ktlintCheck detekt test assembleDebug` — 363 tests, green.

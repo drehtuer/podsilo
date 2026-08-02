@@ -43,23 +43,21 @@ class WorkScheduler
             )
         }
 
-        /**
-         * Bulk triage (docs/UI.md section 5). One work request per episode, deliberately: each row
-         * then appears in S7 and can be cancelled on its own, which is what makes "every queued
-         * episode is visible" true rather than aspirational (docs/decisions/0014).
-         *
-         * `userRequested` is false here — a bulk action only ever covers undecided episodes, so it
-         * never needs to pass the terminal-row refusal.
-         */
-        fun enqueueDownloads(episodeKeys: List<String>) {
-            episodeKeys.forEach { enqueueDownload(it) }
-        }
-
         fun cancelDownload(episodeKey: String) {
             workManager.cancelUniqueWork(DownloadWorker.uniqueWorkName(episodeKey))
         }
 
-        /** "Refresh now" — CLAUDE.md §11: periodic work is best-effort, so a manual trigger must exist. */
+        /**
+         * "Refresh now" — CLAUDE.md §11: periodic work is best-effort, so a manual trigger must exist.
+         *
+         * **Fire-and-forget, and that is not what a screen wants.**
+         * `EpisodeScheduler.requestFeedRefresh` (in `:feature:episodes`) is declared `suspend` and
+         * documented to return only when the work reaches a terminal state, because a pull-to-refresh
+         * indicator has to stay up for the duration of the refresh rather than for the microsecond
+         * enqueueing takes. When this class is wired to that interface, **delegating directly will
+         * silently break that contract** — the implementation has to observe the `WorkInfo` and
+         * suspend until it finishes.
+         */
         fun requestFeedRefresh(feedUrl: String? = null) {
             workManager.enqueueUniqueWork(
                 FeedRefreshWorker.uniqueWorkName(feedUrl),

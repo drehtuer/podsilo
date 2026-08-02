@@ -30,6 +30,8 @@ data class EpisodeListUiState(
     val feedError: String? = null,
     val swipeMapping: SwipeMapping = SwipeMapping(),
     val downloadAllCount: Int = 0,
+    /** Non-null while the *Download all* confirmation is up. Nothing is written until it is confirmed. */
+    val pendingBulk: BulkPreview? = null,
 ) {
     sealed interface Content {
         data object Loading : Content
@@ -110,6 +112,9 @@ sealed interface EpisodeListEvent {
     data class DownloadAllConfirmed(
         val keys: List<String>,
     ) : EpisodeListEvent
+
+    /** Dismissing the confirmation writes nothing — the whole point of the dialog. */
+    data object DownloadAllDismissed : EpisodeListEvent
 
     data object PullToRefresh : EpisodeListEvent
 }

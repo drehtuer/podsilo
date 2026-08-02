@@ -2,6 +2,7 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -217,8 +218,17 @@ class RecordingScheduler : EpisodeScheduler {
         cancellations += episodeKey
     }
 
-    override fun requestFeedRefresh(feedUrl: String?) {
+    /** Suspends until [completeRefresh] is called, so a test can observe `isRefreshing` while it is true. */
+    override suspend fun requestFeedRefresh(feedUrl: String?) {
         refreshes += feedUrl
+        inFlightRefresh?.await()
+    }
+
+    /** Set to hold a refresh open; complete it to let the scheduler return. */
+    var inFlightRefresh: CompletableDeferred<Unit>? = null
+
+    fun completeRefresh() {
+        inFlightRefresh?.complete(Unit)
     }
 }
 
@@ -260,4 +270,11 @@ class FakeSettingsRepository(
     override suspend fun nextcloudCredentials(): NextcloudCredentials? = null
 
     override suspend fun setNextcloudCredentials(credentials: NextcloudCredentials?) = Unit
+}
+
+/** Free space the dialog would report; `null` is the "provider cannot say" case it must tolerate. */
+class FakeSpaceProbe(
+    var freeBytes: Long? = null,
+) : DownloadSpaceProbe {
+    override suspend fun freeBytes(): Long? = freeBytes
 }

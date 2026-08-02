@@ -76,9 +76,24 @@ millis value without someone noticing they typed the wrong function.
 
 - No entry in `gradle/libs.versions.toml`, no row in `docs/third-party.md`. The cheapest possible
   outcome, which is the point.
-- `EpochTime` is the only permitted `Instant.ofEpochMilli`/`toEpochMilli` call site outside
-  `:core:naming` and `:core:sync`, both of which already do their own java.time work for reasons
-  their ADRs record. Worth one grep in review.
+- **`EpochTime` is the only permitted converter at the storage↔UI boundary** — the place a millis
+  value becomes an `Instant` for a screen to render, or an `Instant` becomes a millis value to
+  store. That is the confusion this ADR exists to prevent.
+
+  **Amended 2026-08-02.** This rule was first written as "the only `Instant.ofEpochMilli`/
+  `toEpochMilli` call site outside `:core:naming` and `:core:sync` — worth one grep in review", and
+  the grep promptly failed against code that is entirely correct. Three call sites are neither
+  boundary conversions nor mistakes:
+
+  | Call site | What it is |
+  |---|---|
+  | `RssMapping.parseRfc822Date` | **Parsing** a wire date string into storage millis. `EpochTime` has no parse function and should not grow one — parsing an RSS date is `:core:feed`'s job |
+  | `EpisodeDownloader` | Formatting `pubDate` for an audio tag, i.e. naming work, next to the engine that already owns `ZoneId` |
+  | `OlderThan.cutoffMillis` | Calendar arithmetic that *produces* a stored cutoff, inside the type that owns the periods |
+
+  The narrower rule is the one that was always meant, and it is what a reviewer should check: a
+  **screen** must never construct an `Instant` from a stored `Long` itself. A grep for
+  `ofEpochMilli` in `:feature:*` and `:app` is the useful one; a repo-wide grep is not.
 - Injecting a `Clock` for testability (CLAUDE.md §7) is unaffected — `EpochTime` converts, it never
   reads the current time, and has no `now()` for exactly that reason.
 - If this project ever did go multiplatform, this is the one file that would change. That is a

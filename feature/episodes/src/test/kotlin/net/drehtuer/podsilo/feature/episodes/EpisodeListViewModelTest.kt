@@ -2,6 +2,7 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -52,6 +53,7 @@ class EpisodeListViewModelTest {
     private val settings = FakeSettingsRepository()
     private val connectivity = FakeConnectivityMonitor()
     private val scheduler = RecordingScheduler()
+    private val spaceProbe = FakeSpaceProbe()
     private val clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC)
 
     /**
@@ -74,6 +76,7 @@ class EpisodeListViewModelTest {
                 connectivityMonitor = connectivity,
                 triageWriter = TriageWriter(ledger, clock),
                 scheduler = scheduler,
+                spaceProbe = spaceProbe,
             )
         backgroundScope.launch { vm.state.collect { } }
         return vm
@@ -296,6 +299,100 @@ class EpisodeListViewModelTest {
             runCurrent()
 
             assertNull(vm.state.value.selection)
+        }
+
+    @Test
+    fun `Download all produces a preview and writes absolutely nothing`() =
+        runTest {
+            // The regression guard for the bug this replaced: it used to emit a "Queued (n)" snackbar
+            // without queueing anything, which is worse than not implementing it. docs/decisions/0014
+            // makes naming the count *before* writing the whole safeguard.
+            seed(episode("a"), episode("b"), episode("c"))
+            ledger.seedRow(ledgerRow("c", LedgerState.DOWNLOADED))
+            val vm = viewModel()
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.DownloadAllRequested)
+            runCurrent()
+
+            val preview = checkNotNull(vm.state.value.pendingBulk)
+            assertEquals(2, preview.count)
+            assertTrue("nothing may be written before confirmation", ledger.writes.isEmpty())
+            assertTrue(scheduler.downloads.isEmpty())
+        }
+
+    @Test
+    fun `confirming the preview is what writes, and dismissing it writes nothing`() =
+        runTest {
+            seed(episode("a"), episode("b"))
+            val vm = viewModel()
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.DownloadAllRequested)
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.DownloadAllDismissed)
+            runCurrent()
+            assertNull(vm.state.value.pendingBulk)
+            assertTrue("dismissing is a decision not to act", ledger.writes.isEmpty())
+
+            vm.onEvent(EpisodeListEvent.DownloadAllRequested)
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.DownloadAllConfirmed(listOf("a", "b")))
+            runCurrent()
+
+            assertNull(vm.state.value.pendingBulk)
+            assertEquals(2, ledger.writes.flatten().size)
+            assertEquals(2, scheduler.downloads.size)
+        }
+
+    @Test
+    fun `an unknown duration makes the size estimate absent rather than understated`() =
+        runTest {
+            // A partial estimate would read as "it fits" when it might not; itunes:duration is too
+            // unreliable for a number that looks authoritative.
+            spaceProbe.freeBytes = 1_000_000_000
+            seed(episode("known"), episode("unknown", durationMs = null))
+            val vm = viewModel()
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.DownloadAllRequested)
+            runCurrent()
+
+            val preview = checkNotNull(vm.state.value.pendingBulk)
+            assertNull(preview.estimatedBytes)
+            assertFalse("no estimate means no warning", preview.exceedsFreeSpace)
+        }
+
+    @Test
+    fun `the size warning appears only when the estimate exceeds free space`() =
+        runTest {
+            // 30 minutes at the assumed bitrate is roughly 29 MB, so 1 MB free must warn and 1 GB not.
+            seed(episode("a"))
+            spaceProbe.freeBytes = 1_000_000
+            val tight = viewModel()
+            runCurrent()
+            tight.onEvent(EpisodeListEvent.DownloadAllRequested)
+            runCurrent()
+            assertTrue(checkNotNull(tight.state.value.pendingBulk).exceedsFreeSpace)
+        }
+
+    @Test
+    fun `isRefreshing stays true for as long as the refresh runs`() =
+        runTest {
+            // It used to be set and cleared on consecutive lines around a synchronous enqueue, so the
+            // indicator could never appear at all.
+            seed(episode("e1"))
+            scheduler.inFlightRefresh = CompletableDeferred()
+            val vm = viewModel()
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.PullToRefresh)
+            runCurrent()
+            assertTrue("the indicator must be visible while the work runs", vm.state.value.isRefreshing)
+
+            scheduler.completeRefresh()
+            runCurrent()
+            assertFalse(vm.state.value.isRefreshing)
         }
 
     @Test

@@ -12,8 +12,12 @@ package net.drehtuer.podsilo.core.model
  * @property title Only known after the first successful feed fetch; the URL is a reasonable
  *   placeholder until then, since the GPodder API itself carries no feed titles.
  * @property firstSeenAt Epoch millis, local clock, set once when [url] first appears in the
- *   server's `add[]`. Never updated after that. Drives the backlog cutoff: the default "New"
- *   filter is `pubDate >= firstSeenAt` (CLAUDE.md §5's "backlog is a UI problem" section).
+ *   server's `add[]`. Never updated after that.
+ *
+ *   **No longer a query predicate.** It used to drive a read-time `pubDate >= firstSeenAt` cutoff on
+ *   the "New" filter; `docs/decisions/0013` retired that in favour of *writing* `SKIPPED` rows, so
+ *   "new" now means exactly "no ledger row". This is kept because it is the only sensible default
+ *   cutoff date to offer for a feed that has just appeared.
  * @property lastRefreshedAt Epoch millis, local clock, updated after a successful (200, not 304)
  *   feed fetch.
  * @property httpEtag Last-seen response `ETag`, for conditional `GET`.

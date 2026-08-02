@@ -51,10 +51,12 @@ class EpisodeListViewModel(
     private val connectivityMonitor: ConnectivityMonitor,
     private val triageWriter: TriageWriter,
     private val scheduler: EpisodeScheduler,
+    private val spaceProbe: DownloadSpaceProbe,
 ) : ViewModel() {
     private val filter = MutableStateFlow(EpisodeFilter.TO_DECIDE)
     private val selection = MutableStateFlow<Selection?>(null)
     private val refreshing = MutableStateFlow(false)
+    private val pendingBulk = MutableStateFlow<BulkPreview?>(null)
 
     private val effects = Channel<EpisodeListEffect>(Channel.BUFFERED)
     val effect: Flow<EpisodeListEffect> = effects.receiveAsFlow()
@@ -74,11 +76,18 @@ class EpisodeListViewModel(
         combine(
             filter,
             selection,
-            refreshing,
+            combine(refreshing, pendingBulk, ::Pair),
             settingsRepository.observeSwipeMapping(),
             connectivityMonitor.observe(),
-        ) { current, currentSelection, isRefreshing, mapping, connectivity ->
-            Snapshot(current, currentSelection, isRefreshing, mapping, connectivity.online)
+        ) { current, currentSelection, refreshAndBulk, mapping, connectivity ->
+            Snapshot(
+                current,
+                currentSelection,
+                refreshAndBulk.first,
+                refreshAndBulk.second,
+                mapping,
+                connectivity.online,
+            )
         }.flatMapLatest { snapshot ->
             // flatMapLatest, not combine: a filter change must *replace* the query, so rows from the
             // previous filter can never be rendered under the new chip.
@@ -114,6 +123,7 @@ class EpisodeListViewModel(
                 },
             selection = selection,
             isRefreshing = refreshing,
+            pendingBulk = pendingBulk,
             isOffline = !online,
             swipeMapping = mapping,
             // The overflow reads "Download all (n)"; n is the *undecided* count, so the item is
@@ -146,11 +156,10 @@ class EpisodeListViewModel(
             EpisodeListEvent.DownloadAllRequested -> viewModelScope.launch { emitDownloadAllPreview() }
             is EpisodeListEvent.DownloadAllConfirmed ->
                 viewModelScope.launch {
-                    triage(
-                        event.keys,
-                        EpisodeUiAction.DOWNLOAD,
-                    )
+                    pendingBulk.value = null
+                    triage(event.keys, EpisodeUiAction.DOWNLOAD)
                 }
+            EpisodeListEvent.DownloadAllDismissed -> pendingBulk.value = null
             EpisodeListEvent.PullToRefresh -> refresh()
         }
     }
@@ -195,11 +204,15 @@ class EpisodeListViewModel(
         }
     }
 
+    /**
+     * Produces the confirmation dialog's preview and **writes nothing** — `docs/decisions/0014`'s
+     * whole safeguard is that the count is named before anything happens. Only
+     * [EpisodeListEvent.DownloadAllConfirmed] writes.
+     */
     private suspend fun emitDownloadAllPreview() {
         val undecided =
             ledgerRepository.undecided(BulkScope(kind = BulkScopeKind.ALL_UNDECIDED, feedUrl = feedUrl))
-        if (undecided.isEmpty()) return
-        emit(EpisodeListEffect.ShowMessage(SnackbarText.Queued(undecided.size)))
+        pendingBulk.value = if (undecided.isEmpty()) null else buildBulkPreview(undecided, spaceProbe.freeBytes())
     }
 
     private fun refresh() {
@@ -210,9 +223,17 @@ class EpisodeListViewModel(
                 emit(EpisodeListEffect.ShowMessage(SnackbarText.Offline))
                 return@launch
             }
+            // Held until the refreshed rows arrive rather than cleared on the next line: enqueueing is
+            // synchronous, so clearing it here would make `isRefreshing` never observably true and the
+            // pull-to-refresh indicator would never appear.
             refreshing.value = true
-            scheduler.requestFeedRefresh(feedUrl)
-            refreshing.value = false
+            try {
+                // Suspends until the work reaches a terminal state, so the indicator is visible for the
+                // whole chain rather than for the microsecond enqueueing takes (docs/UI.md §4).
+                scheduler.requestFeedRefresh(feedUrl)
+            } finally {
+                refreshing.value = false
+            }
         }
     }
 
@@ -239,6 +260,7 @@ class EpisodeListViewModel(
         val filter: EpisodeFilter,
         val selection: Selection?,
         val refreshing: Boolean,
+        val pendingBulk: BulkPreview?,
         val mapping: SwipeMapping,
         val online: Boolean,
     )
@@ -259,5 +281,6 @@ interface EpisodeScheduler {
 
     fun cancelDownload(episodeKey: String)
 
-    fun requestFeedRefresh(feedUrl: String?)
+    /** Suspends until the refresh reaches a terminal state, so the UI can show it for its duration. */
+    suspend fun requestFeedRefresh(feedUrl: String?)
 }
