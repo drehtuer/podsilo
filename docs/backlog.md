@@ -13,16 +13,6 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
-- **A restore onto an unconnected install looks like it did nothing.** Found on the Pixel 5,
-  2026-08-02. `PodcastListViewModel.contentFor` short-circuits on `!configured` before it ever looks
-  at the feed list, and credentials live in DataStore rather than the database — so restoring a
-  backup before connecting Nextcloud shows *"No subscriptions — connect Nextcloud"* while the
-  snackbar simultaneously says *"Restored 2 podcasts and 2 handled episodes."* Both statements are
-  true and the data really is there, but they contradict each other on screen, and "restore onto a
-  new phone, then connect" is the main restore scenario. The setup checklist directly above does
-  say *1. Connect Nextcloud*, so the user is not stuck — this is confusing, not broken. Cheapest fix
-  is probably wording: have the restore snackbar add "Connect Nextcloud to see them" when no account
-  is configured.
 - **The restore file picker shows every file, not just zips.** `MainActivity` passes
   `arrayOf("application/zip", "application/octet-stream", "*/*")` to `OpenDocument`, and the `*/*`
   makes the filter a no-op — in a real Downloads folder the picker lists PDFs, APKs and photos. The

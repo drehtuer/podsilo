@@ -25,6 +25,24 @@
             </intent-filter>
         </activity>
 
+        <!-- WorkManager declares SystemForegroundService with NO foregroundServiceType, and from
+             API 34 the type passed to startForeground() must be a subset of the manifest's. Without
+             this merge, DownloadWorker's setForeground(... FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+             throws IllegalArgumentException *inside the system's service dispatch*, which is a hard
+             crash of the whole process, not a caught failure:
+
+                 foregroundServiceType 0x00000001 is not a subset of
+                 foregroundServiceType attribute 0x00000000 in service element of manifest file
+
+             The FOREGROUND_SERVICE_DATA_SYNC permission above is necessary and not sufficient — the
+             service element needs the type too. Found on the first real download on a Pixel 5
+             (Android 14); the emulator run never reached a download, which is why 500-odd green
+             tests said nothing about it. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <!-- WorkManager's own startup initializer would build a default Configuration with the
              no-arg WorkerFactory, which cannot construct our @HiltWorkers. Removing it defers
              initialisation to PodsiloApplication's Configuration.Provider. -->

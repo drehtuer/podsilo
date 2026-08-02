@@ -43,6 +43,10 @@ below differ enormously in how well-proven they are.
 | **Tier 2 — `connectedAndroidTest`** | ✅ **Verified** | 2026-08-02: 6 tests green on `podsilo-ci(AVD) - 15` across `:app` and `:feature:episodes` |
 | **Tier 3 — a real device over adb from the container** | ✅ **Verified** | 2026-08-02: a physical Pixel 5 passed into WSL with usbipd-win, visible in here with no image change — see [§9](#9-attaching-a-real-android-device) |
 | **Tier 3 — adb to an emulator on *Windows*** | ❌ **Never run** | Same mechanism as the row above, but the Windows-side `adb -a -P 5037 nodaemon server` half is untested |
+| **A real Nextcloud login from the phone** | ✅ **Verified** | 2026-08-02: Login Flow v2 approved in the phone's browser; 4 subscriptions and 9,565 episodes arrived |
+| **The download pipeline end to end** | ✅ **Verified** | 2026-08-02: two real episodes fetched, tagged (TIT2/TPE1/TALB/TCON/TYER/COMM **and APIC**) and written through SAF on a Pixel 5 |
+| **The foreground-service notification** | ✅ **Verified** | 2026-08-02 — after fixing the manifest crash it caused on API 34 (`docs/journal.md`) |
+| **Backup / restore with real data** | ✅ **Verified** | 2026-08-02: 9,565 episodes round-tripped; a ledger row created after the export was correctly removed by the restore |
 | `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (ADR 0011) |
 | SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |

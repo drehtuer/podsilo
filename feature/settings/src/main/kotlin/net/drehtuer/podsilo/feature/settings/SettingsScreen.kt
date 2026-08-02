@@ -110,10 +110,22 @@ private fun BackupGroup(
         enabled = !state.archiveBusy,
         onClick = { onEvent(SettingsEvent.ExportDatabaseClicked) },
     )
+    // A restore is refused until Nextcloud is connected, by the author's rule. The reason is
+    // sequencing: the archive deliberately carries no credentials, so restoring first leaves the
+    // ledger sitting behind a "not configured" screen that shows none of it — which is exactly how
+    // it read on the Pixel 5. Connecting first means the restored ledger lands somewhere that can
+    // display it, and the very next sync reconciles it against the server.
+    val restorable = state.nextcloud.isConnected
     SettingsRow(
         title = "Restore from backup",
-        subtitle = "Replaces everything currently on this device",
-        enabled = !state.archiveBusy,
+        subtitle =
+            if (restorable) {
+                "Replaces everything currently on this device"
+            } else {
+                "Connect Nextcloud first"
+            },
+        isWarning = !restorable,
+        enabled = restorable && !state.archiveBusy,
         onClick = { onEvent(SettingsEvent.RestoreDatabaseClicked) },
     )
 }

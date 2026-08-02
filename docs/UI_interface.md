@@ -347,6 +347,11 @@ to the ViewModel as an event rather than being handled in the activity, because 
 happened to it — which is why `HostActions` carries a callback for these two and not for the download
 folder.
 
+**`RestoreDatabaseClicked` is refused while `nextcloud.instanceUrl` is null** — the row is disabled
+and `SettingsViewModel.requestRestore` re-checks the account, so the rule holds however the event
+arrives. Restoring before connecting drops the ledger behind S1's `NotConfigured` content variant,
+which never consults the feed list (ADR 0018's 2026-08-02 amendment).
+
 The two swipe dropdowns **cannot hold the same action**: `SwipeChanged` swaps them in the ViewModel
 rather than rejecting the input, so the pair is always valid and the swipe background can be
 rendered from state with no defensive branch.

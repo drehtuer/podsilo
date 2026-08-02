@@ -137,7 +137,7 @@ class SettingsViewModel(
             SettingsEvent.BulkConfirmed -> viewModelScope.launch { applyBulk() }
             SettingsEvent.BulkCancelled -> pendingBulk.value = null
             SettingsEvent.ExportDatabaseClicked -> emit(SettingsEffect.CreateBackupFile(backupFileName()))
-            SettingsEvent.RestoreDatabaseClicked -> archiveUi.update { it.copy(confirmingRestore = true) }
+            SettingsEvent.RestoreDatabaseClicked -> viewModelScope.launch { requestRestore() }
             SettingsEvent.RestoreCancelled -> archiveUi.update { it.copy(confirmingRestore = false) }
             SettingsEvent.RestoreConfirmed -> {
                 archiveUi.update { it.copy(confirmingRestore = false) }
@@ -148,6 +148,24 @@ class SettingsViewModel(
             is SettingsEvent.BackupSourceChosen ->
                 viewModelScope.launch { runArchive { archive.importFrom(event.uri) } }
         }
+    }
+
+    /**
+     * **A backup is never loaded before Nextcloud is connected** — the author's rule, and the guard
+     * lives here rather than only on the row so it holds however the event arrives.
+     *
+     * The reason is sequencing, not secrecy. The archive deliberately carries no credentials
+     * (`docs/decisions/0018`), so a restore onto an unconfigured install drops the ledger behind a
+     * *not configured* screen that shows none of it — which is precisely how it read on the Pixel 5,
+     * with the snackbar reporting restored podcasts the list could not display. Connecting first
+     * means the restored ledger lands somewhere that renders it, and the next sync reconciles it.
+     */
+    private suspend fun requestRestore() {
+        if (settingsRepository.observeNextcloudAccount().first() == null) {
+            emit(SettingsEffect.ShowMessage("Connect Nextcloud before restoring a backup."))
+            return
+        }
+        archiveUi.update { it.copy(confirmingRestore = true) }
     }
 
     /**

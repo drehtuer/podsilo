@@ -16,6 +16,7 @@ import net.drehtuer.podsilo.core.model.port.ArchiveFailure
 import net.drehtuer.podsilo.core.model.port.ArchiveOutcome
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
+import net.drehtuer.podsilo.core.model.port.NextcloudAccount
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SwipeAction
@@ -265,12 +266,47 @@ class SettingsViewModelTest {
         }
 
     /**
+     * The author's rule: **no backup is loaded until the Nextcloud login has succeeded.** Not about
+     * secrecy — the archive carries no credentials by design — but about sequencing: restoring onto
+     * an unconfigured install drops the ledger behind a *not configured* screen that shows none of
+     * it, which is exactly how it read on the Pixel 5.
+     */
+    @Test
+    fun `restore is refused until Nextcloud is connected`() =
+        runTest {
+            val viewModel = viewModel() // settings.account is null — no account configured
+
+            viewModel.effect.test {
+                viewModel.onEvent(SettingsEvent.RestoreDatabaseClicked)
+                assertEquals(
+                    "Connect Nextcloud before restoring a backup.",
+                    (awaitItem() as SettingsEffect.ShowMessage).text,
+                )
+            }
+            assertTrue("no file may be opened while unconnected", archive.imported.isEmpty())
+        }
+
+    @Test
+    fun `restore proceeds once an account exists`() =
+        runTest {
+            settings.account.value = NextcloudAccount("https://cloud.example.org", "podsilo")
+            val viewModel = viewModel()
+
+            viewModel.state.test {
+                skipItems(1)
+                viewModel.onEvent(SettingsEvent.RestoreDatabaseClicked)
+                assertTrue(awaitItem().restoreConfirmationVisible)
+            }
+        }
+
+    /**
      * The safeguard, and the reason restore is two steps rather than one: a restore replaces the
      * ledger, and nothing may be read from a file until the user has been told that in words.
      */
     @Test
     fun `restore warns before the picker opens, and cancelling touches nothing`() =
         runTest {
+            settings.account.value = NextcloudAccount("https://cloud.example.org", "podsilo")
             val viewModel = viewModel()
 
             viewModel.state.test {
@@ -287,6 +323,7 @@ class SettingsViewModelTest {
     @Test
     fun `confirming the warning opens the picker and restores what comes back`() =
         runTest {
+            settings.account.value = NextcloudAccount("https://cloud.example.org", "podsilo")
             archive.outcome = ArchiveOutcome.Imported(ArchiveContents(3, 90, 12))
             val viewModel = viewModel()
 

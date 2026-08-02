@@ -87,3 +87,31 @@ next sync pulls everything that happened after the backup was taken and folds it
 - Not covered by tests: a *very* large database. The restore reads each table into memory before
   writing it back in batches of 500. For a personal library this is measured in megabytes; if the
   episode table ever grows to a size where that matters, the read needs chunking too.
+
+## Amendment, 2026-08-02 — a backup is not loaded until Nextcloud is connected
+
+Added after the Pixel 5 run, at the author's instruction: *"No backup should be loaded until the
+nextcloud login has succeeded."*
+
+The first device test restored an archive onto an install with no account and got a contradiction on
+screen — the snackbar said *"Restored 2 podcasts and 2 handled episodes"* while S1 said *"No
+subscriptions — connect Nextcloud"*. Both were true. `PodcastListViewModel.contentFor`
+short-circuits on `!configured` before it ever looks at the feed list, and the archive deliberately
+carries no credentials, so the restored ledger had landed somewhere that could not display it.
+
+The author's rule fixes the *sequence* rather than the symptom, and it is the better fix: **connect
+first, restore second.** Then the restored ledger lands in an app that can render it, and the very
+next sync reconciles it against the server rather than sitting invisible until the user works out
+that step 1 of the checklist is what was missing.
+
+Enforced in two places, deliberately:
+
+- **The row** is disabled and says *"Connect Nextcloud first"* instead of its usual subtitle. A
+  disabled row that states its condition beats a row that silently does nothing.
+- **`SettingsViewModel.requestRestore`** re-checks the account and refuses with a message, so the
+  rule holds however the event arrives rather than resting on the row being drawn correctly.
+
+Export is deliberately **not** gated. Writing a backup of an unconfigured install is harmless, and
+the instruction was about loading.
+
+This also closes the `docs/backlog.md` item that recorded the contradiction.

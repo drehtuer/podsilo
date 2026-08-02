@@ -4,11 +4,14 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.LedgerState
 import org.junit.Assert.assertEquals
@@ -273,5 +276,22 @@ class EpisodeListScreenTest {
         // The confirm button stays present: the estimate is a guess and must not veto the decision.
         // Matched by exact text, since the row underneath also has a "Download" button.
         compose.onAllNodes(hasText("Download")).assertCountEquals(2)
+    }
+
+    /**
+     * S2's half of the missing-refresh bug (see `PodcastListScreenTest`): the event and its handler
+     * existed, and **no affordance anywhere on this screen emitted it** — so a feed whose fetch had
+     * failed could not be retried from the screen that shows the failure.
+     */
+    @Test
+    fun `pulling the episode list down refreshes this feed`() {
+        render(listOf(row()))
+
+        compose.onNode(hasScrollAction()).performTouchInput { swipeDown() }
+
+        assertTrue(
+            "pulling the episode list down must request a refresh, got $events",
+            events.contains(EpisodeListEvent.PullToRefresh),
+        )
     }
 }

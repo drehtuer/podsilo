@@ -402,7 +402,7 @@ block-beta
   r12["Theme    ( Light )  ( Dark )  ( System )"]
   g5["BACKUP"]
   r13["Export database\nSave podcasts, episodes and download history as a zip   ›"]
-  r14["Restore from backup\nReplaces everything currently on this device           ›"]
+  r14["Restore from backup\nConnect Nextcloud first  (until connected)                ›"]
   g6["TROUBLESHOOTING"]
   r15["Error log            3 entries today    ›"]
   g7["ABOUT"]
@@ -483,9 +483,14 @@ second note in the preview states it plainly rather than warning against it. Fur
 - **Export database** — a SAF `CreateDocument`, offered as `podsilo-backup-YYYY-MM-DD.zip` so
   successive backups sit beside each other rather than one silently replacing the last. The subtitle
   names what is inside; the snackbar afterwards names the counts.
-- **Restore from backup** — opens a **warning dialog first, then** the file picker. A restore
-  replaces the ledger, which is the app's only memory of what has already been handled, and that has
-  to be said in words before a file is read — the same rule the bulk-mark preview follows (§7,
+- **Restore from backup** — **disabled until Nextcloud is connected**, reading *"Connect Nextcloud
+  first"* (`docs/decisions/0018`). Not about secrecy — the archive carries no credentials by design —
+  but about sequencing: the restored ledger would otherwise land behind S1's *not configured* empty
+  state, which shows none of it, while the snackbar reports podcasts restored. Connect first and the
+  ledger lands somewhere that renders it.
+- Once connected it opens a **warning dialog first, then** the file picker. A restore replaces the
+  ledger, which is the app's only memory of what has already been handled, and that has to be said
+  in words before a file is read — the same rule the bulk-mark preview follows (§7,
   `docs/decisions/0013`). The dialog also states the reassuring half, which is true rather than
   soothing: Nextcloud is untouched, and the next sync pulls back whatever happened after the backup.
 - Both rows go **dead while either operation runs**, so a second tap cannot start a second export
