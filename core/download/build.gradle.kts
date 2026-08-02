@@ -17,6 +17,7 @@ android {
 
     defaultConfig {
         minSdk = 33
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -32,6 +33,10 @@ android {
 }
 
 dependencies {
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+
     implementation(project(":core:model"))
     implementation(project(":core:naming"))
     implementation(libs.jaudiotagger)

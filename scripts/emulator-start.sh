@@ -10,6 +10,13 @@ AVD_NAME="${AVD_NAME:-podsilo-ci}"
 SYSTEM_IMAGE="${SYSTEM_IMAGE:-system-images;android-35;google_apis;x86_64}"
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-300}"
 
+# The emulator inherits the *container's* resolver list at boot. In this dev container that is
+# WSL2's gateway (10.255.255.254), which is not routable from inside QEMU's 10.0.2.0/24 NAT — so
+# name resolution works only when QEMU's built-in proxy happens to answer, and fails intermittently
+# otherwise. That surfaced as a mid-flight `UnknownHostException` during a Nextcloud login poll,
+# which looks exactly like an app bug and is not one. Pin resolvers the guest can actually reach.
+DNS_SERVERS="${DNS_SERVERS:-8.8.8.8,1.1.1.1}"
+
 : "${ANDROID_HOME:?ANDROID_HOME must be set (the dev container sets it to /opt/android-sdk)}"
 AVD_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}/${AVD_NAME}.avd"
 
@@ -41,6 +48,7 @@ else
     # shellcheck disable=SC2086
     emulator -avd "$AVD_NAME" \
         -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim \
+        -dns-server "$DNS_SERVERS" \
         >/tmp/emulator-"$AVD_NAME".log 2>&1 &
     adb wait-for-device
 fi

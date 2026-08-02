@@ -41,8 +41,9 @@ below differ enormously in how well-proven they are.
 | **Tier 2 — emulator booting in-container** | ✅ **Verified** | 2026-08-02: `scripts/emulator-start.sh` creates + boots `podsilo-ci` headless in ~28 s from nothing |
 | **Tier 2 — `connectedAndroidTest`** | ✅ **Verified** | 2026-08-02: 6 tests green on `podsilo-ci(AVD) - 15` across `:app` and `:feature:episodes` |
 | **Tier 3 — adb over TCP to a Windows emulator** | ❌ **Never run** | No `scripts/adb-connect-host.sh` exists |
-| `KeystoreAppPasswordCipher` round-trip | ❌ Never run | Needs a real device/emulator (ADR 0010) |
-| `SafDownloadTarget` (the actual SAF write) | ❌ Never run | Needs a real `DocumentsProvider` (ADR 0011) |
+| `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (ADR 0010) |
+| `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (ADR 0011) |
+| SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |
 | **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`) |
 | **A real Nextcloud (read)** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`) |
 | **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/decisions/0002`) |

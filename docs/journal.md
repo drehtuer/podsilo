@@ -1832,6 +1832,65 @@ a hand-edited log line.
 
 ---
 
+## 2026-08-02 (night) — the two classes nothing had ever run
+
+**Attempted:** with the live-Nextcloud login deferred, the emulator work that needs no server at
+all — the two pieces `docs/backlog.md` called *"the highest-value item here"* and that
+`docs/dev-environment.md` listed as **never run**.
+
+Both are now verified, and neither needed Nextcloud.
+
+### `KeystoreAppPasswordCipher` (ADR 0010)
+
+Robolectric has no `AndroidKeyStore` provider, which is why this class was abstracted behind a seam
+in the first place — and the consequence nobody had stated plainly is that **the guarantee "the app
+password is never stored in plaintext" rested on code that had never executed.** Six tests, green.
+
+The one worth calling out is *a second instance decrypts what the first wrote*. That is the real
+usage — S5 encrypts during login, `SyncWorker` decrypts in a later process — and a per-instance key
+would pass a round-trip test and then fail only after a restart, with no obvious cause.
+
+### `SafDownloadTarget` (ADR 0011)
+
+The file write had never happened. Now it has, and the evidence is on the emulator's filesystem
+rather than in an assertion:
+
+```
+20260714_Wärme über Hamburg.mp3   ← umlauts survived SAF
+Nested Feed/                       ← the {podcast} subfolder was created
+delivered.mp3   28 bytes           ← identical to the source
+retried.mp3      8 bytes           ← "complete", not the 7-byte "partial"
+```
+
+`retried.mp3` is the assertion I care about: a retry reuses the ledger's `writtenFileName`, so
+delivering twice must overwrite rather than leave `… (2)` beside a half-written file. **The byte
+count is what distinguishes the two outcomes** — a test that only checked "a file exists" would
+have passed either way.
+
+**Where the tests live turned out to be a real design question, not a filing decision.** A tree-URI
+grant belongs to a *package*. `:core:download`'s own test APK is a different package and would have
+no usable tree, so the tests sit in `:app`, whose instrumentation runs inside the app's process and
+inherits the grant. They `assumeTrue` on a folder having been chosen: a missing grant is a setup
+gap, not a regression, and a red suite for a setup gap teaches people to ignore red.
+
+### The grant path itself
+
+Driven through the real UI with `adb input`: S1's *Choose folder* → system picker → the storage root
+is refused by Android ("Can't use this folder") → `Podcasts` → Allow. `dumpsys` then shows
+`mode=0x3 persistable=0x3 persisted=0x3`, and **the ✓ survives `am force-stop`** — which is exactly
+the failure CLAUDE.md §11 warns about and nothing had checked.
+
+### One thing I could not test, and why
+
+Downloading a real episode still needs a subscription, and subscriptions come only from Nextcloud. I
+seeded a feed and episode straight into the SQLite file to get around that — and S1 correctly
+refused to show them, because with no account configured the *not configured* empty state replaces
+the list (`docs/UI.md` §4). The design is right; it just also blocks this particular shortcut. So
+the download pipeline end-to-end — enclosure fetch → tag write → SAF copy → ledger → outbox —
+remains unproven on a device.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 507 tests, 3 skipped; 12 new
+instrumented tests green on the emulator (28 total across the project).
 ## 2026-08-02 (late) — three bugs in one screen, all found by using it
 
 **Reported by the author**, after actually typing in S6: the cursor jumps to the beginning of the
