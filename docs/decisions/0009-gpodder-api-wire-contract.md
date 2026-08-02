@@ -100,3 +100,28 @@ changes — but do not rely on the exclusion happening.
 
 Still unverified, and unverifiable here: everything about **`nextcloud-gpodder`**, which remains
 source-read only. opodsync is **not** proof of Nextcloud's behaviour (see 0008).
+
+## Verified against a real Nextcloud (2026-08-02)
+
+The "still unverified, and unverifiable here" caveat above is now **partly closed**. A manual probe
+(`core/gpodder/.../ManualNextcloudProbe.kt`, run by hand against the author's own instance —
+Nextcloud **33.0.5** with gpoddersync installed) exercised the production client and confirmed:
+
+| Claim | Read from source | Observed on Nextcloud 33.0.5 |
+|---|---|---|
+| per-action `timestamp` carries an offset | `…+00:00` | **`…+00:00`, all 3,022 of them** — sample `2025-08-31T22:18:51+00:00` |
+| Podsilo parses what the server emits | asserted by unit tests over fixtures | **3,022 / 3,022 parsed** by `parseGpodderTimestamp` |
+| response `timestamp` is Unix seconds | yes | `1785671472` — Unix seconds, as expected |
+
+This is the one that mattered: CLAUDE.md §11 warns that confusing the two timestamp formats **does
+not crash**, it silently breaks incremental sync in a way that looks like "sync just doesn't work".
+It is now checked against reality rather than against our own fixtures.
+
+**The `add − remove` rule is also confirmed, and it is load-bearing.** CLAUDE.md §5 specified
+`set = add − remove` precisely because the no-`since` response shape was ambiguous between "the full
+current set" and "the complete change log", and that formula is correct under either. The real
+response was **`add=8, remove=50`** — `remove` clearly carries history — so reading `add` alone
+would have been correct here only by accident.
+
+What remains unverified is unchanged: **0008 stands** (Nextcloud discards `DOWNLOAD`), because
+confirming it needs a *write*, and this probe is deliberately read-only.

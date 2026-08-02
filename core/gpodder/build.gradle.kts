@@ -11,6 +11,8 @@ plugins {
 }
 
 dependencies {
+    // The probe checks real server timestamps against the parser that lives in :core:sync.
+    testImplementation(project(":core:sync"))
     implementation(project(":core:model"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
@@ -21,4 +23,23 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+}
+
+/**
+ * A manual probe against a real Nextcloud — see `ManualNextcloudProbe.kt`. Not part of `check`, not
+ * a test, and it talks to the network, which every test in this project is forbidden from doing.
+ *
+ *   ./gradlew :core:gpodder:nextcloudProbe -Phost=cloud.example.org
+ */
+tasks.register<JavaExec>("nextcloudProbe") {
+    group = "verification"
+    description = "Runs Login Flow v2 against a real Nextcloud and lists its subscriptions. Read-only."
+    mainClass.set("net.drehtuer.podsilo.core.gpodder.ManualNextcloudProbeKt")
+    classpath = sourceSets["test"].runtimeClasspath
+    standardOutput = System.out
+    args =
+        listOfNotNull(
+            project.findProperty("host")?.toString(),
+            project.findProperty("handoff")?.toString(),
+        )
 }

@@ -44,6 +44,7 @@ below differ enormously in how well-proven they are.
 | `KeystoreAppPasswordCipher` round-trip | ❌ Never run | Needs a real device/emulator (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ❌ Never run | Needs a real `DocumentsProvider` (ADR 0011) |
 | **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`) |
+| **A real Nextcloud** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`). Read-only — nothing was written |
 
 **In short: Tier 1 is the everyday path and Tier 2 now works when you need a real device.** Tier 1 is
 where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is slow enough (≈28 s to boot,
@@ -325,8 +326,27 @@ CLAUDE.md §4 asks for a `scripts/adb-connect-host.sh` helper handling both netw
 
 ## 7. The opodsync test sync server
 
-A disposable GPodder sync server, so sync is never tested against the author's real Nextcloud
-(CLAUDE.md §4). ✅ Verified working 2026-07-31 with **opodsync 0.5.3**.
+A disposable GPodder sync server, so **automated** sync tests never touch the author's real
+Nextcloud (CLAUDE.md §4). ✅ Verified working 2026-07-31 with **opodsync 0.5.3**.
+
+### The manual probe against a real Nextcloud
+
+Separate from the above, and deliberately not a test:
+
+```bash
+./gradlew :core:gpodder:nextcloudProbe -Phost=cloud.example.org
+```
+
+It drives the **production** `RetrofitNextcloudLoginFlowClient` and `RetrofitGpodderClient` through
+Login Flow v2, prints the URL for a human to approve in a browser, polls, verifies gpoddersync, and
+then performs two `GET`s. **Read-only** — it never posts an episode action and never calls
+`subscription_change/create`. The app password stays in memory: never printed, never written to
+disk.
+
+It is a `main`, not a ``, so JUnit never collects it and CLAUDE.md §7's "deterministic and
+offline" rule is untouched. It exists because one thing the whole suite cannot prove is that the
+client works against an actual server — see `docs/decisions/0009`'s verification section for what a
+run of it settled.
 
 ```bash
 cd .devcontainer
