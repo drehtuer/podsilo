@@ -32,8 +32,13 @@ import java.time.ZoneOffset
  * The `subscription_change/create` half is structural (`GpodderClient` has no such method) and is
  * additionally asserted over the wire in `:core:gpodder`'s `RetrofitGpodderClientTest`.
  *
- * **What this cannot cover yet:** "downloads exactly zero files" needs `DownloadWorker`, which is
- * Tier 4b and does not exist. `TODO.md` flags re-running this end-to-end once it does.
+ * **Where the other halves live**, now that they exist:
+ * - "downloads exactly zero files" — `:core:download`'s `DownloadWorkerTest`, which proves the only
+ *   path to a file is an explicit per-episode enqueue that also refuses an already-terminal row.
+ * - "a refresh writes `SKIPPED` and never `QUEUED`" — `:core:feed`'s `FeedRefreshWorkerTest`.
+ *   `docs/decisions/0013` asked for that assertion *here*, which is not possible: `MarkOldEpisodesRule`
+ *   lives in `:core:feed` and an Android-free `:core:sync` cannot see it. It is asserted where the
+ *   code is, not where the ADR guessed it would be.
  */
 class NoAutoDownloadInvariantTest {
     private val fixedClock: Clock = Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneOffset.UTC)
@@ -130,6 +135,43 @@ class NoAutoDownloadInvariantTest {
             assertTrue(
                 "every row created from a remote action is terminal and already synced",
                 ledgerRepository.allRows.all { it.state == LedgerState.HANDLED_REMOTELY && it.syncedToServer },
+            )
+        }
+
+    @Test
+    fun `no sync path ever writes a QUEUED row`() =
+        runBlocking {
+            // `docs/decisions/0014` allows bulk download as a *command* and forbids it as a *rule*.
+            // QUEUED is the state that causes a file to be fetched, so "sync never writes QUEUED" is
+            // the narrow, checkable form of "no rule downloads anything". The tests above assert the
+            // stronger property for a fresh list (zero rows at all); this one holds even when there
+            // *is* remote traffic to react to.
+            val remoteActions =
+                (1..REMOTE_ACTION_COUNT).map { index ->
+                    EpisodeAction(
+                        podcast = "https://example.com/feed-1.xml",
+                        episode = "https://example.com/ep-$index.mp3",
+                        guid = "guid-$index",
+                        action = if (index % 2 == 0) EpisodeActionType.DOWNLOAD else EpisodeActionType.DELETE,
+                        timestamp = "2026-07-14T09:00:00",
+                    )
+                }
+            val ledgerRepository = FakeEpisodeLedgerRepository()
+
+            SyncOrchestrator(
+                FakeFeedRepository(),
+                ledgerRepository,
+                FakeSyncStateRepository(),
+                FakeGpodderClient(
+                    subscriptions = SubscriptionDelta(manyFeedUrls(1), emptyList(), timestamp = 100L),
+                    episodeActionsPage = EpisodeActionPage(remoteActions, timestamp = 100L),
+                ),
+                fixedClock,
+            ).sync()
+
+            assertTrue(
+                "a sync pass may mark episodes handled, but must never queue one for download",
+                ledgerRepository.allRows.none { it.state == LedgerState.QUEUED },
             )
         }
 

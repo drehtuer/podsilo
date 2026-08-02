@@ -25,6 +25,13 @@ interface DownloadTarget {
      * still there says nothing about whether it was already handled (CLAUDE.md §11's single most
      * important invariant). The ledger answers that; this only stops two different episodes
      * fighting over one name.
+     *
+     * **One caller is licensed to use it as an existence check, and only one**
+     * (`docs/decisions/0012` §4): [EpisodeDownloader]'s pre-flight duplicate guard, which runs *only*
+     * when `KEY_USER_REQUESTED` is set and the row already carries a `writtenFileName`. It asks a
+     * narrower question — "is the file *this* episode previously wrote still here?" — because the
+     * user asked for that specific file again. It never decides whether an episode is new or whether
+     * it was handled. If you find that guard and conclude the rule above was abandoned, it wasn't.
      */
     suspend fun existingNames(folder: String): Result<Set<String>>
 
