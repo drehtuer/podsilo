@@ -17,10 +17,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,6 +29,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.ArtworkSize
+import net.drehtuer.podsilo.core.ui.MaxContentWidth
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.Duration
 import java.time.Instant
 
@@ -53,20 +59,23 @@ fun PodcastListScreen(
             TopAppBar(
                 title = { Text("Podsilo") },
                 actions = {
-                    TextButton(
+                    // The app bar is the one place an icon-only control exists — the target is
+                    // conventional there and nowhere else (docs/UI.md §18).
+                    IconButton(
                         onClick = { onEvent(PodcastListEvent.ActivityClicked) },
-                        modifier =
-                            Modifier
-                                .sizeIn(minHeight = MinTouchTarget)
-                                .semantics {
-                                    contentDescription =
-                                        if (state.activityBadge) "Activity, running" else "Activity"
-                                },
-                    ) { Text(if (state.activityBadge) "Activity •" else "Activity") }
-                    TextButton(
+                        modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+                    ) {
+                        PodsiloIcon(
+                            icon = PodsiloIcons.Activity,
+                            contentDescription = if (state.activityBadge) "Activity, running" else "Activity",
+                        )
+                    }
+                    IconButton(
                         onClick = { onEvent(PodcastListEvent.SettingsClicked) },
                         modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
-                    ) { Text("Settings") }
+                    ) {
+                        PodsiloIcon(PodsiloIcons.Settings, contentDescription = "Settings")
+                    }
                 },
             )
         },
@@ -75,7 +84,7 @@ fun PodcastListScreen(
             modifier = Modifier.padding(padding).fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(modifier = Modifier.widthIn(max = PodcastMaxContentWidth)) {
+            Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
                 // Not while the checklist is up: on first run both would say "choose a folder",
                 // and the checklist says it better — with the step it belongs to. Seen on the first
                 // device run, where the two stacked.
@@ -100,9 +109,6 @@ fun PodcastListScreen(
         }
     }
 }
-
-private val PodcastMaxContentWidth = 600.dp
-internal val ArtworkSize = 56.dp
 
 @Composable
 private fun PodcastFilterChips(
@@ -212,6 +218,8 @@ private fun PodcastRow(
                         feed.undecidedCount?.let { "$it episodes to decide" } ?: "never refreshed"
                 },
         )
+        // The whole row is the tap target; this is the affordance, not a control (§18).
+        PodsiloIcon(PodsiloIcons.ChevronRight, contentDescription = null)
     }
 }
 

@@ -91,9 +91,10 @@ follows from it.
 | `:core:feed` | Android library | Wraps rssparser (docs/decisions/0005, not Stalla); fetches + parses feed XML into `Feed`/`Episode`. Hosts `FeedRefreshWorker`. |
 | `:core:gpodder` | **JVM** (converted from Android library — `docs/decisions/0007`) | Retrofit client for the three GPodder endpoints Podsilo calls; **implements** `GpodderClient` from `:core:model`. |
 | `:core:download` | Android library | Download queue (`DownloadWorker`), cache→tag→SAF-copy pipeline, WorkManager state. Depends on `:core:model`, `:core:naming`. |
-| `:feature:episodes` | Android library (Compose) | Episode list + filters + triage actions. Depends on `:core:model` (ports only); Hilt-injected ViewModel gets real repositories from `:app`'s graph. |
-| `:feature:settings` | Android library (Compose) | Credentials, folder picker, naming template editor + live preview. |
-| `:app` | Android application | Hilt wiring (binds every port to its adapter), navigation, `SyncWorker` (see below), app-level `WorkManager` scheduling. |
+| `:core:ui` | Android library (Compose) | The shared Compose vocabulary: the icon allow-list (`docs/UI.md` §18) and the spacing invariants (§17). No state, no ports, no screens — it exists so those cannot drift between modules. |
+| `:feature:episodes` | Android library (Compose) | S1 (podcast list), S2 (episode list), S3 (detail sheet) — the triage surface. Depends on `:core:model` (ports only) and `:core:ui`; view models are built by `:app`'s factory from its graph. |
+| `:feature:settings` | Android library (Compose) | S4 (settings), S5 (Nextcloud connection dialog), S6 (naming editor with a live preview over the real `NamingTemplateEngine`). |
+| `:app` | Android application | Hilt wiring (binds every port to its adapter), the `NavHost`, S7 (activity) and S8 (error log) — both cross-cutting rather than episode-list concerns — `SyncWorker` (see below), and app-level `WorkManager` scheduling. |
 
 ### Why `SyncWorker` lives in `:app`, not `:core:sync`
 
@@ -1002,10 +1003,15 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 | 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
-| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ◐ **S1–S6 built and navigable**; S7/S8 not written | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
+| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`, `:core:ui`) | ✅ done — all eight screens, navigable and icon-complete | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
 | 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
-**Everything below the UI is built and green** (479 tests, 3 skipped as of 2026-08-02), and so is
-everything the UI *binds to* — every port in `docs/UI_interface.md` §8 is implemented, not just
-declared. **S1–S6 render and are navigable**, and the app has been installed, launched and driven
-through all six on the in-container emulator. What is missing is S7 and S8. Nothing blocks them.
+**The UI is complete** (502 tests, 3 skipped as of 2026-08-02). All eight screens render, every route
+between them exists, and the app has been installed, launched and driven through all of them on the
+in-container emulator. Every port in `docs/UI_interface.md` §8 is implemented, not just declared.
+
+`:core:ui` joined the module list with the icon allow-list (`docs/UI.md` §18) and the spacing
+invariants (§17), both of which are shared by every screen and were starting to drift.
+
+What remains is not code: **nothing has ever run against a real Nextcloud**, and no episode has been
+downloaded by the running app.

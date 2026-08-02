@@ -19,6 +19,8 @@ internal object Routes {
     const val SETTINGS = "settings"
     const val CONNECT = "connect"
     const val NAMING = "naming"
+    const val ACTIVITY = "activity"
+    const val ERROR_LOG = "errorlog"
 
     const val ARG_FEED_URL = "feedUrl"
     const val ARG_EPISODE_KEY = "episodeKey"

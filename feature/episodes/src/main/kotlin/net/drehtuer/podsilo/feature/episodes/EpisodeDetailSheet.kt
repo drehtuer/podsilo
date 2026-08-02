@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.ZoneId
 
 /**

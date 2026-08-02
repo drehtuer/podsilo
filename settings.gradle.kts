@@ -25,6 +25,7 @@ rootProject.name = "podsilo"
 
 include(":app")
 include(":core:model")
+include(":core:ui")
 include(":core:database")
 include(":core:datastore")
 include(":core:feed")

@@ -20,6 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.ArtworkSize
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
  * S1's chrome and its four empty states — every condition the home screen can be in that is not a
@@ -52,6 +58,9 @@ internal fun PodcastPausedBanner(
     ) {
         // weight, and the button unwrapped: without these the message takes the whole row and the
         // action wraps to one word per line ("Choos / e / folder"), seen on the first device run.
+        // A condition the queue is in, never user input to fix — the two icons are not
+        // interchangeable (docs/UI.md §18).
+        PodsiloIcon(PodsiloIcons.Warning, contentDescription = null)
         Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         TextButton(
             onClick = { onEvent(PodcastListEvent.PausedBannerActionClicked) },
@@ -62,15 +71,18 @@ internal fun PodcastPausedBanner(
 
 @Composable
 internal fun PodcastOfflineBanner() {
-    Text(
-        text = "No network connection",
-        style = MaterialTheme.typography.bodyMedium,
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(RowPadding),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PodsiloIcon(PodsiloIcons.Offline, contentDescription = null)
+        Text("No network connection", style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable
@@ -102,6 +114,7 @@ internal fun NotConfiguredState(onEvent: (PodcastListEvent) -> Unit) {
         message = "Podsilo follows the podcast subscriptions in your Nextcloud.",
         actionLabel = "Connect Nextcloud",
         onAction = { onEvent(PodcastListEvent.ConnectNextcloudClicked) },
+        icon = PodsiloIcons.NotConfigured,
     )
 }
 
@@ -113,6 +126,7 @@ internal fun NoSubscriptionsState(onEvent: (PodcastListEvent) -> Unit) {
         message = "No subscriptions found — add feeds in Nextcloud.",
         actionLabel = "Refresh",
         onAction = { onEvent(PodcastListEvent.PullToRefresh) },
+        icon = PodsiloIcons.Empty,
     )
 }
 
@@ -121,12 +135,14 @@ internal fun CentredEmptyState(
     message: String,
     actionLabel: String,
     onAction: () -> Unit,
+    icon: Int? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(RowPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        icon?.let { PodsiloIcon(it, contentDescription = null) }
         Text(message, style = MaterialTheme.typography.bodyLarge)
         TextButton(onClick = onAction, modifier = Modifier.sizeIn(minHeight = MinTouchTarget)) {
             Text(actionLabel)

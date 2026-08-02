@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -26,6 +27,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
  * S6 (`docs/UI.md` §9). Two fields, the placeholder chips the engine actually knows, and a live
@@ -48,8 +53,8 @@ fun NamingScreen(
             TopAppBar(
                 title = { Text("File naming") },
                 navigationIcon = {
-                    TextButton(onClick = onBack, modifier = Modifier.sizeIn(minHeight = MinTouchTarget)) {
-                        Text("Back")
+                    IconButton(onClick = onBack, modifier = Modifier.sizeIn(minHeight = MinTouchTarget)) {
+                        PodsiloIcon(PodsiloIcons.Back, contentDescription = "Back")
                     }
                 },
             )

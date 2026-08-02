@@ -33,8 +33,8 @@ internal fun SettingsDestination(
             SettingsEffect.OpenConnect -> host.navController.navigate(Routes.CONNECT)
             SettingsEffect.OpenNaming -> host.navController.navigate(Routes.NAMING)
             SettingsEffect.ChooseFolder -> host.onChooseFolder()
-            SettingsEffect.OpenActivity -> host.snackbar.notBuiltYet("Activity")
-            SettingsEffect.OpenErrorLog -> host.snackbar.notBuiltYet("The error log")
+            SettingsEffect.OpenActivity -> host.navController.navigate(Routes.ACTIVITY)
+            SettingsEffect.OpenErrorLog -> host.navController.navigate(Routes.ERROR_LOG)
             is SettingsEffect.ShowMessage -> host.snackbar.showSnackbar(effect.text)
         }
     }

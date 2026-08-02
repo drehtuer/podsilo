@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
  * The first-run checklist (`docs/UI.md` §4). Steps are shown in order with a live ✓/○; step 3 is

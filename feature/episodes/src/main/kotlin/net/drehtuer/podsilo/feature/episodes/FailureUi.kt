@@ -88,7 +88,7 @@ enum class FolderState { NOT_CHOSEN, GRANTED, REVOKED }
  * a volume can be nearly full and still fit the next episode, so the honest trigger is "a download
  * already failed for space", not "space looks tight".
  */
-internal fun queueStatusFor(
+fun queueStatusFor(
     folder: FolderState,
     rows: List<EpisodeUi>,
 ): QueueStatus {

@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package net.drehtuer.podsilo.core.ui
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/**
+ * The allow-list in `docs/UI.md` §18, checked rather than trusted.
+ *
+ * Every icon resolves to a real drawable — the artifact ships `VectorDrawable` XML rather than
+ * `ImageVector`s, so a typo'd name is a `0` at runtime and an invisible icon, not a compile error.
+ * And the three distinctions §18 says "make the UI lie if used interchangeably" are asserted to be
+ * genuinely different glyphs.
+ */
+@RunWith(RobolectricTestRunner::class)
+class PodsiloIconsTest {
+    private val all =
+        mapOf(
+            "Back" to PodsiloIcons.Back,
+            "Settings" to PodsiloIcons.Settings,
+            "Activity" to PodsiloIcons.Activity,
+            "Overflow" to PodsiloIcons.Overflow,
+            "ChevronRight" to PodsiloIcons.ChevronRight,
+            "ChevronDown" to PodsiloIcons.ChevronDown,
+            "Download" to PodsiloIcons.Download,
+            "Played" to PodsiloIcons.Played,
+            "Check" to PodsiloIcons.Check,
+            "AllDone" to PodsiloIcons.AllDone,
+            "HandledRemotely" to PodsiloIcons.HandledRemotely,
+            "Close" to PodsiloIcons.Close,
+            "Unchecked" to PodsiloIcons.Unchecked,
+            "Checked" to PodsiloIcons.Checked,
+            "Warning" to PodsiloIcons.Warning,
+            "InputError" to PodsiloIcons.InputError,
+            "Syncing" to PodsiloIcons.Syncing,
+            "Waiting" to PodsiloIcons.Waiting,
+            "Offline" to PodsiloIcons.Offline,
+            "NotConfigured" to PodsiloIcons.NotConfigured,
+            "Empty" to PodsiloIcons.Empty,
+            "ErrorLog" to PodsiloIcons.ErrorLog,
+            "Copy" to PodsiloIcons.Copy,
+            "Share" to PodsiloIcons.Share,
+            "Clear" to PodsiloIcons.Clear,
+            "OpenInBrowser" to PodsiloIcons.OpenInBrowser,
+            "NoEnclosure" to PodsiloIcons.NoEnclosure,
+        )
+
+    @Test
+    fun `every icon in the allow-list resolves to a real drawable`() {
+        all.forEach { (name, id) -> assertNotEquals("$name resolved to 0", 0, id) }
+    }
+
+    @Test
+    fun `the allow-list has exactly the icons §18 names`() {
+        // 27 rows in the table. A new affordance means adding a row there before adding a glyph.
+        assertEquals(27, all.size)
+    }
+
+    @Test
+    fun `handled elsewhere is not the same tick as a download this device performed`() {
+        // §18: the user did not make that decision here, and the affordances differ (§12.6).
+        assertNotEquals(PodsiloIcons.Check, PodsiloIcons.HandledRemotely)
+    }
+
+    @Test
+    fun `a condition the queue is in is not the same icon as input the user can fix`() {
+        // Swapping them makes a typo look like a system fault and vice versa (§18).
+        assertNotEquals(PodsiloIcons.Warning, PodsiloIcons.InputError)
+    }
+
+    @Test
+    fun `every icon is distinct`() {
+        assertTrue("two names share one glyph", all.values.toSet().size == all.size)
+    }
+}

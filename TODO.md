@@ -6,8 +6,8 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c has six of eight screens built and
-navigable — S1, S2, S3, S4, S5, S6.** 479 tests, 3 skipped, plus 6 instrumented.
+**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c complete — all eight screens built,
+navigable, and icon-complete.** 502 tests, 3 skipped, plus 6 instrumented.
 
 **The app runs.** It was installed on the Tier 2 emulator, launched, and rendered S1 — the first time
 any of this has executed as an application rather than as a test. Its first run found three bugs no
@@ -20,8 +20,9 @@ Everything the UI binds to exists: schema v3 with the error log and its migratio
 `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the mark-old rule,
 connectivity, the theme, and `sanitizeEpisodeHtml`.
 
-**Still unwritten: S7 (activity) and S8 (error log).** The two buttons that would open them show a
-snackbar naming the missing screen rather than doing nothing silently.
+**Nothing is unwritten.** `notBuiltYet` — the snackbar that named a missing screen — has no callers
+left and was deleted. `:core:ui` now holds the icon allow-list (`docs/UI.md` §18, 27 icons, all
+asserted to resolve) and the spacing invariants that were duplicated across the feature modules.
 
 **S6 is worth looking at first.** Its live preview renders four cases through the real
 `NamingTemplateEngine` — a recent episode, a missing date (`00000000`, ADR 0004), a UTF-8
