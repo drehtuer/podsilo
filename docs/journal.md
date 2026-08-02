@@ -1558,3 +1558,73 @@ tests green on the emulator; the app installed, launched, and rendered S1 with n
 **Still true:** S4–S8 do not exist, so the buttons that would open them show a snackbar naming the
 missing screen. Nothing has been tested against a real Nextcloud, and no episode has ever been
 downloaded by the running app.
+
+---
+
+## 2026-08-02 (late) — `:feature:settings`: S4, S5, S6, and the app is usable end to end
+
+**Attempted:** the whole settings module. S4 (settings), S5 (the Nextcloud connection dialog) and
+S6 (the naming editor), wired into the NavHost, then run on the emulator.
+
+### The screen that pays for itself
+
+S6's live preview is the best thing in this change, and it cost almost nothing because
+`:core:naming` was already built and exhaustively tested. On the device it renders:
+
+```
+A recent episode     Der Podcast/20260714_Warum Hamburg immer regnet.mp3
+No publication date  Der Podcast/00000000_Folge ohne Datum.mp3
+A very long title    Der Podcast/20260714_Über Über … Über Üb.mp3
+Awkward characters   Der Podcast/20260714_Ep 3_4_ _Regen_ _live_ _ CON.mp3
+```
+
+Four lines that demonstrate four rules the author would otherwise have to take on trust: ADR 0004's
+`00000000` for a missing date, UTF-8 **byte**-budgeted truncation (note it stops at `Üb` — mid-word,
+not mid-character), and FAT32 sanitisation. The editor contains none of that logic; it calls the
+same `resolve()` a download calls, which is exactly why the preview is worth believing.
+
+**That is the argument for building the cheap screen next to the expensive module**, and it
+generalises: a preview is only meaningful when it is the production code path.
+
+### One rule, three places, one implementation
+
+`SwipeMapping.with()` already encoded "the two directions can't hold the same action, so assigning
+a taken one *swaps* rather than rejects". S4's dropdowns just delegate to it. The temptation was to
+validate in the view model — and the reason not to is that the swipe *background* renders from the
+same mapping, so a rule enforced anywhere but the type would need a defensive branch in the row too.
+
+### What the first device run found this time
+
+Only one, and a small one: the five *older than* chips overflowed a phone's width and the last
+wrapped to one letter per line. `FlowRow` instead of `Row`. Two sessions ago I would have shipped
+it; now the emulator run is part of finishing, which is the process change that stuck.
+
+Worth recording that the ratio is improving: the first launch found three bugs, this one found one.
+
+### detekt, five findings, all real
+
+Two file splits (`SettingsRows`, the naming screen's preview and chip sections), one dead
+`unusedFlow` left over from an earlier draft, and a rethrown `CancellationException` I had added out
+of habit — the client's contract is that a cancelled poll simply stops asking, so catching it to
+rethrow it was noise pretending to be care. The one suppression is `ReturnCount` on `connect()`,
+where the three early returns *are* the rule: three ways to stop without storing anything.
+
+### The order in S5 is the whole feature
+
+```
+start flow → open browser → poll → verify gpoddersync → only now store
+```
+
+Success is claimed **only** after the authenticated `GET /subscriptions` returns 200. A completed
+login flow proves the server is a Nextcloud and the password works; it says nothing about
+gpoddersync being installed, and connecting to a Nextcloud without it leaves an app that silently
+syncs nothing. The test that asserts the app password is discarded in that case is the most
+valuable one in the module — and there is a matching Compose test asserting the dialog has no
+password or username field at all, which is the shape of guarantee that survives refactoring.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 479 tests, 3 skipped; six instrumented
+tests green; S1 → S4 → S5 and S4 → S6 all navigated on the emulator with no crash.
+
+**Still true:** nothing has been tested against a real Nextcloud — S5 has never completed a real
+login flow, only a scripted fake. S7 and S8 do not exist, so *Activity* and *Error log* still show
+a snackbar saying so.

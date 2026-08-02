@@ -6,8 +6,8 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c has S1, S2 and S3 built and navigable.**
-**437 tests, 3 skipped, plus 6 instrumented.**
+**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c has six of eight screens built and
+navigable — S1, S2, S3, S4, S5, S6.** 479 tests, 3 skipped, plus 6 instrumented.
 
 **The app runs.** It was installed on the Tier 2 emulator, launched, and rendered S1 — the first time
 any of this has executed as an application rather than as a test. Its first run found three bugs no
@@ -20,9 +20,13 @@ Everything the UI binds to exists: schema v3 with the error log and its migratio
 `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the mark-old rule,
 connectivity, the theme, and `sanitizeEpisodeHtml`.
 
-**Still unwritten: S4–S8** (settings, the connection dialog, the naming editor, activity, the error
-log). The buttons that would open them show a snackbar naming the missing screen rather than doing
-nothing silently.
+**Still unwritten: S7 (activity) and S8 (error log).** The two buttons that would open them show a
+snackbar naming the missing screen rather than doing nothing silently.
+
+**S6 is worth looking at first.** Its live preview renders four cases through the real
+`NamingTemplateEngine` — a recent episode, a missing date (`00000000`, ADR 0004), a UTF-8
+byte-truncated over-long title, and FAT32 sanitisation — so the templates are verifiable at a
+glance rather than on trust.
 
 Each tier's completion note below is kept as written at the time, in build order.
 
@@ -196,6 +200,9 @@ was the service locator CLAUDE.md §3 forbids.
 
 ### 4c. Compose UI (Tier 2 emulator works; see `docs/dev-environment.md` §6)
 
+**Update (2026-08-02, later): six of eight screens.** `:feature:settings` adds S4, S5 and S6, all
+reachable from S1's gear. Only S7 (activity) and S8 (error log) remain.
+
 **Update (2026-08-02): S1, S2 and S3 are built and navigable, and the app runs.** Each screen
 renders its view model's state and emits events, deciding nothing locally. `:app` has a `NavHost`
 (S1 → S2 → S3), the SAF picker, and link opening. Compose tests run under Robolectric as Tier 1;
@@ -262,9 +269,13 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
   installed.
 - [x] **`FeedRefreshWorker`** — a `KEY_FEED_URL` input so S2's pull-to-refresh can scope to one feed.
   Same worker, not a second one.
-- [ ] **`:feature:settings`** — S4 (settings), S5 (Nextcloud connection dialog), S6 (naming editor
-  with live preview over the already-tested `resolve()`). **Not started.** Every port it needs now
-  exists, including `NextcloudLoginFlowClient` and the four persisted settings values.
+- [x] **`:feature:settings`** — S4, S5 and S6, **built** (42 tests). Every control commits on change;
+  the one exception is the bulk *mark as played*, which goes through the mandatory preview
+  (`docs/decisions/0013`) because it reaches the shared action log and cannot be undone in bulk.
+  S5 is Login Flow v2 only — no password field exists in the module, and a Compose test asserts it.
+  Its step order is the feature: success is claimed only after the authenticated `GET /subscriptions`
+  returns 200, and the app password is discarded on any earlier failure. S6 owns no naming logic at
+  all; every preview line calls the same `resolve()` a download calls.
 - [~] **`:feature:episodes`** — S1 (podcast list), S2 (episode list), S3 (detail sheet). **S1 belongs
   here, not in `:app`:** it shares the ledger query and the `EpisodeUi` projection with S2, and a
   badge that disagrees with the list it opens is exactly the bug co-location prevents.
@@ -290,7 +301,7 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
   `PodsiloTheme` (one seed, two schemes, **dynamic colour off**) applied at the root from the
   persisted preference, `AndroidConnectivityMonitor`, and `WorkScheduler`'s additions
   (`userRequested` downloads, per-feed refresh, bulk enqueue, work observation).
-  **Navigation is done**: `PodsiloNavHost` (S1 → S2 → S3), `EpisodeViewModelFactory`, the five
+  **Navigation is done**: `PodsiloNavHost` (S1 → S2 → S3, S1 → S4 → S5/S6), `EpisodeViewModelFactory`, the five
   screen-facing adapters (`WorkEpisodeScheduler`, which suspends until a refresh finishes rather
   than returning at enqueue time; folder status, folder label, free space, naming preview), the SAF
   picker and link opening. **Still to do: S7 (activity) + S8 (error log)** — the events that would

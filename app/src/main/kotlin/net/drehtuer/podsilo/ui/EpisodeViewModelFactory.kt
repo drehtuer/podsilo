@@ -9,13 +9,19 @@ import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
+import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.feature.episodes.EpisodeDetailViewModel
 import net.drehtuer.podsilo.feature.episodes.EpisodeListViewModel
 import net.drehtuer.podsilo.feature.episodes.PodcastListViewModel
 import net.drehtuer.podsilo.feature.episodes.TriageWriter
+import net.drehtuer.podsilo.feature.settings.ConnectSyncTrigger
+import net.drehtuer.podsilo.feature.settings.ConnectViewModel
+import net.drehtuer.podsilo.feature.settings.NamingViewModel
+import net.drehtuer.podsilo.feature.settings.SettingsViewModel
 import java.time.Clock
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -43,6 +49,13 @@ class EpisodeViewModelFactory
         private val folderLabel: DocumentFolderLabel,
         private val namingPreview: TemplateNamingPreview,
         private val clock: Clock,
+        private val settingsFolderStatus: SettingsFolderStatusAdapter,
+        private val settingsCounts: SettingsCountsAdapter,
+        private val syncStatus: SyncStatusAdapter,
+        private val namingSample: NamingSampleSourceAdapter,
+        private val loginFlowClient: NextcloudLoginFlowClient,
+        private val syncTrigger: ConnectSyncTrigger,
+        @Named("appVersion") private val appVersion: String,
     ) {
         fun podcastList(): ViewModelProvider.Factory =
             factory {
@@ -86,6 +99,27 @@ class EpisodeViewModelFactory
                     folderLabel = folderLabel,
                 )
             }
+
+        fun settings(): ViewModelProvider.Factory =
+            factory {
+                SettingsViewModel(
+                    settingsRepository = settingsRepository,
+                    ledgerRepository = ledgerRepository,
+                    listRepository = listRepository,
+                    feedRepository = feedRepository,
+                    folderStatus = settingsFolderStatus,
+                    counts = settingsCounts,
+                    namingSummary = { namingPreview.render(it) },
+                    syncStatus = syncStatus,
+                    clock = clock,
+                    version = appVersion,
+                )
+            }
+
+        fun connect(): ViewModelProvider.Factory =
+            factory { ConnectViewModel(loginFlowClient, settingsRepository, syncTrigger) }
+
+        fun naming(): ViewModelProvider.Factory = factory { NamingViewModel(settingsRepository, namingSample) }
 
         /**
          * A fresh instance per view model, which is fine — it is stateless. Sharing the *class* is
