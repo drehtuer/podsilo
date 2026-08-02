@@ -12,11 +12,13 @@ import dagger.hilt.components.SingletonComponent
 import net.drehtuer.podsilo.core.database.PODSILO_MIGRATIONS
 import net.drehtuer.podsilo.core.database.PodsiloDatabase
 import net.drehtuer.podsilo.core.database.repository.EpisodeLedgerRepositoryImpl
+import net.drehtuer.podsilo.core.database.repository.EpisodeListRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.EpisodeRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.FeedRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.LogRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.SyncStateRepositoryImpl
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.LogRepository
@@ -59,7 +61,12 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideEpisodeLedgerRepository(database: PodsiloDatabase): EpisodeLedgerRepository =
-        EpisodeLedgerRepositoryImpl(database.episodeLedgerDao(), database.episodeListDao())
+        EpisodeLedgerRepositoryImpl(database.episodeLedgerDao())
+
+    @Provides
+    @Singleton
+    fun provideEpisodeListRepository(database: PodsiloDatabase): EpisodeListRepository =
+        EpisodeListRepositoryImpl(database.episodeListDao())
 
     @Provides
     @Singleton

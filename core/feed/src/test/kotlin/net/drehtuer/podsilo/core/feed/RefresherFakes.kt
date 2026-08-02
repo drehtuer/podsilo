@@ -10,6 +10,7 @@ import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 import net.drehtuer.podsilo.core.model.port.LogCategory
@@ -31,7 +32,8 @@ import net.drehtuer.podsilo.core.model.port.ThemePreference
  */
 class RecordingLedgerRepository(
     private val undecided: MutableList<Episode> = mutableListOf(),
-) : EpisodeLedgerRepository {
+) : EpisodeLedgerRepository,
+    EpisodeListRepository {
     val writes = mutableListOf<EpisodeLedgerRow>()
 
     /** Scopes the fake was asked about, so a test can pin *which* cutoff the rule used. */
@@ -47,6 +49,10 @@ class RecordingLedgerRepository(
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
     override suspend fun get(episodeKey: String): EpisodeLedgerRow? = writes.lastOrNull { it.episodeKey == episodeKey }
+
+    override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = MutableStateFlow(null)
+
+    override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> = MutableStateFlow(emptyList())
 
     override suspend fun upsert(row: EpisodeLedgerRow) {
         writes += row

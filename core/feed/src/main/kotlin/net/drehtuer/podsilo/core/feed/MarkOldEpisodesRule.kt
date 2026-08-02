@@ -9,6 +9,7 @@ import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import java.time.Clock
@@ -35,6 +36,7 @@ private const val MILLIS_PER_SECOND = 1_000
  */
 class MarkOldEpisodesRule(
     private val ledgerRepository: EpisodeLedgerRepository,
+    private val listRepository: EpisodeListRepository,
     private val settingsRepository: SettingsRepository,
     private val clock: Clock,
     private val zone: ZoneId = ZoneId.systemDefault(),
@@ -49,7 +51,7 @@ class MarkOldEpisodesRule(
                 ?.cutoffMillis(clock.instant(), zone)
                 ?: return 0
 
-        val stale = ledgerRepository.undecided(BulkScope(kind = BulkScopeKind.OLDER_THAN, olderThanMillis = cutoff))
+        val stale = listRepository.undecided(BulkScope(kind = BulkScopeKind.OLDER_THAN, olderThanMillis = cutoff))
         if (stale.isEmpty()) return 0
 
         val now = clock.millis()

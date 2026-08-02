@@ -20,6 +20,17 @@ interface EpisodeRepository {
      */
     suspend fun get(episodeKey: String): Episode?
 
+    /**
+     * The newest `pubDate` per feed, for S1's ordering. Feeds with no dated episode are absent from
+     * the map rather than present with a zero — "never fetched" sorts last, and a fabricated date
+     * would sort it as ancient instead (`docs/UI.md` §4).
+     *
+     * Deliberately `suspend` and not a [Flow]: S1's order is frozen between explicit refreshes, so
+     * observing this would be the exact bug that rule exists to prevent — rows moving under the
+     * user's finger (`docs/UI_interface.md` §2).
+     */
+    suspend fun latestPublicationByFeed(): Map<String, Long>
+
     suspend fun replaceForFeed(
         feedUrl: String,
         episodes: List<Episode>,

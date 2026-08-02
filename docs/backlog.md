@@ -22,6 +22,12 @@ noted here before that date was instead either built, declined in conversation, 
 - **Paging 3 for the episode list.** CLAUDE.md §3/§5 mandate it for long lists; the UI contract
   currently says "paging or a keyed `LazyColumn`" (`docs/UI_interface.md` §14.3). A 500-episode feed
   under the `All` filter is the case that decides it — measure before adding the dependency.
+- **Split `EpisodeLedgerRepository` into two ports.** It now carries eleven methods covering two
+  roles: the ledger and its outbox, and the UI-facing episode queries (`observeEpisodes`,
+  `observeUndecidedCounts`, `previewUndecided`, `undecided`). The DAOs were already split along that
+  line for the same reason. detekt flags the Room implementation's function count, suppressed there
+  with this note, because splitting the *port* touches `:core:sync`, `:core:download` and
+  `:feature:episodes` and does not belong inside a UI change.
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.

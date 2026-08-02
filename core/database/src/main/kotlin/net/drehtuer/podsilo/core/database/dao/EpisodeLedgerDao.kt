@@ -32,6 +32,10 @@ interface EpisodeLedgerDao {
     @Query("SELECT * FROM episode_ledger WHERE episodeKey = :episodeKey")
     suspend fun get(episodeKey: String): EpisodeLedgerEntity?
 
+    /** [get]'s live twin, for a detail sheet that stays open while the download it started runs. */
+    @Query("SELECT * FROM episode_ledger WHERE episodeKey = :episodeKey")
+    fun observeRow(episodeKey: String): Flow<EpisodeLedgerEntity?>
+
     /** The outbox drain query (CLAUDE.md §5). */
     @Query("SELECT * FROM episode_ledger WHERE syncedToServer = 0")
     suspend fun getUnsynced(): List<EpisodeLedgerEntity>

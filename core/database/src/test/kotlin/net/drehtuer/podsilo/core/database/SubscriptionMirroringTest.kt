@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.core.database
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.drehtuer.podsilo.core.database.repository.EpisodeLedgerRepositoryImpl
+import net.drehtuer.podsilo.core.database.repository.EpisodeListRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.EpisodeRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.FeedRepositoryImpl
 import net.drehtuer.podsilo.core.model.LedgerState
@@ -24,7 +25,8 @@ import org.junit.Test
 class SubscriptionMirroringTest : RoomTestBase() {
     private val feeds by lazy { FeedRepositoryImpl(db.feedDao()) }
     private val episodes by lazy { EpisodeRepositoryImpl(db.episodeDao()) }
-    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao(), db.episodeListDao()) }
+    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao()) }
+    private val list by lazy { EpisodeListRepositoryImpl(db.episodeListDao()) }
 
     @Test
     fun `feed removed then re-added keeps the ledger, so the episode never returns as new`() =
@@ -44,10 +46,10 @@ class SubscriptionMirroringTest : RoomTestBase() {
             episodes.replaceForFeed("f", listOf(episode("e", "f", pubDate = 100)))
 
             // The episode must NOT show up as new — its ledger row still marks it handled.
-            val new = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
+            val new = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
             assertTrue("re-subscribed episode must not reappear as new", new.none { it.episode.episodeKey == "e" })
 
-            val downloaded = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.DOWNLOADED)).first()
+            val downloaded = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.DOWNLOADED)).first()
             assertEquals(listOf("e"), downloaded.map { it.episode.episodeKey })
         }
 }

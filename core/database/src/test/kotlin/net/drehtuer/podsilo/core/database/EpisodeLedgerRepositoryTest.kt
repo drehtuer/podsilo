@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.core.database
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.drehtuer.podsilo.core.database.repository.EpisodeLedgerRepositoryImpl
+import net.drehtuer.podsilo.core.database.repository.EpisodeListRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.EpisodeRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.FeedRepositoryImpl
 import net.drehtuer.podsilo.core.model.LedgerState
@@ -18,7 +19,8 @@ import org.junit.Test
 class EpisodeLedgerRepositoryTest : RoomTestBase() {
     private val feeds by lazy { FeedRepositoryImpl(db.feedDao()) }
     private val episodes by lazy { EpisodeRepositoryImpl(db.episodeDao()) }
-    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao(), db.episodeListDao()) }
+    private val ledger by lazy { EpisodeLedgerRepositoryImpl(db.episodeLedgerDao()) }
+    private val list by lazy { EpisodeListRepositoryImpl(db.episodeListDao()) }
 
     @Test
     fun `get is the durable already-handled lookup and outlives the episode row`() =
@@ -86,7 +88,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
             // "handled" has an action, so it is not new.
             ledger.upsert(ledgerRow("handled", "f", LedgerState.DOWNLOADED))
 
-            val new = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
+            val new = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
 
             assertEquals(setOf("recent", "undated"), new.map { it.episode.episodeKey }.toSet())
             assertTrue("NEW items carry no ledger row", new.all { it.ledger == null })
@@ -108,7 +110,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
                 ),
             )
 
-            val new = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
+            val new = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
 
             assertEquals(setOf("recent", "backlog"), new.map { it.episode.episodeKey }.toSet())
         }
@@ -120,7 +122,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
             episodes.replaceForFeed("f", listOf(episode("e", "f", title = "Episode E")))
             ledger.upsert(ledgerRow("e", "f", LedgerState.DOWNLOADED))
 
-            val items = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.DOWNLOADED)).first()
+            val items = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.DOWNLOADED)).first()
 
             assertEquals(1, items.size)
             assertEquals("Episode E", items.single().episode.title)
@@ -134,7 +136,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
             episodes.replaceForFeed("f", listOf(episode("new", "f"), episode("done", "f")))
             ledger.upsert(ledgerRow("done", "f", LedgerState.DOWNLOADED))
 
-            val items = ledger.observeEpisodes(LedgerFilter(state = LedgerFilterState.ALL)).first()
+            val items = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.ALL)).first()
 
             assertEquals(setOf("new", "done"), items.map { it.episode.episodeKey }.toSet())
             assertNull(items.single { it.episode.episodeKey == "new" }.ledger)
@@ -149,7 +151,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
             episodes.replaceForFeed("f2", listOf(episode("b", "f2")))
 
             val onlyF1 =
-                ledger
+                list
                     .observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW, feedUrl = "f1"))
                     .first()
 

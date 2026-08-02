@@ -19,6 +19,12 @@ class EpisodeRepositoryImpl(
 
     override suspend fun get(episodeKey: String): Episode? = episodeDao.get(episodeKey)?.toDomain()
 
+    override suspend fun latestPublicationByFeed(): Map<String, Long> =
+        episodeDao
+            .latestPublicationByFeed()
+            .mapNotNull { row -> row.latest?.let { row.feedUrl to it } }
+            .toMap()
+
     override suspend fun replaceForFeed(
         feedUrl: String,
         episodes: List<Episode>,
