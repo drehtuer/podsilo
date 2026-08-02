@@ -3,7 +3,10 @@
 package net.drehtuer.podsilo.core.gpodder
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -46,9 +49,10 @@ class RetrofitNextcloudLoginFlowClient(
     private val httpClient: OkHttpClient = OkHttpClient(),
     private val pollInterval: Duration = 3.seconds,
     private val maxPollAttempts: Int = MAX_POLL_ATTEMPTS,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : NextcloudLoginFlowClient {
     override suspend fun start(baseUrl: String): Result<LoginFlow> =
-        runCatchingRequest {
+        runCatchingRequest(ioDispatcher) {
             val root =
                 baseUrl.normalisedRoot()
                     ?: throw LoginFlowException(LoginFlowFailure.NOT_NEXTCLOUD, "'$baseUrl' is not a usable address")
@@ -82,7 +86,7 @@ class RetrofitNextcloudLoginFlowClient(
         }
 
     override suspend fun poll(flow: LoginFlow): Result<LoginResult> =
-        runCatchingRequest {
+        runCatchingRequest(ioDispatcher) {
             repeat(maxPollAttempts) {
                 val request =
                     Request
@@ -115,7 +119,7 @@ class RetrofitNextcloudLoginFlowClient(
         }
 
     override suspend fun verifyGpodderSync(credentials: NextcloudCredentials): Result<Unit> =
-        runCatchingRequest {
+        runCatchingRequest(ioDispatcher) {
             val root =
                 credentials.serverUrl.normalisedRoot()
                     ?: throw LoginFlowException(LoginFlowFailure.NOT_NEXTCLOUD, "unusable server URL")
@@ -176,18 +180,32 @@ internal fun String.normalisedRoot(): HttpUrl? {
     return withScheme.trimEnd('/').plus("/").toHttpUrlOrNull()
 }
 
-private inline fun <T> runCatchingRequest(block: () -> T): Result<T> =
-    try {
-        Result.success(block())
-    } catch (cancellation: CancellationException) {
-        throw cancellation
-    } catch (typed: LoginFlowException) {
-        Result.failure(typed)
-    } catch (tls: javax.net.ssl.SSLException) {
-        Result.failure(LoginFlowException(LoginFlowFailure.TLS, tls.message ?: "the certificate isn't trusted"))
-    } catch (io: IOException) {
-        // DNS failure, connection refused, timeout — all "can't reach that address" to the user.
-        Result.failure(LoginFlowException(LoginFlowFailure.UNREACHABLE, io.message ?: "could not reach the server"))
+/**
+ * Runs [block] **off the calling thread**, then maps what it throws onto a [LoginFlowFailure].
+ *
+ * The `withContext` is not tidiness. `OkHttpClient.execute()` blocks, these are `suspend` functions,
+ * and `viewModelScope.launch` runs on `Dispatchers.Main.immediate` — so without it, S5 tapping
+ * *Request authorization* performs a DNS lookup on the main thread and Android's StrictMode kills the
+ * app with `NetworkOnMainThreadException`. Every JVM test passed regardless, because a JVM has no
+ * main-thread policy (CLAUDE.md §8: no blocking calls on the main dispatcher, inject the dispatcher).
+ */
+private suspend fun <T> runCatchingRequest(
+    dispatcher: CoroutineDispatcher,
+    block: suspend () -> T,
+): Result<T> =
+    withContext(dispatcher) {
+        try {
+            Result.success(block())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (typed: LoginFlowException) {
+            Result.failure(typed)
+        } catch (tls: javax.net.ssl.SSLException) {
+            Result.failure(LoginFlowException(LoginFlowFailure.TLS, tls.message ?: "the certificate isn't trusted"))
+        } catch (io: IOException) {
+            // DNS failure, connection refused, timeout — all "can't reach that address" to the user.
+            Result.failure(LoginFlowException(LoginFlowFailure.UNREACHABLE, io.message ?: "could not reach the server"))
+        }
     }
 
 @Serializable
