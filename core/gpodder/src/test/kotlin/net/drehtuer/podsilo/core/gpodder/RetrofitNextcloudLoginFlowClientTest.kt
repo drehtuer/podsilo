@@ -4,6 +4,8 @@ package net.drehtuer.podsilo.core.gpodder
 
 import kotlinx.coroutines.test.runTest
 import net.drehtuer.podsilo.core.model.port.LoginFlow
+import net.drehtuer.podsilo.core.model.port.LoginFlowException
+import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer

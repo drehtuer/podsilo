@@ -68,3 +68,20 @@ data class LoginResult(
     val credentials: NextcloudCredentials
         get() = NextcloudCredentials(serverUrl = serverUrl, username = loginName, appPassword = appPassword)
 }
+
+/**
+ * Why a login attempt failed, in the vocabulary S5 renders (`docs/UI.md` §8).
+ *
+ * **Distinguishing these is the whole point.** "Check the spelling and your network" and "this
+ * Nextcloud has no GPodder Sync app installed" are different problems with different fixes, and a
+ * single "login failed" hides both. It lives on the port rather than beside the Retrofit
+ * implementation because the *kind* of failure is part of the contract the UI binds to — a caller
+ * that cannot tell them apart can only ever show one message, which is the bug this prevents.
+ */
+enum class LoginFlowFailure { UNREACHABLE, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
+
+/** Carries a [LoginFlowFailure] out through `Result.failure`. **Never contains a credential.** */
+class LoginFlowException(
+    val failure: LoginFlowFailure,
+    message: String,
+) : Exception(message)

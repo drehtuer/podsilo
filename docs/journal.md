@@ -1700,3 +1700,75 @@ callers left and was deleted.
 sync path is exercised by `MockWebServer` and `opodsync`; S5 has never completed a real login flow;
 no episode has been downloaded by the running app. That is the next thing worth doing, and it is
 not a coding task.
+
+---
+
+## 2026-08-02 (late night) — the first real Nextcloud, and the bug that found itself
+
+**Attempted:** connect to the author's own Nextcloud and read their subscriptions. Everything in
+this project had, until now, only ever talked to `MockWebServer` and opodsync.
+
+### The typo that exposed a real bug
+
+The first address given was `cloud.drehtuer.de`; the instance is at `cloud.drehtuer.**net**`. Our
+client reported it correctly —
+
+```
+✗ start failed: cloud.drehtuer.de: Name or service not known
+```
+
+— but **S5 would not have.** `ConnectViewModel` was doing this at all three steps:
+
+```kotlin
+loginFlowClient.start(baseUrl).getOrElse { return fail(ConnectError.NOT_NEXTCLOUD) }
+```
+
+The client types its failures (`UNREACHABLE`, `TLS`, `NOT_NEXTCLOUD`, …) and the view model threw
+every one of them away. A mistyped host would have said *"This doesn't look like a Nextcloud
+server"* — sending the author to check their server instead of their spelling, which is exactly the
+confusion `docs/UI.md` §8's message table was written to prevent.
+
+`LoginFlowFailure` lived next to the Retrofit implementation, so `:feature:settings` could not see
+it. It belongs on the port: **the kind of failure is part of the contract the UI binds to**, and a
+caller that cannot tell the cases apart can only ever show one message. Moved to `:core:model`,
+mapped through in S5, three tests.
+
+**Worth sitting with:** I wrote that `getOrElse` block, and I wrote the ADR that says these must be
+distinguishable, and I wrote the Compose test asserting each `ConnectError` has its own sentence —
+which passed, because it tested the mapping from error to string and never the mapping from failure
+to error. The bug lived in the seam between two things I had each tested. It took *one wrong
+character in a hostname* to surface it.
+
+### What the real server settled
+
+Two things the docs explicitly flagged as unverified:
+
+- **`add − remove` is load-bearing.** CLAUDE.md §5 specified that formula because the no-`since`
+  response was ambiguous between "current set" and "complete change log", and it is correct under
+  either. The real response: **`add=8, remove=50`**. `remove` carries history. Reading `add` alone
+  would have been right here only by accident.
+- **The timestamp format is `+00:00`, and all 3,022 of them parse.** ADR 0009 predicted this from
+  reading the `nextcloud-gpodder` source. CLAUDE.md §11 calls this the failure that *does not
+  crash* — it silently breaks incremental sync. Now checked against reality rather than our own
+  fixtures.
+
+And one thing nobody had asked: **3,005 of the 3,022 actions are `PLAY`**. The author's backlog is
+already triaged elsewhere, so the "5,000-row New tab" hazard that shaped ADR 0013 will not
+materialise on their data. The design is still right; the pressure behind it was lower than assumed.
+
+### The probe is a `main`, not a test
+
+`./gradlew :core:gpodder:nextcloudProbe -Phost=…` runs the production classes, prints a URL for a
+human to approve, and does two `GET`s. Read-only by construction: it cannot post an episode action
+because it never calls the method. The app password stays in memory — never printed, never written.
+JUnit never collects it, so §7's offline rule is untouched.
+
+Building it before knowing whether the host was reachable was the right call: the DNS failure came
+back through *our* error path, which is how the S5 bug appeared at all.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 505 tests, 3 skipped; two live runs
+against Nextcloud 33.0.5, both read-only, nothing written.
+
+**Still true:** `SafDownloadTarget` and `KeystoreAppPasswordCipher` have never executed, no episode
+has been downloaded by the running app, and ADR 0008 (Nextcloud discards `DOWNLOAD`) stays
+source-read-only — confirming it needs a *write*, which this probe deliberately cannot do.

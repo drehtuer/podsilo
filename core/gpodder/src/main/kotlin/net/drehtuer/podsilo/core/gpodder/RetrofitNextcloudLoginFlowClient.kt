@@ -8,6 +8,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.drehtuer.podsilo.core.model.port.LoginFlow
+import net.drehtuer.podsilo.core.model.port.LoginFlowException
+import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.LoginResult
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
@@ -147,19 +149,6 @@ class RetrofitNextcloudLoginFlowClient(
         private const val USER_AGENT = "Podsilo"
     }
 }
-
-/**
- * Why a login attempt failed, in the vocabulary S5 renders (`docs/UI.md` §8). Distinguishing these
- * is the whole point: "check the spelling" and "this Nextcloud has no GPodder Sync app" are
- * different problems with different fixes, and a single "login failed" would hide both.
- */
-enum class LoginFlowFailure { UNREACHABLE, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
-
-/** Carries a [LoginFlowFailure] out through `Result.failure`. Never contains a credential. */
-class LoginFlowException(
-    val failure: LoginFlowFailure,
-    message: String,
-) : Exception(message)
 
 /**
  * Accepts what a person actually types: a bare host, an explicit scheme, or a subdirectory install

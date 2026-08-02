@@ -9,6 +9,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import net.drehtuer.podsilo.core.model.port.LoginFlowException
+import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -102,6 +104,40 @@ class ConnectViewModelTest {
         assertEquals(ConnectError.UNREACHABLE, hostProblem("cloud example org"))
         assertNull(hostProblem("cloud.example.org"))
         assertNull("a subdirectory install is legal", hostProblem("example.org/nextcloud"))
+    }
+
+    @Test
+    fun `an address that does not resolve says check the spelling, not "not a Nextcloud"`() =
+        runTest {
+            // Found by running the manual probe against a host with no DNS record: every start
+            // failure used to collapse into NOT_NEXTCLOUD, which sends the user to check their
+            // server instead of their typing (docs/UI.md §8's table exists to prevent exactly this).
+            client.startResult =
+                Result.failure(LoginFlowException(LoginFlowFailure.UNREACHABLE, "Name or service not known"))
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.onEvent(ConnectEvent.Submit)
+
+            assertEquals(ConnectError.UNREACHABLE, viewModel.state.value.inlineError)
+        }
+
+    @Test
+    fun `an untrusted certificate says so rather than blaming the address`() =
+        runTest {
+            client.startResult = Result.failure(LoginFlowException(LoginFlowFailure.TLS, "cert"))
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.onEvent(ConnectEvent.Submit)
+
+            assertEquals(ConnectError.TLS, viewModel.state.value.inlineError)
+        }
+
+    @Test
+    fun `an untyped failure still degrades to the step's most likely cause`() {
+        assertEquals(ConnectError.NOT_NEXTCLOUD, IllegalStateException("?").asConnectError(ConnectError.NOT_NEXTCLOUD))
+        assertEquals(ConnectError.ABANDONED, IllegalStateException("?").asConnectError(ConnectError.ABANDONED))
     }
 
     @Test
