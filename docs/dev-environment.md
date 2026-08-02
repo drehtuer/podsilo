@@ -32,23 +32,23 @@ below differ enormously in how well-proven they are.
 | Dev container builds and starts | ✅ Verified | Repeatedly, incl. 2026-07-31 |
 | Android SDK provisioning (`post-create.sh`) | ✅ Verified | Idempotent, installs into the named volume |
 | Portability across hosts with different UID/GID | ✅ Verified | 2026-07-31: second machine, uid 1002 / docker gid 108 — see [§4](#4-host-uidgid-portability) |
-| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-01, after Tier 4c's foundations: 339 tests, 3 skipped, exit 0 |
+| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-02, after Tier 4c's S2 screen: 386 tests, 3 skipped, exit 0 |
 | `./gradlew assembleDebug` | ✅ Verified | 29 MB debug APK |
 | opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green (3 tests, 0 skipped) |
 | `docker` from inside the container | ✅ Verified | Host daemon, group aligned at runtime by `post-create.sh` |
 | `gh` (GitHub CLI) | ✅ Verified | 2.97.0, upstream release tarball |
 | `/dev/kvm` usable in-container | ✅ Verified | `emulator -accel-check` → "KVM (version 12) is installed and usable" |
-| **Tier 2 — emulator booting in-container** | ❌ **Never run** | No AVD has ever booted; see [§6](#6-testing-tiers) |
-| **Tier 2 — `connectedAndroidTest`** | ❌ **Never run** | Follows from the above |
+| **Tier 2 — emulator booting in-container** | ✅ **Verified** | 2026-08-02: `scripts/emulator-start.sh` creates + boots `podsilo-ci` headless in ~28 s from nothing |
+| **Tier 2 — `connectedAndroidTest`** | ✅ **Verified** | 2026-08-02: `:feature:episodes:connectedDebugAndroidTest`, 2 tests green on `podsilo-ci(AVD) - 15` |
 | **Tier 3 — adb over TCP to a Windows emulator** | ❌ **Never run** | No `scripts/adb-connect-host.sh` exists |
 | `KeystoreAppPasswordCipher` round-trip | ❌ Never run | Needs a real device/emulator (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ❌ Never run | Needs a real `DocumentsProvider` (ADR 0011) |
 | The app actually running on a device | ❌ Never run | Tier 4b builds an APK; nothing has installed or launched it |
 
-**In short: Tier 1 is the supported path today.** It is also where CLAUDE.md §4 says the majority of
-tests must live, so this is not as limiting as it sounds — but do not assume Tiers 2 and 3 work
-because they are described here. They are described because they are specified, not because they
-have been proven.
+**In short: Tier 1 is the everyday path and Tier 2 now works when you need a real device.** Tier 1 is
+where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is slow enough (≈28 s to boot,
+minutes per run) that it should stay reserved for what genuinely cannot run headless. **Tier 3 is
+still unproven** — it is described because it is specified, not because it has been run.
 
 ---
 
@@ -267,45 +267,42 @@ tooling version gap.
 Robolectric downloads an `android-all` jar on first use. That is still Tier 1 by CLAUDE.md §4's own
 definition (headless, no emulator), just not dependency-free.
 
-### Tier 2 — headless emulator in the container ❌ never run
-
-Everything *underneath* the emulator is verified: `/dev/kvm` is present and accessible to the
-container user, and the emulator's own probe agrees —
-
-```
-$ emulator -accel-check
-accel:
-0
-KVM (version 12) is installed and usable.
-```
-
-But **no AVD has ever been booted, and no `connectedAndroidTest` has ever run.** There is currently
-an AVD directory at `~/.android/avd/podsilo-test.avd` which `avdmanager` refuses to load:
-
-```
-$ avdmanager list avd
-The following Android Virtual Devices could not be loaded:
-    Name: podsilo-test
-   Error: Missing system image for Google APIs x86_64 podsilo-test.
-```
-
-The system image *is* installed (`system-images;android-35;google_apis;x86_64`), and the AVD's
-`config.ini` contains placeholder values (`avd.name = <build>`), so this looks like a partially
-created AVD rather than a missing dependency. It has not been investigated. To start clean:
+### Tier 2 — headless emulator in the container ✅ works
 
 ```bash
-rm -rf ~/.android/avd/podsilo-test.avd ~/.android/avd/podsilo-test.ini
-avdmanager create avd -n podsilo-test -k "system-images;android-35;google_apis;x86_64" -d pixel_6
-emulator -avd podsilo-test -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim &
-adb wait-for-device
-# Then poll properly — never a fixed sleep:
-until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do sleep 2; done
+./scripts/emulator-start.sh                              # create if needed, boot, wait for the flag
+./gradlew :feature:episodes:connectedDebugAndroidTest
+adb emu kill                                             # when you are done
 ```
 
-Expect a nested-virtualisation warning and poor performance; that is normal in WSL2 and is exactly
-why CLAUDE.md §4 makes Tier 2 a convenience rather than the main workflow. If it cannot be made
-reliable here, the supported path stays Tier 1 + Tier 3 and CI keeps no emulator job — which is
-currently the case.
+The script is idempotent, refuses to run without a writable `/dev/kvm` rather than degrading to an
+unusably slow software emulator (CLAUDE.md §11), and polls `sys.boot_completed` instead of sleeping.
+Boot takes ≈28 s on this host despite the nested-virtualisation warning.
+
+**The failure this replaces, because the error message points at the wrong thing.** `avdmanager`
+used to produce an AVD the emulator rejected with:
+
+```
+Error: Missing system image for Google APIs x86_64 podsilo-test.
+```
+
+The system image was installed all along. The cause is that the command-line tools live at
+`/opt/android-cmdline-tools/latest/bin`, **outside** `ANDROID_HOME=/opt/android-sdk`, and
+`avdmanager` infers the SDK root from its own location rather than from `ANDROID_HOME` — so it
+decided the root was `/opt` and wrote a path relative to that:
+
+```ini
+image.sysdir.1 = android-sdk/system-images/android-35/google_apis/x86_64/   # → /opt/android-sdk/android-sdk/...
+```
+
+The same misinference is visible in the warnings it prints (`Observed package id 'emulator' in
+inconsistent location '/opt/android-sdk/emulator' (Expected '/opt/emulator')`) — related to
+[§8.5](#85-sdkmanager-could-not-determine-sdk-root). The script rewrites that one line after
+creating the AVD; nothing else was wrong.
+
+Tier 2 stays a convenience rather than the main workflow, per CLAUDE.md §4: it is minutes per run
+against seconds for Tier 1, so use it for what genuinely needs a device — SAF, the Keystore cipher,
+WorkManager — and keep everything else in Robolectric. **CI still runs no emulator job.**
 
 ### Tier 3 — emulator on the Windows host, driven from the container ❌ never run
 
@@ -458,6 +455,11 @@ for each.
 `sdkmanager` can never infer its root. **Every** invocation needs `--sdk_root="$ANDROID_HOME"`.
 `post-create.sh` wraps this in an `sdkm()` shell function.
 
+`avdmanager` has the same blind spot but **fails silently instead of loudly**: it writes an AVD whose
+`image.sysdir.1` is relative to `/opt`, and the emulator then reports a *missing system image* that
+is in fact installed. `scripts/emulator-start.sh` fixes the line after creation — see
+[§6](#tier-2--headless-emulator-in-the-container--works).
+
 ### 8.6 ktlint and detekt disagree with each other
 
 **Settled in Tier 4b — this should no longer bite.** Kept because the reasoning matters if anyone
@@ -509,7 +511,7 @@ Verified inside the container on 2026-07-31.
 | Platform tools / adb | **37.0.1** / adb 1.0.41 | Match this on the Windows side for Tier 3 |
 | `gh` (GitHub CLI) | **2.97.0** | Upstream release tarball pinned via the `GH_VERSION` build arg, not apt — noble only packages 2.45.0 (Feb 2024) |
 | Emulator | 37.1.11 | |
-| System image | `android-35;google_apis;x86_64` | Deliberately still 35; Tier 2 is unproven anyway |
+| System image | `android-35;google_apis;x86_64` | API 35 while `compileSdk` is 37; the instrumented tests do not depend on 36+ behaviour |
 | cmdline-tools | build 13114758 | |
 | opodsync | **0.5.3** | Upstream's version line is `0.x` — there has never been a `1.x` |
 
