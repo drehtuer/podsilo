@@ -46,6 +46,7 @@ below differ enormously in how well-proven they are.
 | **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`) |
 | **A real Nextcloud (read)** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`) |
 | **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/decisions/0002`) |
+| **A full `SyncOrchestrator` pass on real data** | ✅ **Verified** | 2026-08-02: real subscriptions + a real episode — outbox push, the echo of our own action, and server-clock `since` all confirmed (`docs/journal.md`) |
 
 **In short: Tier 1 is the everyday path and Tier 2 now works when you need a real device.** Tier 1 is
 where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is slow enough (≈28 s to boot,
