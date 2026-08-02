@@ -2155,3 +2155,60 @@ place. The temptation to build the "cleaner" thing would have cost real code and
 `CreateDocument` is a different code path in the resolver, though the same one the download pipeline
 already uses successfully. The WAL checkpoint is likewise unexercised — Robolectric may not have the
 database in WAL mode at all, so that line is reasoned-about rather than proven.
+
+---
+
+## 2026-08-02 (later) — The devcontainer already had the device
+
+**Request:** "To attach a real ADB device, the devcontainer needs to support `linux-tools-virtual`
+and `hwdata`. I am able to attach from WSL via adb, now the devcontainer needs to be able, too."
+
+The premise was wrong, and checking took one command:
+
+```
+$ ls /dev/bus/usb          -> No such file or directory
+$ pgrep -x adb             -> (nothing)
+$ adb devices -l           -> 08241FDD40014S device usb:1-1 model:Pixel_5
+```
+
+No USB in the container, no adb server in the container, and a Pixel 5 attached anyway. **adb is a
+client/server protocol over TCP.** Only the server opens the USB device; every `adb` command is a
+client speaking to it on port 5037. `devcontainer.json` already runs with `--network=host`, so WSL's
+`127.0.0.1:5037` *is* the container's — the client here has been talking to WSL's server all along.
+
+So `linux-tools-virtual` and `hwdata` are needed in **WSL**, where usbipd-win delivers the device and
+the author had already installed them. Putting them in the image would have added a *second*
+claimant for one USB interface, and would have needed `--privileged` (usbip writes to sysfs, which is
+read-only in containers), a `plugdev` group aligned to WSL's GID, and udev rules — to reach a state
+that already worked. Not built, on purpose, and written down in `docs/dev-environment.md` §9.1 so the
+same assumption does not get made twice.
+
+### What was actually missing
+
+`scripts/adb-connect-host.sh` — the helper CLAUDE.md §4 asks for by name and which has never
+existed. Tier 3 was recorded as "❌ never run"; it turns out to have been working, undocumented.
+
+The script is built around the one thing that genuinely breaks this setup, which is worth recording
+because it is counter-intuitive: **an adb client in the container will silently start a server when
+none is listening**, that server is blind to USB, and because the network namespace is shared it then
+answers for WSL too. Both sides report no devices, which looks like a cable fault. The same trap has
+a second door — a client/server version mismatch makes the client *kill the working server* and
+start its own USB-blind replacement.
+
+So the script never runs an adb command to test for a server; it probes port 5037 with a raw bash
+`/dev/tcp` connect, so it cannot cause the problem it is looking for. And it detects an
+already-running container-local server with `pgrep -x adb`, which is exact here precisely because the
+container has no USB: any adb server visible in this PID namespace is by definition the broken one.
+
+### Note to self
+
+The instinct on reading the request was to start editing the Dockerfile. The check that made the work
+unnecessary cost one command and thirty seconds. Verify the premise before implementing it —
+especially when the premise is stated confidently and the implementation is plausible.
+
+**Verified:** all three script branches exercised against the real Pixel 5 — attached (device
+listed), no server listening (tested on port 5999, leaving 5037 alone), and container-local server
+(started on port 5038, detected, cleaned up).
+
+**Not verified:** the Windows-side `adb -a -P 5037 nodaemon server` variant with `ADB_SERVER_SOCKET`.
+Still never run; still marked ❌ in §1.

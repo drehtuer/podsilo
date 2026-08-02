@@ -18,7 +18,8 @@ and this document records what was actually built — deviations are called out 
 6. [Testing tiers](#6-testing-tiers)
 7. [The opodsync test sync server](#7-the-opodsync-test-sync-server)
 8. [Troubleshooting](#8-troubleshooting)
-9. [Version reference](#9-version-reference)
+9. [Attaching a real Android device](#9-attaching-a-real-android-device)
+10. [Version reference](#10-version-reference)
 
 ---
 
@@ -40,7 +41,8 @@ below differ enormously in how well-proven they are.
 | `/dev/kvm` usable in-container | ✅ Verified | `emulator -accel-check` → "KVM (version 12) is installed and usable" |
 | **Tier 2 — emulator booting in-container** | ✅ **Verified** | 2026-08-02: `scripts/emulator-start.sh` creates + boots `podsilo-ci` headless in ~28 s from nothing |
 | **Tier 2 — `connectedAndroidTest`** | ✅ **Verified** | 2026-08-02: 6 tests green on `podsilo-ci(AVD) - 15` across `:app` and `:feature:episodes` |
-| **Tier 3 — adb over TCP to a Windows emulator** | ❌ **Never run** | No `scripts/adb-connect-host.sh` exists |
+| **Tier 3 — a real device over adb from the container** | ✅ **Verified** | 2026-08-02: a physical Pixel 5 passed into WSL with usbipd-win, visible in here with no image change — see [§9](#9-attaching-a-real-android-device) |
+| **Tier 3 — adb to an emulator on *Windows*** | ❌ **Never run** | Same mechanism as the row above, but the Windows-side `adb -a -P 5037 nodaemon server` half is untested |
 | `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (ADR 0011) |
 | SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |
@@ -49,10 +51,11 @@ below differ enormously in how well-proven they are.
 | **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/decisions/0002`) |
 | **A full `SyncOrchestrator` pass on real data** | ✅ **Verified** | 2026-08-02: real subscriptions + a real episode — outbox push, the echo of our own action, and server-clock `since` all confirmed (`docs/journal.md`) |
 
-**In short: Tier 1 is the everyday path and Tier 2 now works when you need a real device.** Tier 1 is
-where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is slow enough (≈28 s to boot,
-minutes per run) that it should stay reserved for what genuinely cannot run headless. **Tier 3 is
-still unproven** — it is described because it is specified, not because it has been run.
+**In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
+with a real phone.** Tier 1 is where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is
+slow enough (≈28 s to boot, minutes per run) that it should stay reserved for what genuinely cannot
+run headless. Tier 3 turned out to need **nothing added to the container** — see [§9](#9-attaching-a-real-android-device)
+for why, and for the one failure mode that breaks it.
 
 ---
 
@@ -308,22 +311,31 @@ Tier 2 stays a convenience rather than the main workflow, per CLAUDE.md §4: it 
 against seconds for Tier 1, so use it for what genuinely needs a device — SAF, the Keystore cipher,
 WorkManager — and keep everything else in Robolectric. **CI still runs no emulator job.**
 
-### Tier 3 — emulator on the Windows host, driven from the container ❌ never run
+### Tier 3 — a device or emulator outside the container ✅ works, with a real phone
 
-The recommended path for interactive UI work once `:feature:*` exists, because the emulator runs
-natively on Windows with WHPX acceleration (full speed, real window, no nested virtualisation).
+**Verified 2026-08-02** against a physical Pixel 5 (`redfin`) passed into WSL with usbipd-win:
 
-Intended shape, **entirely untested**:
+```
+$ ./scripts/adb-connect-host.sh
+==> adb server answering on 127.0.0.1:5037
+==> Attached
+08241FDD40014S   device usb:1-1 product:redfin model:Pixel_5 device:redfin transport_id:2
+```
+
+Nothing had to be added to the container image to make that work. See §9 below for why, and for the
+one failure mode that can break it.
+
+The same arrangement drives an emulator running natively on Windows (WHPX acceleration, full speed,
+real window, no nested virtualisation), which remains the recommended path for interactive UI work:
 
 - On Windows: `adb -a -P 5037 nodaemon server` so the adb server listens on all interfaces.
 - In the container: `export ADB_SERVER_SOCKET=tcp:<windows-host-ip>:5037`.
 - With WSL2 `networkingMode=mirrored`, `localhost` reaches the Windows host directly; otherwise
-  resolve the host IP from `ip route show default`.
-- **adb versions must match** between Windows and the container or the handshake fails confusingly.
-  The container currently has **platform-tools 37.0.1 / adb 1.0.41**; pin the Windows side to match.
+  resolve the host IP from `ip route show default`. `scripts/adb-connect-host.sh` handles both.
+- **adb versions must match** between the server side and the container or the handshake fails
+  confusingly — see §9.3. The container has **platform-tools 37.0.1 / adb 1.0.41**.
 
-CLAUDE.md §4 asks for a `scripts/adb-connect-host.sh` helper handling both networking modes.
-**It does not exist yet.** There is no `scripts/` directory at all.
+That Windows-server variant is still **untested**; only the WSL-server variant above has been run.
 
 ---
 
@@ -528,7 +540,96 @@ offline mode — see the 2026-07-31 Tier 4a journal entry for the exact workarou
 
 ---
 
-## 9. Version reference
+## 9. Attaching a real Android device
+
+**Verified 2026-08-02 with a Pixel 5.** Short version: get the phone into WSL, then run
+`./scripts/adb-connect-host.sh` in the container. There is nothing to install in here.
+
+### 9.1 Why the container needs no USB support at all
+
+This is worth stating plainly because the obvious assumption is the opposite one.
+
+**adb is a client/server protocol over TCP.** Exactly one process — the *server* — opens the USB
+device; every `adb` command you type is a *client* that connects to it on port 5037 and speaks a
+text protocol. The client never touches USB.
+
+So the split is:
+
+| | Owns the USB device | Needs `usbip`, `hwdata`, `/dev/bus/usb`, udev rules |
+|---|---|---|
+| **Windows** (`usbipd-win`) | shares it over the network | n/a |
+| **WSL2 distro** | yes — the adb **server** runs here | **yes**, this is where `linux-tools-virtual` + `hwdata` go |
+| **This container** | no — only the adb **client** | **no** |
+
+And the container reaches WSL's server for free: `devcontainer.json` runs with `--network=host`, so
+the container shares the host's network namespace and WSL's `127.0.0.1:5037` *is* the container's
+`127.0.0.1:5037`. No `ADB_SERVER_SOCKET`, no port forwarding, no configuration.
+
+Confirmed inside the running container:
+
+```
+$ ls /dev/bus/usb
+ls: cannot access '/dev/bus/usb': No such file or directory      # no USB in here at all
+$ pgrep -x adb
+                                                                  # no server in here either
+$ adb devices -l
+08241FDD40014S   device usb:1-1 product:redfin model:Pixel_5 …    # …and yet
+```
+
+Adding `linux-tools-virtual`, `hwdata` and a `/dev/bus/usb` mount to this image would give the
+container a *second* way to claim the same device. It would need `--privileged` (usbip writes to
+sysfs, mounted read-only in containers), a `plugdev` group aligned to WSL's GID, and udev rules —
+and the reward would be two processes competing for one USB interface. It is not wired up, on
+purpose.
+
+### 9.2 One-time Windows and WSL setup
+
+On Windows, in an **elevated** prompt ([usbipd-win](https://github.com/dorssel/usbipd-win)):
+
+```powershell
+usbipd list                          # find the phone's BUSID
+usbipd bind   --busid <busid>        # once per device; persists across reboots
+usbipd attach --wsl --busid <busid>  # after every replug
+```
+
+In the WSL distro, once:
+
+```bash
+sudo apt install linux-tools-virtual hwdata
+sudo update-alternatives --install /usr/local/bin/usbip usbip \
+    "$(ls /usr/lib/linux-tools/*/usbip | tail -n1)" 20
+```
+
+Then `adb devices` **in WSL** — which both starts the server and prompts the phone for its USB
+debugging authorisation. Accept the RSA fingerprint on the phone's screen.
+
+### 9.3 The one thing that breaks it
+
+**Never let an adb client in the container run while no server is listening.** adb silently starts a
+server when none answers, and a server started *here* is blind to USB — yet because the network
+namespace is shared it also answers for WSL. Both sides then report no devices, which looks like a
+cable or a phone fault and is neither.
+
+The same trap has a second door: if the container's adb build differs from the server's, the client
+**kills the working server** and starts its own USB-blind replacement. Keep the versions in step.
+
+`scripts/adb-connect-host.sh` is built around both hazards — it probes port 5037 with a raw TCP
+connect rather than an adb command, so it can never trigger the problem it reports, and it detects
+an already-running container-local server with `pgrep`:
+
+```
+$ ./scripts/adb-connect-host.sh
+An adb server is running INSIDE this container (pid 3763).
+  Fix, in this order:
+      adb kill-server            # here
+      adb devices                # in WSL, which starts a server that owns the device
+```
+
+Recovery is always: `adb kill-server` in the container, then `adb devices` in WSL.
+
+---
+
+## 10. Version reference
 
 Verified inside the container on 2026-07-31.
 
