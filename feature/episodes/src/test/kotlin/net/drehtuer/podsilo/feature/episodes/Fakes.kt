@@ -16,6 +16,7 @@ import net.drehtuer.podsilo.core.model.port.Connectivity
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
@@ -37,6 +38,7 @@ const val FEED_URL = "https://example.org/feed.xml"
 fun episode(
     key: String,
     title: String = key,
+    feedUrl: String = FEED_URL,
     pubDate: Long? = 1_752_480_000_000,
     durationMs: Long? = 1_800_000,
     description: String? = null,
@@ -45,7 +47,7 @@ fun episode(
 ): Episode =
     Episode(
         episodeKey = key,
-        feedUrl = FEED_URL,
+        feedUrl = feedUrl,
         guid = key,
         enclosureUrl = enclosureUrl,
         title = title,
@@ -87,7 +89,8 @@ fun ledgerRow(
  */
 class FakeLedgerRepository(
     private val episodes: MutableList<Episode> = mutableListOf(),
-) : EpisodeLedgerRepository {
+) : EpisodeLedgerRepository,
+    EpisodeListRepository {
     private val rows = MutableStateFlow<Map<String, EpisodeLedgerRow>>(emptyMap())
 
     /** Every write in order — bulk behaviour is about *how many* writes, not just the end state. */
@@ -123,6 +126,18 @@ class FakeLedgerRepository(
 
     override suspend fun get(episodeKey: String): EpisodeLedgerRow? = rows.value[episodeKey]
 
+    override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = rows.map { it[episodeKey] }
+
+    /** Derived from the same map as everything else, so a badge here cannot drift from its list. */
+    override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> =
+        rows.map { current ->
+            episodes
+                .filter { current[it.episodeKey] == null }
+                .groupingBy { it.feedUrl }
+                .eachCount()
+                .map { FeedUndecidedCount(it.key, it.value) }
+        }
+
     override suspend fun upsert(row: EpisodeLedgerRow) {
         writes += listOf(row)
         rows.value = rows.value + (row.episodeKey to row)
@@ -155,6 +170,13 @@ class FakeEpisodeRepository(
         MutableStateFlow(episodes.filter { it.feedUrl == feedUrl })
 
     override suspend fun get(episodeKey: String): Episode? = episodes.firstOrNull { it.episodeKey == episodeKey }
+
+    /** Undated episodes contribute nothing, so a feed with only those is absent — never zero. */
+    override suspend fun latestPublicationByFeed(): Map<String, Long> =
+        episodes
+            .mapNotNull { episode -> episode.pubDate?.let { episode.feedUrl to it } }
+            .groupBy(Pair<String, Long>::first, Pair<String, Long>::second)
+            .mapValues { (_, dates) -> dates.max() }
 
     override suspend fun replaceForFeed(
         feedUrl: String,
@@ -189,13 +211,14 @@ fun feed(
     url: String = FEED_URL,
     title: String = "Der Podcast",
     imageUrl: String? = null,
+    lastRefreshedAt: Long? = null,
 ): Feed =
     Feed(
         url = url,
         title = title,
         imageUrl = imageUrl,
         firstSeenAt = 0,
-        lastRefreshedAt = null,
+        lastRefreshedAt = lastRefreshedAt,
         httpEtag = null,
         httpLastModified = null,
     )
@@ -270,7 +293,9 @@ class FakeSettingsRepository(
 
     override suspend fun setMarkOldOlderThan(value: OlderThan) = Unit
 
-    override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = MutableStateFlow(null)
+    val account = MutableStateFlow<NextcloudAccount?>(null)
+
+    override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = account
 
     override suspend fun nextcloudCredentials(): NextcloudCredentials? = null
 

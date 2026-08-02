@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package net.drehtuer.podsilo.feature.episodes
+
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.time.Instant
+
+/**
+ * S1's rendering. The load-bearing assertions are the two the design keeps insisting on: a screen
+ * with no subscriptions must point at Nextcloud and **never** offer an add-feed control, and a
+ * never-fetched feed shows "–" rather than a confident zero.
+ */
+@RunWith(RobolectricTestRunner::class)
+class PodcastListScreenTest {
+    @get:Rule
+    val compose = createComposeRule()
+
+    private val events = mutableListOf<PodcastListEvent>()
+    private val now = Instant.parse("2026-08-02T12:00:00Z")
+
+    private fun render(state: PodcastListUiState) {
+        compose.setContent {
+            PodcastListScreen(state = state, onEvent = { events += it }, now = now)
+        }
+    }
+
+    private fun feeds(vararg rows: FeedUi) =
+        PodcastListUiState(content = PodcastListUiState.Content.Feeds(rows.toList()))
+
+    @Test
+    fun `a feed renders its title and its count`() {
+        render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = 12)))
+
+        compose.onNodeWithText("Der Podcast").assertIsDisplayed()
+        compose.onNodeWithText("12").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a feed with no title yet renders its URL, never Unknown podcast`() {
+        // A feed has no title until the first successful fetch (architecture §4).
+        render(feeds(FeedUi(url = "https://example.org/feed.xml", title = null)))
+
+        compose.onNodeWithText("https://example.org/feed.xml").assertIsDisplayed()
+        compose.onAllNodes(hasText("Unknown", substring = true)).assertCountEquals(0)
+    }
+
+    @Test
+    fun `a never-fetched feed shows a dash and says so, rather than zero`() {
+        render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = null)))
+
+        compose.onNodeWithText("–").assertIsDisplayed()
+        compose.onNode(hasText("never refreshed", substring = true)).assertIsDisplayed()
+        compose.onAllNodes(hasText("0")).assertCountEquals(0)
+    }
+
+    @Test
+    fun `a refreshed feed reports how long ago, relatively`() {
+        render(
+            feeds(
+                FeedUi(
+                    url = "a",
+                    title = "Der Podcast",
+                    lastRefreshedAt = now.minusSeconds(600),
+                    undecidedCount = 3,
+                ),
+            ),
+        )
+
+        compose.onNode(hasText("10 min ago", substring = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping a feed opens it`() {
+        render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = 1)))
+
+        compose.onNodeWithText("Der Podcast").performClick()
+
+        assertEquals(listOf(PodcastListEvent.FeedClicked("a")), events)
+    }
+
+    @Test
+    fun `the no-subscriptions state points at Nextcloud and offers no way to add a feed`() {
+        // This empty state is the main place the read-only design becomes visible (CLAUDE.md §10),
+        // so the absence of an add button is the assertion, not the wording alone.
+        render(PodcastListUiState(content = PodcastListUiState.Content.NoSubscriptions))
+
+        compose.onNode(hasText("add feeds in Nextcloud", substring = true)).assertIsDisplayed()
+        compose.onAllNodes(hasText("Add", substring = true)).assertCountEquals(0)
+        compose.onAllNodes(hasText("New podcast", substring = true)).assertCountEquals(0)
+    }
+
+    @Test
+    fun `an unconfigured app offers Connect rather than an empty list`() {
+        render(PodcastListUiState(content = PodcastListUiState.Content.NotConfigured))
+
+        compose.onNode(hasText("subscriptions in your Nextcloud", substring = true)).assertIsDisplayed()
+        compose.onNodeWithText("Connect Nextcloud").performClick()
+
+        assertTrue(events.contains(PodcastListEvent.ConnectNextcloudClicked))
+    }
+
+    @Test
+    fun `a filter that hides everything says caught up, not no subscriptions`() {
+        render(PodcastListUiState(content = PodcastListUiState.Content.Feeds(emptyList())))
+
+        compose.onNodeWithText("Nothing new. All caught up.").assertIsDisplayed()
+        compose.onNodeWithText("Show all podcasts").performClick()
+
+        assertEquals(
+            listOf(PodcastListEvent.FilterChanged(PodcastFilter.ALL)),
+            events,
+        )
+    }
+
+    @Test
+    fun `the setup checklist shows each step and its remaining action`() {
+        render(
+            PodcastListUiState(
+                content = PodcastListUiState.Content.Feeds(emptyList()),
+                setup =
+                    SetupChecklist(
+                        nextcloudConnected = true,
+                        instanceLabel = "https://cloud.example.org",
+                        folderState = FolderState.NOT_CHOSEN,
+                        namingPreview = "Der Podcast/20260714_Warum.mp3",
+                    ),
+            ),
+        )
+
+        compose.onNode(hasText("✓ 1. Connect Nextcloud", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("○ 2. Choose a download folder", substring = true)).assertIsDisplayed()
+        // Step 3 is optional, so it renders as done and never holds the card open.
+        compose.onNode(hasText("✓ 3. Check file naming", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("20260714_Warum.mp3", substring = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a revoked grant says the folder is gone, not that none was chosen`() {
+        // Otherwise the user re-picks the folder that just failed (CLAUDE.md §11).
+        render(
+            PodcastListUiState(
+                content = PodcastListUiState.Content.Feeds(emptyList()),
+                setup =
+                    SetupChecklist(
+                        nextcloudConnected = true,
+                        instanceLabel = "https://cloud.example.org",
+                        folderState = FolderState.REVOKED,
+                        namingPreview = "x",
+                    ),
+            ),
+        )
+
+        compose.onNode(hasText("no longer available", substring = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the paused banner carries its fix as a button`() {
+        render(
+            PodcastListUiState(
+                content = PodcastListUiState.Content.Feeds(emptyList()),
+                queueStatus = QueueStatus.Paused(QueueStatus.PauseCause.FOLDER_NOT_CHOSEN, queuedCount = 0),
+            ),
+        )
+
+        compose.onNode(hasText("no download folder chosen", substring = true)).assertIsDisplayed()
+        compose.onNodeWithText("Choose folder").performClick()
+
+        assertTrue(events.contains(PodcastListEvent.PausedBannerActionClicked))
+    }
+
+    @Test
+    fun `the paused banner does not double up with the checklist that says the same thing`() {
+        // Regression from the first device run: both rendered on first launch, one above the other,
+        // and the checklist is the more useful of the two.
+        render(
+            PodcastListUiState(
+                content = PodcastListUiState.Content.NoSubscriptions,
+                queueStatus = QueueStatus.Paused(QueueStatus.PauseCause.FOLDER_NOT_CHOSEN, queuedCount = 0),
+                setup =
+                    SetupChecklist(
+                        nextcloudConnected = false,
+                        instanceLabel = null,
+                        folderState = FolderState.NOT_CHOSEN,
+                        namingPreview = "x",
+                    ),
+            ),
+        )
+
+        compose.onAllNodes(hasText("Downloads paused", substring = true)).assertCountEquals(0)
+        compose.onNode(hasText("2. Choose a download folder", substring = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the summary line counts what is on screen`() {
+        assertEquals(
+            "18 episodes to decide across 7 podcasts with new episodes",
+            summaryLine(18, 7, PodcastFilter.WITH_NEW),
+        )
+        assertEquals(
+            "0 episodes to decide across 9 podcasts",
+            summaryLine(0, 9, PodcastFilter.ALL),
+        )
+    }
+
+    @Test
+    fun `relative times stay coarse`() {
+        val then = Instant.parse("2026-08-02T12:00:00Z")
+        assertEquals("just now", relativeTime(then, then.plusSeconds(30)))
+        assertEquals("5 min ago", relativeTime(then, then.plusSeconds(300)))
+        assertEquals("2 h ago", relativeTime(then, then.plusSeconds(7_200)))
+        assertEquals("3 d ago", relativeTime(then, then.plusSeconds(259_200)))
+    }
+}

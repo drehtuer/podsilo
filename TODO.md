@@ -6,21 +6,23 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c's foundations complete and **S2 is built,
-screen included**. 386 tests, 3 skipped.**
+**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c has S1, S2 and S3 built and navigable.**
+**437 tests, 3 skipped, plus 6 instrumented.**
+
+**The app runs.** It was installed on the Tier 2 emulator, launched, and rendered S1 — the first time
+any of this has executed as an application rather than as a test. Its first run found three bugs no
+unit test could (`docs/journal.md`), one of them serious: `:core:naming`'s token regex used a bare
+`}`, which the JVM accepts and Android's ICU engine rejects, so **every filename in the app** failed
+to resolve on a device while 437 JVM tests stayed green. Fixed, and `docs/decisions/0017` is the rule
+that came out of it.
 
 Everything the UI binds to exists: schema v3 with the error log and its migrations,
 `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the mark-old rule,
 connectivity, the theme, and `sanitizeEpisodeHtml`.
 
-**S2 is the first screen that renders.** `EpisodeListScreen` + `EpisodeRow`, with 14 Compose tests
-under Robolectric and 2 instrumented tests that have actually run on an emulator — the first Podsilo
-code ever executed on an Android device. **Still unwritten: S1, S3 and S4–S8.** `MainActivity`
-renders a placeholder inside the real theme and there is no `NavHost`, so S2 is reachable from tests
-but not yet from the app.
-
-**Tier 2 now works** (`scripts/emulator-start.sh`), so a Composable can be checked on a real device
-without the Windows-host path — see `docs/dev-environment.md` §6.
+**Still unwritten: S4–S8** (settings, the connection dialog, the naming editor, activity, the error
+log). The buttons that would open them show a snackbar naming the missing screen rather than doing
+nothing silently.
 
 Each tier's completion note below is kept as written at the time, in build order.
 
@@ -194,10 +196,11 @@ was the service locator CLAUDE.md §3 forbids.
 
 ### 4c. Compose UI (Tier 2 emulator works; see `docs/dev-environment.md` §6)
 
-**Update (2026-08-02): S2 is built.** The screen renders from the view model's state and emits
-events, with nothing decided locally. Compose tests run under Robolectric as Tier 1, and the same
-screen was exercised on the in-container emulator — the first time any of this project's code has
-run on Android.
+**Update (2026-08-02): S1, S2 and S3 are built and navigable, and the app runs.** Each screen
+renders its view model's state and emits events, deciding nothing locally. `:app` has a `NavHost`
+(S1 → S2 → S3), the SAF picker, and link opening. Compose tests run under Robolectric as Tier 1;
+six instrumented tests run on the emulator. The first launch found three bugs no unit test could —
+see `docs/journal.md` and `docs/decisions/0017`.
 
 **Update (2026-08-01): designed, not yet built.** All eight screens and every state
 `docs/UI.md` enumerates are drawn (light and dark), and the UI↔logic contract is written down in
@@ -271,7 +274,14 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
     swipe obeys the configured mapping, bulk writes are one transaction, and only *Download again*
     carries `userRequested`; and **S2's screen** (`EpisodeListScreen` + `EpisodeRow`), stateless
     against that view model, with 14 Robolectric Compose tests and 2 instrumented ones.
-  - **Not built:** S1 and S3 have neither screen nor view model.
+  - **S1 and S3 are built too.** `PodcastListViewModel` freezes its sort on cold start and on each
+    explicit refresh — a background sync updates rows in place and never reorders them
+    (`docs/UI.md` §4) — and a feed subscribed since the last freeze is appended rather than sorted
+    in. `EpisodeDetailViewModel` shares `TriageWriter` and `EpisodeScheduler` with S2, so the same
+    decision taken in the sheet and in the row writes an identical ledger row. 35 tests between them.
+  - **The ledger port was split**, mirroring the DAO split: `EpisodeListRepository` owns the four
+    UI-facing joins, `EpisodeLedgerRepository` keeps the durable record and its outbox. detekt
+    flagged both the interface and its implementation, which was the signal the seam was due.
   - **`EpisodeUi` now matches `docs/UI_interface.md` §1.** `FailureUi` carries a stored `ErrorCause`
     and `retryable` (schema v3), so ADR 0011's "that row offers *Choose folder*, never *Retry*" is
     enforceable and tested rather than aspirational. `QueueStatus` (paused banner) and
@@ -280,7 +290,11 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
   `PodsiloTheme` (one seed, two schemes, **dynamic colour off**) applied at the root from the
   persisted preference, `AndroidConnectivityMonitor`, and `WorkScheduler`'s additions
   (`userRequested` downloads, per-feed refresh, bulk enqueue, work observation).
-  **Still to do: navigation and S7 (activity) + S8 (error log).**
+  **Navigation is done**: `PodsiloNavHost` (S1 → S2 → S3), `EpisodeViewModelFactory`, the five
+  screen-facing adapters (`WorkEpisodeScheduler`, which suspends until a refresh finishes rather
+  than returning at enqueue time; folder status, folder label, free space, naming preview), the SAF
+  picker and link opening. **Still to do: S7 (activity) + S8 (error log)** — the events that would
+  open them, and S4–S6, surface a snackbar naming the missing screen.
 - [~] **Error-log write points** — `FeedRefresher` writes them (feed HTTP failures, unreachable
   hosts, unparseable XML), with a test asserting the plain sentence comes first and the technical
   half is separate. **Still to do:** `SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/

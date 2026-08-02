@@ -73,7 +73,7 @@ class EpisodeListViewModelTest {
                 feedUrl = FEED_URL,
                 feedRepository = feeds,
                 episodeRepository = episodes,
-                ledgerRepository = ledger,
+                listRepository = ledger,
                 settingsRepository = settings,
                 connectivityMonitor = connectivity,
                 triageWriter = TriageWriter(ledger, clock),
