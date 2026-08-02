@@ -24,8 +24,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
@@ -72,26 +78,7 @@ fun NamingScreen(
                         .padding(RowPadding),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
-                    value = state.folderTemplate,
-                    onValueChange = { onEvent(NamingEvent.FolderTemplateChanged(it)) },
-                    label = { Text("Folder template") },
-                    singleLine = true,
-                    isError = state.errorFor(NamingField.FOLDER) != null,
-                    supportingText = state.errorFor(NamingField.FOLDER)?.let { { Text(it) } },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = state.fileTemplate,
-                    onValueChange = { onEvent(NamingEvent.FileTemplateChanged(it)) },
-                    label = { Text("File template") },
-                    singleLine = true,
-                    isError = state.errorFor(NamingField.FILE) != null,
-                    supportingText = state.errorFor(NamingField.FILE)?.let { { Text(it) } },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                PlaceholderChips(state, onEvent)
+                TemplateFields(state, onEvent)
 
                 HorizontalDivider()
                 PreviewSection(state.previews)
@@ -122,26 +109,98 @@ internal val PreviewCase.label: String
         }
 
 /**
- * The chips are exactly the set `DefaultNamingTemplateEngine` resolves. Offering one it does not
- * know would put its literal text in a filename, which is why the list lives in the state rather
- * than being written out here (CLAUDE.md §6).
+ * The two fields, and the chips that insert into whichever one has focus.
+ *
+ * The caret lives here, in [TextFieldValue] state, rather than being reconstructed from the view
+ * model's `String` on every keystroke — that reconstruction is what used to throw it to position 0.
+ * See [insertAtCursor] and [syncedFromState].
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlaceholderChips(
+private fun TemplateFields(
     state: NamingUiState,
     onEvent: (NamingEvent) -> Unit,
 ) {
+    var folder by remember { mutableStateOf(TextFieldValue(state.folderTemplate)) }
+    var file by remember { mutableStateOf(TextFieldValue(state.fileTemplate)) }
+    // Which field a chip lands in. Defaults to the file template, which is the one people edit.
+    var focused by remember { mutableStateOf(NamingField.FILE) }
+
+    folder = syncedFromState(folder, state.folderTemplate)
+    file = syncedFromState(file, state.fileTemplate)
+
+    OutlinedTextField(
+        value = folder,
+        onValueChange = {
+            folder = it
+            onEvent(NamingEvent.FolderTemplateChanged(it.text))
+        },
+        label = { Text("Folder template") },
+        singleLine = true,
+        isError = state.errorFor(NamingField.FOLDER) != null,
+        supportingText = state.errorFor(NamingField.FOLDER)?.let { { Text(it) } },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) focused = NamingField.FOLDER },
+    )
+    OutlinedTextField(
+        value = file,
+        onValueChange = {
+            file = it
+            onEvent(NamingEvent.FileTemplateChanged(it.text))
+        },
+        label = { Text("File template") },
+        singleLine = true,
+        isError = state.errorFor(NamingField.FILE) != null,
+        supportingText = state.errorFor(NamingField.FILE)?.let { { Text(it) } },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) focused = NamingField.FILE },
+    )
+
+    PlaceholderChips(state.placeholders) { placeholder ->
+        // Into the field the user is actually editing, at the caret — not appended to the end of
+        // the file template regardless of focus, as it used to be.
+        when (focused) {
+            NamingField.FOLDER -> {
+                folder = insertAtCursor(folder, placeholder)
+                onEvent(NamingEvent.FolderTemplateChanged(folder.text))
+            }
+            NamingField.FILE -> {
+                file = insertAtCursor(file, placeholder)
+                onEvent(NamingEvent.FileTemplateChanged(file.text))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlaceholderChips(
+    placeholders: List<String>,
+    onInsert: (String) -> Unit,
+) {
     Text("Available placeholders", style = MaterialTheme.typography.labelMedium)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        state.placeholders.forEach { placeholder ->
+        placeholders.forEach { placeholder ->
             AssistChip(
-                onClick = { onEvent(NamingEvent.FileTemplateChanged(state.fileTemplate + placeholder)) },
+                onClick = { onInsert(placeholder) },
                 label = { Text(placeholder) },
                 modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
             )
         }
     }
+
+    // The extension's absence from the chip list is deliberate but was reported as confusing: the
+    // preview grows a ".mp3" from nowhere. Say where it comes from (CLAUDE.md §6).
+    Text(
+        "The file extension is added automatically from the download — .mp3, .m4a, .opus and so " +
+            "on — so templates do not include it.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** One real episode and three synthetic worst cases, all resolved by the engine (`docs/UI.md` §9). */

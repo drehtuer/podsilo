@@ -1829,3 +1829,58 @@ longer reproduces on the device.
 **Note to self:** the temporary `Log.i` used to capture the login URL out of the app was reverted
 before committing. Worth having a real answer for "how do I see what URL the app opened" that is not
 a hand-edited log line.
+
+---
+
+## 2026-08-02 (late) — three bugs in one screen, all found by using it
+
+**Reported by the author**, after actually typing in S6: the cursor jumps to the beginning of the
+field, and the absence of any entry for the file extension is confusing.
+
+### The caret
+
+Classic Compose. The fields used the `String` overload of `OutlinedTextField`, and the view model
+persists on every keystroke and echoes the template back — so the field kept being rebuilt from a
+`String`, which carries **no selection information**. Compose has nowhere to put the caret and puts
+it at 0.
+
+The fix is to let the screen own a `TextFieldValue`, and to adopt the view model's text only when it
+genuinely differs (which in practice means *Reset to default*). Two small pure functions,
+`insertAtCursor` and `syncedFromState`, both table-tested — the logic is worth having outside a
+Compose test because it is where the bug actually was.
+
+### The third bug, which nobody reported
+
+While fixing that I found the chips **always inserted into the file template**, whatever had focus.
+Editing the folder template and tapping `{podcast}` silently appended to the other field. Nobody had
+noticed because nobody had edited the folder template on a device.
+
+Chips now insert into the focused field, at the caret. Verified by hand:
+
+```
+{date}_{title}     caret after {date}, type "ZZ"     → {date}ZZ_{title}
+                   caret still there, tap {guid_short} → {date}ZZ{guid_short}_{title}
+```
+
+Before the fix, the first line would have produced `ZZ{date}_{title}` and the second would have
+appended at the end.
+
+### The extension
+
+`{ext}` is deliberately not a chip: the engine does not resolve it, the extension is appended after
+resolution, and offering a chip the engine does not know would put the literal text `{ext}` in a
+filename (CLAUDE.md §6, `docs/UI.md` §18). All true — and **the absence still reads as an omission**,
+because the preview grows a `.mp3` from nowhere.
+
+So the screen now says where it comes from. That is the cheap fix and it removes the confusion
+without touching the rule. Whether the extension should become a *placeable* variable is a real
+design question — it would mean the engine stops appending when a template contains `{ext}` — and
+that is the author's call, not one to make while fixing a caret.
+
+**The lesson is about who finds what.** Twelve Compose tests cover this screen, including one
+asserting the placeholder list is exactly what the engine resolves. None of them type a character in
+the middle of a string, and none of them tap a chip while a different field has focus. Both bugs
+needed a person using the thing.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 514 tests, 3 skipped; both behaviours
+confirmed on the emulator by driving the real screen.
