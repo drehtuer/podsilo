@@ -94,3 +94,29 @@ Rationale:
 - If cross-client download hiding ever becomes important enough, the options are: patch/fork the
   Nextcloud app, or revisit the forbidden `PLAY`-on-download trade-off with the author — not
   something to decide unilaterally.
+
+## Observed on a real Nextcloud (2026-08-02)
+
+This ADR was **source-read-only** from the day it was written: the filtering was read out of
+`EpisodeActionController.php` and never seen happen. It has now been seen happen.
+
+Nextcloud **33.0.5** with gpoddersync, via the manual probe in write mode against a dedicated test
+account (`core/gpodder/src/test/.../ManualNextcloudProbe.kt`, `-Pwrite=<loginName>`):
+
+```
+→ POST episode_action/create: 2xx          ← two actions posted: one DOWNLOAD, one PLAY
+→ read back since=0: 1 actions total (was 0), 1 of them ours
+   PLAY  guid=probe-…-play  started=0 position=1800 total=1800
+```
+
+**Two posted, 2xx returned, one stored.** The `DOWNLOAD` is gone with no error of any kind — exactly
+the behaviour this ADR predicted from the PHP, and exactly why it is dangerous: a client that trusts
+the 2xx believes it succeeded.
+
+Everything the ADR decided stands unchanged. What changes is its confidence: the consequence for
+CLAUDE.md §1 requirement 9 — that mark-on-download **cannot** make a download visible to other
+clients through this server — is now a measured fact rather than an inference.
+
+The synthetic feed used (`https://podsilo.invalid/probe-<millis>.xml`) matches no real subscription.
+Note that gpoddersync exposes no way to delete an episode action, so the one `PLAY` row remains on
+the test account; that is harmless and was the point.

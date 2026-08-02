@@ -60,3 +60,22 @@ for interoperability even when duration data was never available.
 - `net.drehtuer.podsilo.core.sync.toOutboundAction()` (`:core:sync`) implements exactly this
   mapping; see `OutboundEpisodeActionTest` for the covered cases (known duration, unknown duration,
   `DOWNLOADED` vs `SKIPPED`, local-only states never emitting an action).
+
+## Round-tripped against a real Nextcloud (2026-08-02)
+
+The encoding this ADR chose — `started = 0, position = total, total = <duration>` — was taken from
+AntennaPod's convention, which is convention rather than specification. It now survives a real
+server unchanged.
+
+Nextcloud 33.0.5 with gpoddersync, posted and read straight back:
+
+```
+PLAY  guid=probe-…-play  started=0  position=1800  total=1800
+```
+
+Byte-for-byte what was sent. Worth having, because the fields are exactly the sort of thing a server
+is free to normalise, clamp or drop — and a silently altered `position` would make Podsilo's skips
+look like partial listens to every other client.
+
+Verified in the same run as `docs/decisions/0008`, whose `DOWNLOAD` was *not* kept — so this is a
+positive result from a run where the negative control also behaved as predicted.

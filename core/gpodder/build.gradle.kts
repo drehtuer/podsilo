@@ -38,8 +38,10 @@ tasks.register<JavaExec>("nextcloudProbe") {
     classpath = sourceSets["test"].runtimeClasspath
     standardOutput = System.out
     args =
-        listOfNotNull(
-            project.findProperty("host")?.toString(),
-            project.findProperty("handoff")?.toString(),
+        listOf(
+            project.findProperty("host")?.toString().orEmpty(),
+            project.findProperty("handoff")?.toString().orEmpty(),
+            // Writes are opt-in and name the account they may touch: -Pwrite=<loginName>
+            project.findProperty("write")?.toString().orEmpty(),
         )
 }

@@ -44,7 +44,8 @@ below differ enormously in how well-proven they are.
 | `KeystoreAppPasswordCipher` round-trip | ❌ Never run | Needs a real device/emulator (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ❌ Never run | Needs a real `DocumentsProvider` (ADR 0011) |
 | **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`) |
-| **A real Nextcloud** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`). Read-only — nothing was written |
+| **A real Nextcloud (read)** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`) |
+| **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/decisions/0002`) |
 
 **In short: Tier 1 is the everyday path and Tier 2 now works when you need a real device.** Tier 1 is
 where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is slow enough (≈28 s to boot,
@@ -336,6 +337,17 @@ Separate from the above, and deliberately not a test:
 ```bash
 ./gradlew :core:gpodder:nextcloudProbe -Phost=cloud.example.org
 ```
+
+Read-only by default. Writes are opt-in **and** name the account they may touch:
+
+```bash
+./gradlew :core:gpodder:nextcloudProbe -Phost=cloud.example.org -Pwrite=<loginName>
+```
+
+A login flow is approved by whoever is signed in to the browser, so without that guard a write pass
+could post to a real account by accident. If a different account approves, the probe reports what it
+saw and stops without writing. Use a **test account** — gpoddersync cannot delete an episode action,
+so anything written stays.
 
 It drives the **production** `RetrofitNextcloudLoginFlowClient` and `RetrofitGpodderClient` through
 Login Flow v2, prints the URL for a human to approve in a browser, polls, verifies gpoddersync, and
