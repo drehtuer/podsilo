@@ -4,6 +4,8 @@ package net.drehtuer.podsilo.feature.settings
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -201,6 +203,42 @@ class SettingsScreensTest {
         // Absent on purpose: the extension is appended after resolution, not resolved (CLAUDE.md §6).
         compose.onAllNodes(hasText("{ext}")).assertCountEquals(0)
         compose.onNode(hasText("never renamed", substring = true)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun `a chip inserts into the field that has focus, not always the file template`() {
+        // Reported from the device: tapping a placeholder while editing the folder field appended
+        // it to the *file* template instead.
+        compose.setContent {
+            NamingScreen(
+                state = NamingUiState(folderTemplate = "{podcast}", fileTemplate = "{date}"),
+                onEvent = { namingEvents += it },
+                onBack = {},
+            )
+        }
+
+        // Focus the *folder* field (matched by its label, not its contents), then tap a chip.
+        compose.onNode(hasText("Folder template") and hasSetTextAction()).performClick()
+        namingEvents.clear()
+        compose.onNode(hasText("{title}") and hasClickAction() and !hasSetTextAction()).performClick()
+
+        val folderEdits = namingEvents.filterIsInstance<NamingEvent.FolderTemplateChanged>()
+        assertTrue("the chip did not reach the focused folder field: $namingEvents", folderEdits.isNotEmpty())
+        assertTrue(
+            "the chip was not inserted into the folder template",
+            folderEdits.last().value.contains("{title}"),
+        )
+    }
+
+    @Test
+    fun `the screen says where the file extension comes from`() {
+        // `{ext}` is deliberately not a chip (CLAUDE.md §6), but its absence read as an omission —
+        // the preview grows a ".mp3" from nowhere.
+        compose.setContent {
+            NamingScreen(state = NamingUiState(), onEvent = { namingEvents += it }, onBack = {})
+        }
+
+        compose.onNode(hasText("added automatically", substring = true)).performScrollTo().assertIsDisplayed()
     }
 
     @Test
