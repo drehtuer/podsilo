@@ -1415,3 +1415,69 @@ decide* filter, and an `ERROR` row is not "to decide" — it *has* a ledger row.
 the setup was wrong, which is the good version of a failing test.
 
 **Verified:** `./gradlew ktlintCheck detekt test assembleDebug` — 372 tests, green.
+
+---
+
+## 2026-08-02 (evening) — The first screen, and an emulator that had never booted
+
+**Attempted:** S2's Composable, its tests, and — because the instruction was that testing had to go
+through the software emulator — actually making Tier 2 work, which no previous session had managed.
+
+### The emulator: an error message pointing at the wrong thing
+
+`docs/dev-environment.md` had recorded the failure honestly and left it uninvestigated:
+
+```
+Error: Missing system image for Google APIs x86_64 podsilo-test.
+```
+
+The system image was installed the whole time. `avdmanager` infers the SDK root from **its own
+location**, not from `ANDROID_HOME` — and this container deliberately keeps the command-line tools
+at `/opt/android-cmdline-tools`, outside `$ANDROID_HOME=/opt/android-sdk`, so the volume mount can't
+shadow them (§8.5). So it decided the root was `/opt` and wrote
+
+```ini
+image.sysdir.1 = android-sdk/system-images/...   →  /opt/android-sdk/android-sdk/...
+```
+
+One `sed` on one line, and the AVD boots in 28 s. **The lesson is about how the failure was framed,
+not the fix.** The doc's diagnosis — "looks like a partially created AVD" — was a reasonable guess
+from the error text, and it sent nobody anywhere for two sessions. What broke it open was ignoring
+the message entirely and diffing the *config file* against what the path should be. The clue had
+been on screen all along, in warnings everyone reads past: `Observed package id 'emulator' in
+inconsistent location '/opt/android-sdk/emulator' (Expected '/opt/emulator')`.
+
+It is now `scripts/emulator-start.sh`, verified from a deleted AVD, because a fix that lives only in
+a journal entry is a fix that gets rediscovered.
+
+### The screen
+
+`EpisodeListScreen` renders state and emits events and decides nothing. That is not a style
+preference here: `EpisodeUi.actions` is computed once in the view model, so the row body, the
+overflow menu and the accessibility actions **cannot disagree** about what an episode currently
+offers. A screen that re-derived "should this show Retry?" from `ledgerState` would be a second
+opinion, and ADR 0011 is precisely a case where the second opinion is wrong.
+
+14 Compose tests run under Robolectric — Tier 1 by CLAUDE.md §4's own definition (headless, no
+emulator), and they run in seconds. The two instrumented tests exist to prove the *tier*, not to
+duplicate coverage. Worth keeping that ratio.
+
+**Two tests that only a rendering test can catch**, both from `docs/UI_interface.md` §7:
+
+- a `DOWNLOADING` row with no in-process progress must say *resuming*, not draw 0 %. After process
+  death WorkManager's progress is gone; a progress bar at zero asserts something false.
+- a missing duration has *no part* in the meta line — not "unknown", not a fabricated value.
+
+### detekt as a design reviewer, again
+
+Five findings, four fixed by splitting `EpisodeRow` out of the screen file. The split is right on its
+own terms — chrome and row have different jobs — but it was detekt that noticed, which is the third
+session running where a length rule found a real seam. The one genuine suppression was
+`CyclomaticComplexMethod` on an exhaustive `when` over a sealed event hierarchy: the complexity is
+the point, and collapsing it would hide which events exist.
+
+**Verified:** `./gradlew ktlintCheck detekt test assembleDebug` green, 386 tests, 3 skipped; plus
+`:feature:episodes:connectedDebugAndroidTest`, 2 tests green on `podsilo-ci(AVD) - 15`.
+
+**Still true:** the app has never been launched by a human. S2 has no route into it — `MainActivity`
+still renders a placeholder — so what ran on the emulator was the screen under test, not the app.

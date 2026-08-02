@@ -6,11 +6,11 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: no screens yet.** Everything underneath them is built and tested — subscription
+> **Status: one screen of eight.** Everything underneath them is built and tested — subscription
 > mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
-> (339 JVM tests, green). The Compose UI is fully designed (`docs/UI.md`) and its foundations are in
-> place, but the screens themselves are unwritten, so the app installs and shows a placeholder.
-> Nothing here has run on a real device.
+> (386 JVM tests, green). The Compose UI is fully designed (`docs/UI.md`); the **episode list** is
+> built and has run on an emulator, and the other seven screens are unwritten, so the app itself
+> still installs and shows a placeholder.
 
 ## The idea
 

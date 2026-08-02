@@ -1001,10 +1001,11 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 | 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
-| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ◐ foundations built; **screens not written** | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
+| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ◐ **S2 built**; S1, S3–S8 and the `NavHost` not written | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
 | 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
-**Everything below the UI is built and green** (339 tests, 3 skipped as of 2026-08-01), and so is
-everything the UI *binds to* — every port in `docs/UI_interface.md` §8 is now implemented, not just
-declared. What is missing is the screens: S1–S8, their state types, their ViewModels and the
-`NavHost`. Nothing blocks them. Nothing has run on a device.
+**Everything below the UI is built and green** (386 tests, 3 skipped as of 2026-08-02), and so is
+everything the UI *binds to* — every port in `docs/UI_interface.md` §8 is implemented, not just
+declared. **S2 (episode list) is the first screen that renders**, view model and Composable, and it
+has been exercised on the in-container emulator. What is missing is S1, S3–S8, their state types and
+ViewModels, and the `NavHost` — so nothing yet routes to S2 inside the app. Nothing blocks them.

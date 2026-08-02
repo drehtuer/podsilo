@@ -121,6 +121,9 @@ sealed interface EpisodeListEvent {
     data object DownloadAllDismissed : EpisodeListEvent
 
     data object PullToRefresh : EpisodeListEvent
+
+    /** The banner always carries its fix as a button (`docs/UI.md` §12.11). */
+    data object PausedBannerActionClicked : EpisodeListEvent
 }
 
 /**
@@ -139,6 +142,9 @@ sealed interface EpisodeListEffect {
     data class ShowMessage(
         val text: SnackbarText,
     ) : EpisodeListEffect
+
+    /** Ask the host to fix whatever is holding the queue — in practice, the folder picker. */
+    data object ResolvePausedQueue : EpisodeListEffect
 }
 
 /**

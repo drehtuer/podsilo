@@ -6,17 +6,21 @@ order. Cross-references `docs/architecture.md`. See that document's [§13 build-
 checklist](docs/architecture.md#13-build-order-checklist) for the module-order view of the same
 work.
 
-**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c's foundations and S2's logic layer
-complete, no Composable written. 372 tests, 3 skipped.**
+**Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c's foundations complete and **S2 is built,
+screen included**. 386 tests, 3 skipped.**
 
-Everything the UI binds to now exists: schema v2 with the error log and the project's first
-migration, `KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the
-mark-old rule, connectivity, the theme, and `sanitizeEpisodeHtml`.
+Everything the UI binds to exists: schema v3 with the error log and its migrations,
+`KEY_USER_REQUESTED` and the duplicate guard, Login Flow v2, per-feed refresh, the mark-old rule,
+connectivity, the theme, and `sanitizeEpisodeHtml`.
 
-**What is not written: any Composable.** S2 has its state types, events, effects and view model —
-all tested — but no screen. S1, S3 and S4–S8 have neither. `MainActivity` renders a placeholder
-inside the real theme, and there is no `NavHost`. None of it is blocked on anything: every port the
-screens need is declared *and* implemented. Nothing in this project has ever run on a device.
+**S2 is the first screen that renders.** `EpisodeListScreen` + `EpisodeRow`, with 14 Compose tests
+under Robolectric and 2 instrumented tests that have actually run on an emulator — the first Podsilo
+code ever executed on an Android device. **Still unwritten: S1, S3 and S4–S8.** `MainActivity`
+renders a placeholder inside the real theme and there is no `NavHost`, so S2 is reachable from tests
+but not yet from the app.
+
+**Tier 2 now works** (`scripts/emulator-start.sh`), so a Composable can be checked on a real device
+without the Windows-host path — see `docs/dev-environment.md` §6.
 
 Each tier's completion note below is kept as written at the time, in build order.
 
@@ -188,7 +192,12 @@ was the service locator CLAUDE.md §3 forbids.
   `EpisodeRepository.get`, `EpisodeLedgerRepository.get`, and a `GpodderClientFactory` port so
   `SyncWorker` is testable with a fake client.
 
-### 4c. Compose UI (emulator recommended, per CLAUDE.md's Tier 3 host-emulator path)
+### 4c. Compose UI (Tier 2 emulator works; see `docs/dev-environment.md` §6)
+
+**Update (2026-08-02): S2 is built.** The screen renders from the view model's state and emits
+events, with nothing decided locally. Compose tests run under Robolectric as Tier 1, and the same
+screen was exercised on the in-container emulator — the first time any of this project's code has
+run on Android.
 
 **Update (2026-08-01): designed, not yet built.** All eight screens and every state
 `docs/UI.md` enumerates are drawn (light and dark), and the UI↔logic contract is written down in
@@ -257,12 +266,12 @@ built in parallel, and the one genuinely blocking item is an **ADR, not code**.
   here, not in `:app`:** it shares the ledger query and the `EpisodeUi` projection with S2, and a
   badge that disagrees with the list it opens is exactly the bug co-location prevents.
   - **Built:** `sanitizeEpisodeHtml` (16 tests); the `EpisodeUi` projection with its `actions` set;
-    `TriageWriter` (the one place a UI decision becomes a ledger row); and **S2's state types,
-    events, effects and `EpisodeListViewModel`** with 18 tests covering the traps — a tap never
-    triages, a swipe obeys the configured mapping, bulk writes are one transaction, and only
-    *Download again* carries `userRequested`.
-  - **Not built:** every Composable. S2 has no screen yet, and S1 and S3 have neither screen nor
-    view model.
+    `TriageWriter` (the one place a UI decision becomes a ledger row); **S2's state types, events,
+    effects and `EpisodeListViewModel`** with 18 tests covering the traps — a tap never triages, a
+    swipe obeys the configured mapping, bulk writes are one transaction, and only *Download again*
+    carries `userRequested`; and **S2's screen** (`EpisodeListScreen` + `EpisodeRow`), stateless
+    against that view model, with 14 Robolectric Compose tests and 2 instrumented ones.
+  - **Not built:** S1 and S3 have neither screen nor view model.
   - **`EpisodeUi` now matches `docs/UI_interface.md` §1.** `FailureUi` carries a stored `ErrorCause`
     and `retryable` (schema v3), so ADR 0011's "that row offers *Choose folder*, never *Retry*" is
     enforceable and tested rather than aspirational. `QueueStatus` (paused banner) and
