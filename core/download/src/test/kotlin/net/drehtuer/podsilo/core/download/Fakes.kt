@@ -11,6 +11,7 @@ import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
@@ -72,6 +73,13 @@ class FakeEpisodeRepository(
 
     override suspend fun get(episodeKey: String): Episode? = episodes.firstOrNull { it.episodeKey == episodeKey }
 
+    /** S1 only; the download tests never read it, but the port has to be satisfied honestly. */
+    override suspend fun latestPublicationByFeed(): Map<String, Long> =
+        episodes
+            .mapNotNull { episode -> episode.pubDate?.let { episode.feedUrl to it } }
+            .groupBy(Pair<String, Long>::first, Pair<String, Long>::second)
+            .mapValues { (_, dates) -> dates.max() }
+
     override suspend fun replaceForFeed(
         feedUrl: String,
         episodes: List<Episode>,
@@ -87,7 +95,8 @@ class FakeEpisodeRepository(
 
 class FakeEpisodeLedgerRepository(
     initial: List<EpisodeLedgerRow> = emptyList(),
-) : EpisodeLedgerRepository {
+) : EpisodeLedgerRepository,
+    EpisodeListRepository {
     private val rows = MutableStateFlow(initial.associateBy { it.episodeKey })
 
     /** Every write in order — the download path's durability is about *sequence*, not just end state. */
@@ -98,6 +107,10 @@ class FakeEpisodeLedgerRepository(
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
     override suspend fun get(episodeKey: String): EpisodeLedgerRow? = rows.value[episodeKey]
+
+    override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = MutableStateFlow(null)
+
+    override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> = MutableStateFlow(emptyList())
 
     override suspend fun upsert(row: EpisodeLedgerRow) {
         writes += row

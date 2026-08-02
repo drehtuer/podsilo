@@ -6,11 +6,12 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: one screen of eight.** Everything underneath them is built and tested — subscription
-> mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
-> (386 JVM tests, green). The Compose UI is fully designed (`docs/UI.md`); the **episode list** is
-> built and has run on an emulator, and the other seven screens are unwritten, so the app itself
-> still installs and shows a placeholder.
+> **Status: three screens of eight, and the app runs.** Everything underneath them is built and
+> tested — subscription mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud
+> login, naming and tagging (437 JVM tests, green). The podcast list, episode list and detail sheet
+> are built and navigable, and the app has been launched on an emulator. Settings, the connection
+> dialog, the naming editor, activity and the error log are still unwritten — the buttons that would
+> open them say so. Nothing has yet been tested against a real Nextcloud.
 
 ## The idea
 

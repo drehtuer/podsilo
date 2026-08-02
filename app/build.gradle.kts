@@ -15,6 +15,7 @@ android {
         applicationId = "net.drehtuer.podsilo"
         minSdk = 33
         targetSdk = 37
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -46,6 +47,7 @@ dependencies {
     implementation(project(":core:gpodder"))
     implementation(project(":core:naming"))
     implementation(project(":core:sync"))
+    implementation(project(":feature:episodes"))
 
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.work)
@@ -63,6 +65,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.documentfile)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -70,6 +76,10 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
+
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)

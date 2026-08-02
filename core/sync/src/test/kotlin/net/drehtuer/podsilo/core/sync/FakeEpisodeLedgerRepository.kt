@@ -10,6 +10,7 @@ import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 
@@ -19,7 +20,8 @@ import net.drehtuer.podsilo.core.model.port.LedgerFilter
  */
 class FakeEpisodeLedgerRepository(
     initial: List<EpisodeLedgerRow> = emptyList(),
-) : EpisodeLedgerRepository {
+) : EpisodeLedgerRepository,
+    EpisodeListRepository {
     private val state = MutableStateFlow(initial.associateBy { it.episodeKey })
 
     val allRows: List<EpisodeLedgerRow> get() = state.value.values.toList()
@@ -30,6 +32,10 @@ class FakeEpisodeLedgerRepository(
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
     override suspend fun get(episodeKey: String): EpisodeLedgerRow? = state.value[episodeKey]
+
+    override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = MutableStateFlow(null)
+
+    override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> = MutableStateFlow(emptyList())
 
     override suspend fun upsert(row: EpisodeLedgerRow) {
         state.value = state.value + (row.episodeKey to row)

@@ -28,7 +28,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-private const val MINUTES_PER_HOUR = 60
+internal const val MINUTES_PER_HOUR = 60
 
 /**
  * One episode row and everything it renders — split from the screen because a Compose file is a
@@ -125,7 +125,7 @@ private fun EpisodeActions(
  * A `FOLDER_UNAVAILABLE` or `DISK_FULL` failure replaces *Retry* with the action that can actually
  * clear it (`docs/UI.md` §12.11, `docs/decisions/0011`) — a Retry there is a button that cannot work.
  */
-private fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
+internal fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
     when (this) {
         EpisodeUiAction.DOWNLOAD -> "Download"
         EpisodeUiAction.DOWNLOAD_AGAIN -> "Download again"
@@ -141,11 +141,11 @@ private fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
         EpisodeUiAction.OPEN_IN_BROWSER, EpisodeUiAction.COPY_LINK -> null
     }
 
-private fun EpisodeUi.metaLine(zone: ZoneId): String =
+internal fun EpisodeUi.metaLine(zone: ZoneId): String =
     listOfNotNull(publishedAt?.formatDate(zone), duration?.formatDuration())
         .joinToString(" · ")
 
-private fun EpisodeUi.statusLine(): String? =
+internal fun EpisodeUi.statusLine(): String? =
     when (ledgerState) {
         null -> null
         LedgerState.QUEUED -> "queued"
@@ -176,7 +176,7 @@ private fun Duration.formatDuration(): String {
  * *resuming* rather than implying it knows how far along it is.
  */
 @Composable
-private fun DownloadProgressBar(progress: DownloadProgress?) {
+internal fun DownloadProgressBar(progress: DownloadProgress?) {
     val percent = progress?.percent
     if (percent != null) {
         LinearProgressIndicator(

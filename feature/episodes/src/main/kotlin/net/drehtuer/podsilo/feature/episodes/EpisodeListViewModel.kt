@@ -21,8 +21,8 @@ import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
-import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
@@ -47,7 +47,7 @@ class EpisodeListViewModel(
     private val feedUrl: String,
     private val feedRepository: FeedRepository,
     private val episodeRepository: EpisodeRepository,
-    private val ledgerRepository: EpisodeLedgerRepository,
+    private val listRepository: EpisodeListRepository,
     private val settingsRepository: SettingsRepository,
     private val connectivityMonitor: ConnectivityMonitor,
     private val triageWriter: TriageWriter,
@@ -98,7 +98,7 @@ class EpisodeListViewModel(
             // flatMapLatest, not combine: a filter change must *replace* the query, so rows from the
             // previous filter can never be rendered under the new chip.
             combine(
-                ledgerRepository.observeEpisodes(
+                listRepository.observeEpisodes(
                     LedgerFilter(state = snapshot.filter.ledgerState, feedUrl = feedUrl),
                 ),
                 feedFlow,
@@ -226,7 +226,7 @@ class EpisodeListViewModel(
      */
     private suspend fun emitDownloadAllPreview() {
         val undecided =
-            ledgerRepository.undecided(BulkScope(kind = BulkScopeKind.ALL_UNDECIDED, feedUrl = feedUrl))
+            listRepository.undecided(BulkScope(kind = BulkScopeKind.ALL_UNDECIDED, feedUrl = feedUrl))
         pendingBulk.value = if (undecided.isEmpty()) null else buildBulkPreview(undecided, spaceProbe.freeBytes())
     }
 

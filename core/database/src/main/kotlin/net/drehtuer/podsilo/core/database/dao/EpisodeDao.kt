@@ -18,6 +18,14 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE episodeKey = :episodeKey")
     suspend fun get(episodeKey: String): EpisodeEntity?
 
+    /**
+     * Newest publication date per feed, for S1's ordering. Undated episodes contribute nothing:
+     * `MAX` skips NULLs, so a feed with only undated episodes is simply absent from the result and
+     * sorts as "never fetched" rather than as ancient.
+     */
+    @Query("SELECT feedUrl, MAX(pubDate) AS latest FROM episodes GROUP BY feedUrl")
+    suspend fun latestPublicationByFeed(): List<FeedLatestRow>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(episodes: List<EpisodeEntity>)
 
@@ -34,3 +42,9 @@ interface EpisodeDao {
         insertAll(episodes)
     }
 }
+
+/** Projection for [EpisodeDao.latestPublicationByFeed]; `latest` is null when the feed has no dated episode. */
+data class FeedLatestRow(
+    val feedUrl: String,
+    val latest: Long?,
+)

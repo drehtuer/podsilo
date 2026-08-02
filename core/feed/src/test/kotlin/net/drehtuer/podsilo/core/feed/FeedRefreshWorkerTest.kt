@@ -109,6 +109,7 @@ class FeedRefreshWorkerTest {
                                 markOldEpisodesRule =
                                     MarkOldEpisodesRule(
                                         ledgerRepository = ledger,
+                                        listRepository = ledger,
                                         settingsRepository = settings,
                                         clock = Clock.fixed(Instant.ofEpochMilli(NOW_MILLIS), ZoneOffset.UTC),
                                         zone = ZoneOffset.UTC,
@@ -345,6 +346,12 @@ private class RecordingEpisodeRepository : EpisodeRepository {
     val stored = mutableMapOf<String, List<Episode>>()
 
     override fun observeForFeed(feedUrl: String): Flow<List<Episode>> = MutableStateFlow(stored[feedUrl].orEmpty())
+
+    override suspend fun latestPublicationByFeed(): Map<String, Long> =
+        stored
+            .mapValues { (_, episodes) -> episodes.mapNotNull { it.pubDate }.maxOrNull() }
+            .mapNotNull { (feedUrl, latest) -> latest?.let { feedUrl to it } }
+            .toMap()
 
     override suspend fun get(episodeKey: String): Episode? =
         stored.values.flatten().firstOrNull {

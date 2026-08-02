@@ -11,18 +11,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
-import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.SyncState
-import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.EpisodeAction
 import net.drehtuer.podsilo.core.model.port.EpisodeActionPage
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
-import net.drehtuer.podsilo.core.model.port.EpisodeListItem
 import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
-import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.GpodderClient
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 import net.drehtuer.podsilo.core.model.port.NamingSettings
@@ -192,9 +188,9 @@ private class FakeEpisodeLedgerRepository : EpisodeLedgerRepository {
 
     override fun observe(filter: LedgerFilter): Flow<List<EpisodeLedgerRow>> = rows.map { it.values.toList() }
 
-    override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
-
     override suspend fun get(episodeKey: String): EpisodeLedgerRow? = rows.value[episodeKey]
+
+    override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = MutableStateFlow(null)
 
     override suspend fun upsert(row: EpisodeLedgerRow) {
         rows.value = rows.value + (row.episodeKey to row)
@@ -208,10 +204,6 @@ private class FakeEpisodeLedgerRepository : EpisodeLedgerRepository {
     }
 
     override suspend fun upsertAll(rows: List<EpisodeLedgerRow>) = rows.forEach { row -> upsert(row) }
-
-    override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> = emptyList()
-
-    override suspend fun undecided(scope: BulkScope): List<Episode> = emptyList()
 }
 
 private class FakeSyncStateRepository : SyncStateRepository {

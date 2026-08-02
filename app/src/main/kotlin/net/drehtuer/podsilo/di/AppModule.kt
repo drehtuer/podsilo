@@ -12,7 +12,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import net.drehtuer.podsilo.core.download.SyncTrigger
 import net.drehtuer.podsilo.core.gpodder.RetrofitGpodderClientFactory
+import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
 import net.drehtuer.podsilo.core.model.port.GpodderClientFactory
+import net.drehtuer.podsilo.system.AndroidConnectivityMonitor
 import net.drehtuer.podsilo.work.WorkScheduler
 import okhttp3.OkHttpClient
 import java.time.Clock
@@ -54,4 +56,11 @@ abstract class BindingsModule {
     /** `:core:download` asks for a sync pass through this; `:app` is where the worker it schedules lives. */
     @Binds
     abstract fun bindSyncTrigger(workScheduler: WorkScheduler): SyncTrigger
+
+    /**
+     * The screens ask "is there a network" before starting a refresh, so an offline pull can answer
+     * instantly rather than timing out against every feed (`docs/UI.md` §12.10).
+     */
+    @Binds
+    abstract fun bindConnectivityMonitor(monitor: AndroidConnectivityMonitor): ConnectivityMonitor
 }

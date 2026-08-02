@@ -100,6 +100,20 @@ interface EpisodeListDao {
         olderThanMillis: Long?,
     ): List<FeedUndecidedCountRow>
 
+    /**
+     * [countUndecidedByFeed]'s live twin, for S1's badges — same predicate, no cutoff parameter
+     * because a home-screen badge is never scoped to a date.
+     *
+     * Counting in SQL rather than observing the episodes and grouping them in Kotlin is the point:
+     * the badges are a handful of integers over a table that can hold thousands of rows.
+     */
+    @Query(
+        "SELECT e.feedUrl AS feedUrl, COUNT(*) AS count FROM episodes e " +
+            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
+            "GROUP BY e.feedUrl",
+    )
+    fun observeUndecidedCounts(): Flow<List<FeedUndecidedCountRow>>
+
     /** The rows [countUndecidedByFeed] counts. Same predicate, verbatim — see that KDoc. */
     @Query(
         "SELECT e.* FROM episodes e " +

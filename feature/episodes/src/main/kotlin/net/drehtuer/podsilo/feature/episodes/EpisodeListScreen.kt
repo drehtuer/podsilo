@@ -112,11 +112,13 @@ private fun PausedBanner(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(message, style = MaterialTheme.typography.bodyMedium)
+        // weight, and the button unwrapped: without these the message takes the whole row and the
+        // action wraps to one word per line ("Choos / e / folder"), seen on the first device run.
+        Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         TextButton(
             onClick = { onEvent(EpisodeListEvent.PausedBannerActionClicked) },
             modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
-        ) { Text(action) }
+        ) { Text(action, maxLines = 1, softWrap = false) }
     }
 }
 

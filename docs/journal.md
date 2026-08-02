@@ -1481,3 +1481,80 @@ the point, and collapsing it would hide which events exist.
 
 **Still true:** the app has never been launched by a human. S2 has no route into it — `MainActivity`
 still renders a placeholder — so what ran on the emulator was the screen under test, not the app.
+
+---
+
+## 2026-08-02 (later) — S1, S3, a NavHost, and the app running for the first time
+
+**Attempted:** the rest of `:feature:episodes` (S1 podcast list, S3 detail sheet) plus the `:app`
+navigation that makes them reachable — and then actually launching the thing.
+
+### The bug that mattered
+
+The app started, S1 rendered, and the naming preview on the setup checklist showed `—` — its
+failure fallback. `adb logcat`:
+
+```
+Caused by: java.util.regex.PatternSyntaxException: Syntax error in regexp pattern near index 21
+\{(\w+)(?::([^}]*))?}
+    at net.drehtuer.podsilo.core.naming.TemplateTokenKt.<clinit>
+```
+
+Android's regex engine is ICU. **ICU rejects an unescaped `}`; the JVM accepts it.** The pattern is
+a top-level `val`, so on a device it threw inside a static initialiser and took every filename in
+the app with it — not just the preview.
+
+**437 JVM tests were green, and could not have caught it.** `:core:naming` is pure JVM by design;
+the code is identical, only the engine differs. Its table tests are the ones CLAUDE.md §7 ranks
+fifth-highest *because naming is the entire user experience of a download*, and they were compiling
+that regex with the wrong implementation. One character, invisible to the whole suite.
+
+That is now `docs/decisions/0017`: pure-JVM logic that ships inside the app gets **one** test that
+runs on a real Android runtime — not a mirrored suite, a thin one whose job is to load the classes
+and compile the patterns under the platform's own implementations. `NamingOnAndroidTest` is four
+tests covering all four of the module's regexes.
+
+**The uncomfortable part is the timing.** Tier 2 started working yesterday. This bug has been in the
+tree since Tier 1 and would have shipped. The lesson is not "write more tests" — the suite was
+thorough — it is that *a green suite proves things about the environment it ran in*, and a
+pure-JVM module inside an Android app has two environments.
+
+### Two smaller things the first run found
+
+Both invisible to unit tests, both obvious in one screenshot:
+
+- The paused banner's message took the whole row, wrapping *Choose folder* into `Choos / e /
+  folder`. A `weight(1f)` and `softWrap = false`.
+- On first launch the paused banner and the setup checklist both said "choose a download folder",
+  stacked. The checklist says it better, attached to the step it belongs to, so the banner now
+  yields to it. Regression tests for both.
+
+Screenshots are cheap and I should have taken one earlier.
+
+### detekt found the port split, again
+
+Adding S1's two queries pushed `EpisodeLedgerRepository` to eleven methods and detekt flagged it. My
+first move was to suppress and write a backlog entry — then it flagged the *interface* too, which
+was the honest signal that the split was due now, not later.
+
+`EpisodeListRepository` is the four UI-facing joins; `EpisodeLedgerRepository` keeps the durable
+record and its outbox. **The seam already existed** — the DAOs were split along exactly that line
+two sessions ago, with a KDoc explaining why. Four production call sites; the test fakes implement
+both interfaces, which is honest for a double. This is the fourth session running where a detekt
+length rule found a real seam rather than a style nit.
+
+### Frozen ordering
+
+S1's list is sorted once on cold start and once per explicit refresh, then held as a list of URLs
+into which updated rows are re-projected (`docs/UI.md` §4). Deliberately an `init`-launched job and
+a `MutableStateFlow` rather than something derived inside `state`: "computed once" cannot be
+expressed as a derivation of the flows it must not react to. A feed subscribed since the last freeze
+is **appended**, not sorted in — it has to appear, but inserting it mid-list would shift every row
+below it, which is the movement the rule exists to prevent. Both have tests.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 437 tests, 3 skipped; six instrumented
+tests green on the emulator; the app installed, launched, and rendered S1 with no crash.
+
+**Still true:** S4–S8 do not exist, so the buttons that would open them show a snackbar naming the
+missing screen. Nothing has been tested against a real Nextcloud, and no episode has ever been
+downloaded by the running app.

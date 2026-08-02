@@ -8,6 +8,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import androidx.core.content.getSystemService
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -32,7 +33,7 @@ import javax.inject.Singleton
 class AndroidConnectivityMonitor
     @Inject
     constructor(
-        private val context: Context,
+        @ApplicationContext private val context: Context,
     ) : ConnectivityMonitor {
         override fun observe(): Flow<Connectivity> =
             callbackFlow {
