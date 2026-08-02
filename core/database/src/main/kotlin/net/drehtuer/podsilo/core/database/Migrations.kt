@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Every numeric literal in this file is a schema version, and each is already named by the property
+// it belongs to — MIGRATION_1_2 goes 1 -> 2.
+@file:Suppress("MagicNumber")
+
 package net.drehtuer.podsilo.core.database
 
 import androidx.room.migration.Migration
@@ -42,5 +46,21 @@ val MIGRATION_1_2: Migration =
         }
     }
 
+/**
+ * Records *why* a download failed, next to the message saying what happened.
+ *
+ * Additive and nullable, so every existing row keeps its `lastError` and simply has no
+ * classification — which the UI reads as `UNKNOWN` and therefore offers a plain **Retry** for. That
+ * is the right default for historical rows: the alternative, guessing a cause from the stored
+ * sentence, would be wrong silently and in the unsafe direction.
+ */
+val MIGRATION_2_3: Migration =
+    object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE episode_ledger ADD COLUMN lastErrorCause TEXT")
+            db.execSQL("ALTER TABLE episode_ledger ADD COLUMN lastErrorRetryable INTEGER")
+        }
+    }
+
 /** Every migration, in order — what `:app` hands to `Room.databaseBuilder().addMigrations(...)`. */
-val PODSILO_MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2)
+val PODSILO_MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3)

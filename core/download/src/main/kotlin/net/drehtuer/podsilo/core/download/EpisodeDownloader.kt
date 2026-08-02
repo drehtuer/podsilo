@@ -3,6 +3,7 @@
 package net.drehtuer.podsilo.core.download
 
 import net.drehtuer.podsilo.core.model.Episode
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.ResolvedName
@@ -19,6 +20,8 @@ import java.util.regex.PatternSyntaxException
 private const val HTTP_REQUEST_TIMEOUT = 408
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_SERVER_ERROR_FLOOR = 500
+private const val HTTP_UNAUTHORIZED = 401
+private const val HTTP_FORBIDDEN = 403
 
 /** What one run of the pipeline in `docs/architecture.md` §11 produced. */
 sealed interface DownloadOutcome {
@@ -40,6 +43,12 @@ sealed interface DownloadOutcome {
     data class Failed(
         val reason: String,
         val retryable: Boolean,
+        /**
+         * Classified here, where the failure is understood, and carried into the ledger so a screen
+         * never has to parse [reason] to decide between *Retry* and *Choose folder*
+         * (`docs/UI.md` §12.11).
+         */
+        val cause: ErrorCause,
     ) : DownloadOutcome
 
     /**
@@ -142,7 +151,11 @@ class EpisodeDownloader(
                 naming.compiledCleanupRules()
             } catch (invalidRule: PatternSyntaxException) {
                 val reason = invalidRule.message ?: "invalid title cleanup rule"
-                return DownloadOutcome.Failed("naming settings contain an invalid rule: $reason", retryable = false)
+                return DownloadOutcome.Failed(
+                    "naming settings contain an invalid rule: $reason",
+                    retryable = false,
+                    cause = ErrorCause.UNKNOWN,
+                )
             }
 
         val cacheFile = File(cacheDir, "${guidShort(episode.episodeKey)}.partial")
@@ -231,13 +244,21 @@ class EpisodeDownloader(
 
         val fileName =
             delivery.previousFileName ?: uniqueFileName(resolved).getOrElse { failure ->
-                return DownloadOutcome.Failed(failure.message ?: "download folder unavailable", retryable = false)
+                return DownloadOutcome.Failed(
+                    failure.message ?: "download folder unavailable",
+                    retryable = false,
+                    cause = ErrorCause.FOLDER_UNAVAILABLE,
+                )
             }
 
         return downloadTarget.deliver(resolved.folder, fileName, taggable).fold(
             onSuccess = { DownloadOutcome.Delivered(fileName, tagOutcome) },
             onFailure = { failure ->
-                DownloadOutcome.Failed(failure.message ?: "could not write to the download folder", false)
+                DownloadOutcome.Failed(
+                    failure.message ?: "could not write to the download folder",
+                    retryable = false,
+                    cause = ErrorCause.FOLDER_UNAVAILABLE,
+                )
             },
         )
     }
@@ -318,7 +339,14 @@ private fun EnclosureDownloadResult.toFailure(): DownloadOutcome.Failed =
                     code >= HTTP_SERVER_ERROR_FLOOR ||
                         code == HTTP_REQUEST_TIMEOUT ||
                         code == HTTP_TOO_MANY_REQUESTS,
+                // A signed enclosure URL that has expired comes back 401/403, and telling the user
+                // "the server said no" is more useful than "server error" when the fix is a re-sync.
+                cause = if (code == HTTP_UNAUTHORIZED || code == HTTP_FORBIDDEN) ErrorCause.AUTH else ErrorCause.SERVER,
             )
-        is EnclosureDownloadResult.NetworkError -> DownloadOutcome.Failed(reason, retryable = true)
-        is EnclosureDownloadResult.WriteError -> DownloadOutcome.Failed(reason, retryable = false)
+        is EnclosureDownloadResult.NetworkError ->
+            DownloadOutcome.Failed(reason, retryable = true, cause = ErrorCause.NETWORK)
+        // A lost folder grant is raised as an exception and classified at the call site, so a write
+        // failure reaching here is the disk itself.
+        is EnclosureDownloadResult.WriteError ->
+            DownloadOutcome.Failed(reason, retryable = false, cause = ErrorCause.DISK_FULL)
     }

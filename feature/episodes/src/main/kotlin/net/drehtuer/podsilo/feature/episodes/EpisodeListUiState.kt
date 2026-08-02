@@ -2,6 +2,7 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.port.LedgerFilterState
 import net.drehtuer.podsilo.core.model.port.SwipeAction
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
@@ -24,6 +25,9 @@ data class EpisodeListUiState(
     val feedTitle: String,
     val filter: EpisodeFilter = EpisodeFilter.TO_DECIDE,
     val content: Content = Content.Loading,
+    /** Sticky headers, indexed into [content]'s list so the two cannot drift. */
+    val sections: List<MonthSection> = emptyList(),
+    val queueStatus: QueueStatus = QueueStatus.Running,
     val selection: Selection? = null,
     val isRefreshing: Boolean = false,
     val isOffline: Boolean = false,
@@ -146,9 +150,20 @@ sealed interface SnackbarText {
         val count: Int,
     ) : SnackbarText
 
-    data class MarkedAsPlayed(
+    data class BulkApplied(
         val count: Int,
     ) : SnackbarText
+
+    /** Informational, **not** an error: the file was already there (`docs/decisions/0012` §4). */
+    data class AlreadyInFolder(
+        val fileName: String,
+    ) : SnackbarText
+
+    data class DownloadFailed(
+        val cause: ErrorCause,
+    ) : SnackbarText
+
+    data object LinkCopied : SnackbarText
 
     data object Offline : SnackbarText
 

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.BulkScope
@@ -61,6 +62,8 @@ fun ledgerRow(
     writtenFileName: String? = null,
     attempts: Int = 0,
     lastError: String? = null,
+    lastErrorCause: ErrorCause? = null,
+    lastErrorRetryable: Boolean? = null,
     syncedToServer: Boolean = false,
 ): EpisodeLedgerRow =
     EpisodeLedgerRow(
@@ -72,6 +75,8 @@ fun ledgerRow(
         syncedToServer = syncedToServer,
         attempts = attempts,
         lastError = lastError,
+        lastErrorCause = lastErrorCause,
+        lastErrorRetryable = lastErrorRetryable,
         writtenFileName = writtenFileName,
         durationSeconds = 1_800,
     )
@@ -277,4 +282,11 @@ class FakeSpaceProbe(
     var freeBytes: Long? = null,
 ) : DownloadSpaceProbe {
     override suspend fun freeBytes(): Long? = freeBytes
+}
+
+/** Folder grant the screen sees; flip it to exercise the paused banner. */
+class FakeFolderStatus(
+    var state: FolderState = FolderState.GRANTED,
+) : DownloadFolderStatus {
+    override fun observe(): Flow<FolderState> = MutableStateFlow(state)
 }

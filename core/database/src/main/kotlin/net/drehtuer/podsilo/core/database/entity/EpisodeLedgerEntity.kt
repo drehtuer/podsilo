@@ -23,6 +23,9 @@ data class EpisodeLedgerEntity(
     val syncedToServer: Boolean,
     val attempts: Int,
     val lastError: String?,
+    // Schema v3: the classification, kept beside the message so a screen never has to parse prose.
+    val lastErrorCause: String? = null,
+    val lastErrorRetryable: Boolean? = null,
     val writtenFileName: String?,
     val durationSeconds: Int?,
 )

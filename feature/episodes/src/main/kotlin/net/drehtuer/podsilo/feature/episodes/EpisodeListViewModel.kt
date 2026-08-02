@@ -29,6 +29,7 @@ import net.drehtuer.podsilo.core.model.port.LedgerFilter
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
+import java.time.ZoneId
 
 /** `WhileSubscribed` grace period: survives a rotation without restarting the query. */
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
@@ -52,6 +53,8 @@ class EpisodeListViewModel(
     private val triageWriter: TriageWriter,
     private val scheduler: EpisodeScheduler,
     private val spaceProbe: DownloadSpaceProbe,
+    private val folderStatus: DownloadFolderStatus,
+    private val zone: ZoneId = ZoneId.systemDefault(),
 ) : ViewModel() {
     private val filter = MutableStateFlow(EpisodeFilter.TO_DECIDE)
     private val selection = MutableStateFlow<Selection?>(null)
@@ -76,17 +79,20 @@ class EpisodeListViewModel(
         combine(
             filter,
             selection,
-            combine(refreshing, pendingBulk, ::Pair),
+            // Nested because `combine` tops out at five sources; these three are the screen's
+            // chrome — the indicator, the dialog and the paused banner — rather than its content.
+            combine(refreshing, pendingBulk, folderStatus.observe(), ::Triple),
             settingsRepository.observeSwipeMapping(),
             connectivityMonitor.observe(),
-        ) { current, currentSelection, refreshAndBulk, mapping, connectivity ->
+        ) { current, currentSelection, chrome, mapping, connectivity ->
             Snapshot(
-                current,
-                currentSelection,
-                refreshAndBulk.first,
-                refreshAndBulk.second,
-                mapping,
-                connectivity.online,
+                filter = current,
+                selection = currentSelection,
+                refreshing = chrome.first,
+                pendingBulk = chrome.second,
+                folder = chrome.third,
+                mapping = mapping,
+                online = connectivity.online,
             )
         }.flatMapLatest { snapshot ->
             // flatMapLatest, not combine: a filter change must *replace* the query, so rows from the
@@ -121,6 +127,8 @@ class EpisodeListViewModel(
                 } else {
                     EpisodeListUiState.Content.Episodes(rows)
                 },
+            sections = monthSectionsFor(rows, zone),
+            queueStatus = queueStatusFor(folder, rows),
             selection = selection,
             isRefreshing = refreshing,
             pendingBulk = pendingBulk,
@@ -187,7 +195,7 @@ class EpisodeListViewModel(
         when (action) {
             EpisodeUiAction.MARK_AS_PLAYED -> {
                 triageWriter.markAsPlayed(episodes)
-                emit(EpisodeListEffect.ShowMessage(SnackbarText.MarkedAsPlayed(episodes.size)))
+                emit(EpisodeListEffect.ShowMessage(SnackbarText.BulkApplied(episodes.size)))
             }
             EpisodeUiAction.DOWNLOAD, EpisodeUiAction.DOWNLOAD_AGAIN, EpisodeUiAction.RETRY -> {
                 triageWriter.queue(episodes)
@@ -261,6 +269,7 @@ class EpisodeListViewModel(
         val selection: Selection?,
         val refreshing: Boolean,
         val pendingBulk: BulkPreview?,
+        val folder: FolderState,
         val mapping: SwipeMapping,
         val online: Boolean,
     )

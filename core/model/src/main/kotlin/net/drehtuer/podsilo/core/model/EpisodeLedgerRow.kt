@@ -20,6 +20,13 @@ package net.drehtuer.podsilo.core.model
  *   action's ISO-8601 `timestamp` (see the two-timestamp-format gotcha in CLAUDE.md §11).
  * @property syncedToServer The outbox flag: `false` on every local write, flipped to `true` only
  *   on a confirmed 2xx POST. `getUnsynced()` is `WHERE syncedToServer = 0`.
+ * @property lastErrorCause Classified by whoever produced the failure, not re-derived from
+ *   [lastError]'s wording. A screen needs it to honour `docs/UI.md` §12.11: a `FOLDER_UNAVAILABLE`
+ *   row must offer *Choose folder*, never a bare *Retry*, and string-matching a message to work that
+ *   out would fail silently in the unsafe direction the first time the wording changed.
+ * @property lastErrorRetryable The pipeline's own verdict on whether another attempt could help.
+ *   Stored rather than inferred from [lastErrorCause] because the two genuinely differ — a 404 and a
+ *   503 are both `SERVER`, and only one is worth retrying.
  * @property writtenFileName Retry idempotency **only** — never a file-existence check (CLAUDE.md
  *   §11's single most important invariant).
  * @property durationSeconds Snapshot of `Episode.durationMs` (converted to seconds) at the moment
@@ -36,6 +43,8 @@ data class EpisodeLedgerRow(
     val syncedToServer: Boolean,
     val attempts: Int,
     val lastError: String?,
+    val lastErrorCause: ErrorCause? = null,
+    val lastErrorRetryable: Boolean? = null,
     val writtenFileName: String?,
     val durationSeconds: Int? = null,
 ) {
