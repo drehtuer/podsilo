@@ -52,3 +52,47 @@ a registry-reviewed release) — and accepted as recommended.
   container format this fork claims to support, re-check that specific code path first.
 - Tag writing remains **best-effort** per CLAUDE.md §6: a failure here must never block delivering
   the downloaded file or block marking the episode `DOWNLOADED`.
+
+## Which formats it actually handles (2026-08-02)
+
+Read off `SupportedFileFormat` in the 2.3.15 fork, prompted by the question *"are there formats that
+only support a subset of features, and is that handled?"*
+
+| Container | Readable | Accepts artwork | Notes |
+|---|---|---|---|
+| MP3 | ✅ | ✅ ID3v2 `APIC` | The overwhelming majority of podcast enclosures |
+| M4A / MP4 / M4B | ✅ | ✅ `covr` atom | The usual AAC-in-MP4 delivery |
+| OGG (Vorbis) | ✅ | ✅ `METADATA_BLOCK_PICTURE` | |
+| Opus | ✅ | ✅ (Vorbis comments) | |
+| FLAC | ✅ | ✅ `PICTURE` | |
+| WAV, AIFF | ✅ | ✅ via an ID3 chunk | Rare for podcasts |
+| WMA, DSF, RA/RM | ✅ | varies | Not seen in podcast feeds |
+| **Raw `.aac` (ADTS)** | ❌ | ❌ | **Not a supported format at all** |
+
+**The one real gap is raw `.aac`,** which CLAUDE.md §6 explicitly lists among the extensions to
+expect ("expect `m4a`, `aac`, `ogg`, `opus`"). A raw ADTS stream has no tag container to write into,
+so `AudioFileIO.read()` throws and the episode is delivered **untagged and without a cover**.
+
+That is the documented behaviour rather than a bug — §6 requires tag writing to be best-effort and
+forbids losing a download over it — but it was previously undocumented, so "why has this one file no
+tags?" had no answer. Note that `.aac` in podcast feeds is almost always *AAC in an MP4 container*
+served as `.m4a`, which works; genuinely raw ADTS is rare.
+
+### How partial support is reported
+
+- **Per field**: `writeFields` sets each key independently and collects the ones the container
+  refuses into `TagWriteOutcome.PartialSuccess.skippedFields`.
+- **Artwork**: reported the same way, via `PartialSuccess.artworkSkipped`. This was added after the
+  cover-art feature shipped with artwork failures *silent* — every other field's failure was visible
+  and artwork's was not, which made "why has this episode no cover?" unanswerable.
+- **Whole container unreadable**: `TagWriteOutcome.Failure`, and the episode is still delivered.
+
+"The file already had its own cover" is deliberately **not** a skip: that is the intended outcome of
+the feature, not a limitation, and conflating the two would make the flag useless for spotting real
+container problems.
+
+### Still untested
+
+There are no non-MP3 fixtures in the suite — `audio/silence.mp3` is the only one — so M4A, OGG and
+Opus tagging is supported *by the library* but unexercised *by us*. Generating those fixtures needs
+an encoder the dev container does not have. Recorded in `docs/backlog.md`.
