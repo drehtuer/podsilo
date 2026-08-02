@@ -140,6 +140,10 @@ class EpisodeListViewModel(
         )
     }
 
+    // `@Suppress("CyclomaticComplexMethod")`: an exhaustive `when` over a sealed event hierarchy.
+    // Its complexity is the number of events, and splitting it would hide the one place that lists
+    // every thing this screen can do.
+    @Suppress("CyclomaticComplexMethod")
     fun onEvent(event: EpisodeListEvent) {
         when (event) {
             is EpisodeListEvent.RowClicked -> emit(EpisodeListEffect.OpenDetail(event.episodeKey))
@@ -169,6 +173,9 @@ class EpisodeListViewModel(
                 }
             EpisodeListEvent.DownloadAllDismissed -> pendingBulk.value = null
             EpisodeListEvent.PullToRefresh -> refresh()
+            // The fix lives outside this screen (the SAF picker, or the user freeing space), so the
+            // host handles it; S2 only reports that the queue is held.
+            EpisodeListEvent.PausedBannerActionClicked -> emit(EpisodeListEffect.ResolvePausedQueue)
         }
     }
 

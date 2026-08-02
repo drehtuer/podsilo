@@ -29,6 +29,7 @@ acceptable*, not the current version, so it does not need touching on a version 
 |---|---|---|---|
 | Kotlin stdlib, coroutines, kotlinx.serialization | Apache-2.0 | ✅ | |
 | AndroidX (Core, Activity, Lifecycle, Compose, Room, DataStore, WorkManager, DocumentFile) | Apache-2.0 | ✅ | |
+| AndroidX Test (`compose.ui:ui-test-junit4`/`-manifest`, `test:runner`, `test.ext:junit`) | Apache-2.0 | ✅ (test-only) | The Compose UI test harness CLAUDE.md §3 names; drives both the Robolectric and the instrumented runs |
 | Hilt / Dagger | Apache-2.0 | ✅ | |
 | Retrofit, OkHttp, MockWebServer | Apache-2.0 | ✅ | OkHttp pinned above Retrofit's transitive version deliberately — see the catalog's header comment |
 | `com.prof18.rssparser:rssparser` | Apache-2.0 | ✅ | Chosen over Stalla — `docs/decisions/0005` |
