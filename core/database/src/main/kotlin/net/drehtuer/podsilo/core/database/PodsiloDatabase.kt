@@ -38,7 +38,7 @@ import net.drehtuer.podsilo.core.database.entity.SyncStateEntity
         SyncStateEntity::class,
         LogEntryEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PodsiloDatabase : RoomDatabase() {

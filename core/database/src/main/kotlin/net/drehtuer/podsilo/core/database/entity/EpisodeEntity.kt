@@ -36,4 +36,5 @@ data class EpisodeEntity(
     val durationMs: Long?,
     // Schema v2. The episode's own page, for "Open in browser" — never the enclosure, which is audio.
     val link: String? = null,
+    val imageUrl: String? = null,
 )

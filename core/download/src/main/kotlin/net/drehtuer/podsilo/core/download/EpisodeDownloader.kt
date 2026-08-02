@@ -105,6 +105,11 @@ class EpisodeDownloader(
     private val downloadTarget: DownloadTarget,
     private val cacheDir: File,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
+    /**
+     * `null` disables artwork embedding entirely — which is what the JVM tests use, since fetching
+     * a cover is network I/O and CLAUDE.md §7 requires tests to be offline.
+     */
+    private val artworkFetcher: ArtworkFetcher? = null,
 ) {
     /**
      * @param previousFileName the name a previous successful delivery recorded in the ledger.
@@ -316,6 +321,9 @@ class EpisodeDownloader(
                         .toString()
                 },
             comment = episode.description,
+            // The episode's own cover if the feed named one, else the podcast's. The writer only
+            // uses this when the file carries no artwork of its own.
+            artwork = artworkFetcher?.fetch(episode.imageUrl, feed.imageUrl),
         )
 }
 

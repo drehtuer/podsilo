@@ -2037,3 +2037,48 @@ a real server timestamp — a synthetic episode would have exercised the same co
 values that make it hard. Worth remembering which questions need which.
 
 The `PLAY` for that episode is permanent on the test account: gpoddersync has no delete.
+
+---
+
+## 2026-08-02 (later) — cover art, and the question worth asking first
+
+**Requested:** embed the episode's image when a downloaded file has none — the feed's per-item
+`<itunes:image>` if present, otherwise the podcast's.
+
+The feature spans four modules and needs a schema column, so CLAUDE.md §9 applies twice: *plan
+multi-module changes first*, and *ask before a migration*. I asked two questions and the answers
+shaped the work: **add the column** (rather than re-fetching the feed at download time), and
+**no size cap**.
+
+Asking about the cap was worth it for a reason I did not anticipate. I checked the actual covers on
+the author's own feeds first — **~270–290 KB**, about 1% of a 30 MB episode — which turned "should
+we cap this?" from a guess into a decision with a number attached. Without that, I would probably
+have imposed a default cap and quietly dropped the art of some podcast that ships a 3 MB cover.
+Measure before offering options.
+
+### The rule that needed the most care
+
+"If the episode has no image embedded in its id tag" is a *conditional*, and the interesting case is
+when the condition cannot be evaluated: `getFirstArtwork()` throws on some containers rather than
+returning null. Treating that as "no artwork" would overwrite a publisher's cover because we failed
+to read it. It is treated as "artwork exists" — when in doubt, do nothing. That asymmetry is the
+whole reason the feature is safe to ship.
+
+The rest follows the module's existing habits: content type is trusted over the URL extension (the
+same rule the enclosure follows), a listed-but-404 episode cover falls through to the podcast's
+rather than leaving the episode bare, and every failure resolves to no artwork rather than to a lost
+download.
+
+### On testing a feature that is mostly plumbing
+
+19 of the 22 new tests are at the layer boundaries — parsing, fetching, embedding, migrating — and
+each is cheap. The three that matter more are in `EpisodeDownloaderTest`, because they are the only
+ones that can catch the seam the others cannot see: that the downloader actually asks the fetcher
+and hands the result to the writer. A feature assembled from four well-tested parts still fails if
+nothing wires them together.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 536 tests, 3 skipped.
+
+**Not verified on a device:** no episode has been downloaded by the running app yet, so the artwork
+has never reached a real file through the real pipeline. That is the same gap as before, and it is
+still waiting on a download that needs a subscription.
