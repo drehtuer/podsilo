@@ -138,7 +138,12 @@ class SettingsScreensTest {
      */
     @Test
     fun `restore asks for confirmation before it asks for a file`() {
-        renderSettings(SettingsUiState(version = "0.1.0"))
+        renderSettings(
+            SettingsUiState(
+                version = "0.1.0",
+                nextcloud = NextcloudUi(instanceUrl = "https://cloud.example.org", loginName = "podsilo"),
+            ),
+        )
 
         compose.onNodeWithText("Restore from backup").performScrollTo().performClick()
 
@@ -147,7 +152,13 @@ class SettingsScreensTest {
 
     @Test
     fun `the restore warning says it cannot be undone and that Nextcloud is untouched`() {
-        renderSettings(SettingsUiState(version = "0.1.0", restoreConfirmationVisible = true))
+        renderSettings(
+            SettingsUiState(
+                version = "0.1.0",
+                restoreConfirmationVisible = true,
+                nextcloud = NextcloudUi(instanceUrl = "https://cloud.example.org", loginName = "podsilo"),
+            ),
+        )
 
         compose.onNode(hasText("cannot be undone", substring = true)).assertIsDisplayed()
         compose.onNode(hasText("Nextcloud account is not touched", substring = true)).assertIsDisplayed()
@@ -156,10 +167,41 @@ class SettingsScreensTest {
         assertTrue(settingsEvents.contains(SettingsEvent.RestoreCancelled))
     }
 
+    /** The author's rule, on the row: an unconnected install may not open a backup file at all. */
+    @Test
+    fun `the restore row is dead and says why until Nextcloud is connected`() {
+        renderSettings(SettingsUiState(version = "0.1.0"))
+
+        compose.onNodeWithText("Connect Nextcloud first").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Restore from backup").performScrollTo().performClick()
+
+        assertTrue(settingsEvents.none { it is SettingsEvent.RestoreDatabaseClicked })
+    }
+
+    @Test
+    fun `the restore row works once connected`() {
+        renderSettings(
+            SettingsUiState(
+                version = "0.1.0",
+                nextcloud = NextcloudUi(instanceUrl = "https://cloud.example.org", loginName = "podsilo"),
+            ),
+        )
+
+        compose.onNodeWithText("Restore from backup").performScrollTo().performClick()
+
+        assertEquals(listOf(SettingsEvent.RestoreDatabaseClicked), settingsEvents)
+    }
+
     /** A second tap mid-zip would start a second export over the same file. */
     @Test
     fun `both backup rows go dead while one is running`() {
-        renderSettings(SettingsUiState(version = "0.1.0", archiveBusy = true))
+        renderSettings(
+            SettingsUiState(
+                version = "0.1.0",
+                archiveBusy = true,
+                nextcloud = NextcloudUi(instanceUrl = "https://cloud.example.org", loginName = "podsilo"),
+            ),
+        )
 
         compose.onNodeWithText("Export database").performScrollTo().performClick()
         compose.onNodeWithText("Restore from backup").performScrollTo().performClick()

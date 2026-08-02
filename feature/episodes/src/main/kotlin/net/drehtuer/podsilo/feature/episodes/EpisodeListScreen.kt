@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,25 +55,34 @@ fun EpisodeListScreen(
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
     Scaffold(modifier = modifier) { padding ->
-        Column(
+        // Scoped to this feed (conditional GET — docs/UI.md §5). Like S1's, this gesture was
+        // specified and its event handled, but nothing ever emitted it: S2 had no refresh
+        // affordance of any kind, so a feed that failed to parse could never be retried from here.
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { onEvent(EpisodeListEvent.PullToRefresh) },
             modifier =
                 Modifier
                     .padding(padding)
                     .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
-                state.queueStatus.let { status ->
-                    if (status is QueueStatus.Paused) PausedBanner(status, onEvent)
-                }
-                if (state.isOffline) OfflineBanner()
-                FilterChips(state.filter, onEvent)
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
+                    state.queueStatus.let { status ->
+                        if (status is QueueStatus.Paused) PausedBanner(status, onEvent)
+                    }
+                    if (state.isOffline) OfflineBanner()
+                    FilterChips(state.filter, onEvent)
 
-                when (val content = state.content) {
-                    EpisodeListUiState.Content.Loading -> LoadingRows()
-                    is EpisodeListUiState.Content.Empty -> EmptyState(content.filter, onEvent)
-                    is EpisodeListUiState.Content.Episodes ->
-                        EpisodeRows(content.items, state, onEvent, zone)
+                    when (val content = state.content) {
+                        EpisodeListUiState.Content.Loading -> LoadingRows()
+                        is EpisodeListUiState.Content.Empty -> EmptyState(content.filter, onEvent)
+                        is EpisodeListUiState.Content.Episodes ->
+                            EpisodeRows(content.items, state, onEvent, zone)
+                    }
                 }
             }
         }

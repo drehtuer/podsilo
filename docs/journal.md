@@ -2272,3 +2272,107 @@ physical Pixel 5 through the real SAF pickers.
 **Still not verified:** a restore over an install that *is* connected to Nextcloud (needs a login on
 the phone), and the download pipeline end to end — no episode has yet been fetched, tagged and
 written to a SAF folder by the running app.
+
+---
+
+## 2026-08-02 (evening) — A real account, a real phone, and three bugs no test could see
+
+The first session with a real Nextcloud account, a real download folder, and real episodes on a
+Pixel 5. 559 green tests had said the app worked. It did not.
+
+### Bug 1 — feeds could never be refreshed
+
+`docs/UI.md` §4/§5 specify pull-to-refresh on S1 and S2. The events existed. Both view models
+handled them. **No `PullToRefreshBox` existed anywhere in the repository**, and the only thing that
+emitted `PodcastListEvent.PullToRefresh` was the *Refresh* button inside S1's *no subscriptions*
+empty state — which by definition stops rendering the moment there are feeds.
+
+So: with zero subscriptions you could refresh; with subscriptions you could not, from any screen.
+S2 had no refresh affordance at all, meaning a feed whose fetch failed could never be retried from
+the screen that displays the failure. `requestFeedRefresh` was reachable only from the periodic
+worker.
+
+The emulator run never caught it because the emulator never had a subscription — the one path that
+worked was the only one it exercised. Four real feeds and it was obvious in ten seconds: every row
+read *never refreshed*, permanently.
+
+After the fix: 9,565 episodes across four feeds in 4.6 s, zero errors, titles resolving through CJK
+and umlauts. The regression test asserts the *populated* state, deliberately.
+
+### Bug 2 — every download crashed the process
+
+Tapping Download killed the app instantly:
+
+```
+foregroundServiceType 0x00000001 is not a subset of
+foregroundServiceType attribute 0x00000000 in service element of manifest file
+```
+
+`DownloadWorker` calls `setForeground(… FOREGROUND_SERVICE_TYPE_DATA_SYNC)`; WorkManager serves that
+through its own `SystemForegroundService`, whose manifest entry declares no type at all; API 34
+requires the runtime type to be a subset of the declared one. The `FOREGROUND_SERVICE_DATA_SYNC`
+**permission** was already declared and correct — necessary, and not sufficient. The throw happens
+inside the system's service dispatch, so the worker cannot catch it, and WorkManager's retry turned
+it into a crash loop.
+
+`HANDOVER.md` had flagged the foreground notification as never displayed and `architecture.md` §13
+marked it "◐ partly". Both were right, and neither was actionable until something ran.
+
+The fix is four lines of manifest merge. The test reads the **merged manifest** under Robolectric,
+which turns a device-only defect into a Tier 1 one.
+
+### Bug 3 — "Last sync: 20647 d ago"
+
+`SyncState.lastEpisodeActionSyncTs` is Unix **seconds**, verbatim from the server — the one value in
+the app that is not epoch millis. `SyncStatusAdapter` read it with `EpochTime.ofMillisOrNull`, so a
+sync that had just succeeded rendered as 21 January 1970.
+
+This is the exact mistake `docs/decisions/0016` created `EpochTime` to prevent, by giving the two
+units differently-named functions. The single call site that needed `ofServerSeconds` used
+`ofMillis` anyway. A naming convention is a prompt, not a guarantee; the unit is now pinned by a
+test that fails with `1970-01-21T16:01:43.652Z`.
+
+### What worked, first time, on real data
+
+- **Login Flow v2** end to end from the phone — Nextcloud named the app, the app password never
+  appeared in the UI, and four subscriptions arrived.
+- **Reconciliation.** The badge read 56 where the feed had 57 episodes: one already carried a `PLAY`
+  from another client and was correctly `HANDLED_REMOTELY`. The app's central job, against a real
+  server. Two probe actions from the previous session — for episodes in no subscribed feed — were
+  processed too, exactly as architecture §6 requires.
+- **The whole download pipeline**: cache → verify → name → tag → SAF copy. Files landed as
+  `Trash Talk... with Count Binface/20260224_BY-ELECTION SPECIAL featuring Hannah Spencer of the
+  Green Party.mp3`, and the ID3 tag carried TIT2, TPE1, TALB, TCON=Podcast, TYER, COMM **and APIC** —
+  the cover-art feature working through the real pipeline for the first time.
+- **The duplicate guard** (ADR 0012): *Download again* left both files byte-identical with unchanged
+  mtimes, kept `writtenFileName`, reset `attempts`, re-posted the action, and wrote **nothing** to
+  the error log — informational, not a failure, exactly as §12.3 specifies.
+- **Backup and restore with 9,565 episodes.** The archive carried 4 feeds / 9,565 episodes / 5 ledger
+  rows; restoring it removed a `SKIPPED` row created after the export and brought both
+  `writtenFileName`s back intact.
+- **The connection survived the restore**, confirming empirically what ADR 0018 claims: credentials
+  live in DataStore, not the database.
+
+### The author's new rule
+
+*"No backup should be loaded until the nextcloud login has succeeded."* Implemented on the row and
+again in the view model. The reasoning is sequencing rather than secrecy, and it closes the backlog
+item from the previous session where a restore onto an unconfigured install left the ledger behind a
+*not configured* screen that showed none of it.
+
+### Note to self
+
+Three bugs, and all three were in the seams that no unit test owns: a Composable that never called
+an event, a manifest attribute, and a unit conversion at an adapter. The tests covered the logic on
+both sides of each seam. **The lesson is not "write more tests" — it is that a green suite says
+nothing about whether the pieces are connected**, and the cheapest way to find that out is to run
+the thing on the hardware it is for. Every one of these was visible within two minutes of real use.
+
+**Verified:** `ktlintCheck detekt test` green, 561 tests, plus everything above on a physical
+Pixel 5 against a real Nextcloud.
+
+**Not verified:** that a *server-side* action created after a backup returns on the next sync
+(ADR 0018's reassurance line). My test `PLAY` was still in the outbox when I restored, so the restore
+correctly discarded it and there was nothing on the server to come back — the mechanism is untested,
+not disproved. Also untested on device: the restore row's **disabled** state, which would need the
+account disconnected and re-approved.

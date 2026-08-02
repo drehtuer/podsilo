@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,29 +81,41 @@ fun PodcastListScreen(
             )
         },
     ) { padding ->
-        Column(
+        // The ONLY way to refresh feeds once subscriptions exist. `PodcastListEvent.PullToRefresh`
+        // and its view-model handler shipped without a gesture to fire them, and the sole emitter was
+        // the Refresh button in the *no subscriptions* empty state — which by definition never
+        // renders once there are feeds. On a real account with four subscriptions the result was
+        // that every feed read "never refreshed" for ever and no episode ever arrived, because the
+        // periodic worker is the only other caller (see docs/journal.md, 2026-08-02).
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { onEvent(PodcastListEvent.PullToRefresh) },
             modifier = Modifier.padding(padding).fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
-                // Not while the checklist is up: on first run both would say "choose a folder",
-                // and the checklist says it better — with the step it belongs to. Seen on the first
-                // device run, where the two stacked.
-                if (state.setup == null) {
-                    (state.queueStatus as? QueueStatus.Paused)?.let {
-                        PodcastPausedBanner(it, onEvent)
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
+                    // Not while the checklist is up: on first run both would say "choose a folder",
+                    // and the checklist says it better — with the step it belongs to. Seen on the first
+                    // device run, where the two stacked.
+                    if (state.setup == null) {
+                        (state.queueStatus as? QueueStatus.Paused)?.let {
+                            PodcastPausedBanner(it, onEvent)
+                        }
                     }
-                }
-                if (state.isOffline) PodcastOfflineBanner()
-                state.setup?.let { SetupCard(it, onEvent) }
+                    if (state.isOffline) PodcastOfflineBanner()
+                    state.setup?.let { SetupCard(it, onEvent) }
 
-                when (val content = state.content) {
-                    PodcastListUiState.Content.NotConfigured -> NotConfiguredState(onEvent)
-                    PodcastListUiState.Content.Loading -> PodcastLoadingState()
-                    PodcastListUiState.Content.NoSubscriptions -> NoSubscriptionsState(onEvent)
-                    is PodcastListUiState.Content.Feeds -> {
-                        PodcastFilterChips(state.filter, onEvent)
-                        FeedRows(content.feeds, state.totalUndecided, state.filter, now, onEvent)
+                    when (val content = state.content) {
+                        PodcastListUiState.Content.NotConfigured -> NotConfiguredState(onEvent)
+                        PodcastListUiState.Content.Loading -> PodcastLoadingState()
+                        PodcastListUiState.Content.NoSubscriptions -> NoSubscriptionsState(onEvent)
+                        is PodcastListUiState.Content.Feeds -> {
+                            PodcastFilterChips(state.filter, onEvent)
+                            FeedRows(content.feeds, state.totalUndecided, state.filter, now, onEvent)
+                        }
                     }
                 }
             }

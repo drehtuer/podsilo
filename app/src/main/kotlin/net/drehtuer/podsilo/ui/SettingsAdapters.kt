@@ -80,6 +80,13 @@ class SettingsCountsAdapter
  * Reads the **server's** timestamp, which is what `SyncState` persists (CLAUDE.md §11: never compute
  * it from local device time). `0` means no pass has ever completed, and renders as *never* rather
  * than as 1970.
+ *
+ * **`ofServerSeconds`, not `ofMillis`.** `lastEpisodeActionSyncTs` is Unix **seconds** verbatim from
+ * the server — the one value in the whole app that is not epoch millis (architecture §4). Reading it
+ * as millis put the last sync 20,647 days in the past, and S4 duly reported *"20647 d ago"* on the
+ * Pixel 5 while the pass had in fact just succeeded. That is precisely the mix-up `docs/decisions/
+ * 0016` gave `EpochTime` two differently-named functions to prevent, and it still shipped, so the
+ * unit is now pinned by a test rather than by the reader noticing.
  */
 @Singleton
 class SyncStatusAdapter
@@ -88,7 +95,10 @@ class SyncStatusAdapter
         private val syncStateRepository: SyncStateRepository,
     ) : SyncStatus {
         override fun observeLastSyncAt(): Flow<Instant?> =
-            flow { emit(EpochTime.ofMillisOrNull(syncStateRepository.get().lastEpisodeActionSyncTs.takeIf { it > 0 })) }
+            flow {
+                val seconds = syncStateRepository.get().lastEpisodeActionSyncTs
+                emit(seconds.takeIf { it > 0 }?.let(EpochTime::ofServerSeconds))
+            }
     }
 
 /**

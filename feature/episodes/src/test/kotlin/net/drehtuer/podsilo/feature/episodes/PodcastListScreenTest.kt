@@ -4,10 +4,13 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -220,5 +223,27 @@ class PodcastListScreenTest {
         assertEquals("5 min ago", relativeTime(then, then.plusSeconds(300)))
         assertEquals("2 h ago", relativeTime(then, then.plusSeconds(7_200)))
         assertEquals("3 d ago", relativeTime(then, then.plusSeconds(259_200)))
+    }
+
+    /**
+     * The regression test for what the first real-account run exposed.
+     *
+     * `PullToRefresh` existed as an event and the view model handled it, but **nothing in the UI
+     * ever emitted it** — the sole caller was the Refresh button in the *no subscriptions* empty
+     * state, which by definition never renders once there are feeds. With four real subscriptions
+     * the app therefore had no way to fetch a feed at all, and every row read "never refreshed"
+     * permanently. Asserting on the *populated* state is the whole point: the empty state was never
+     * the broken one.
+     */
+    @Test
+    fun `a screen with feeds can be refreshed by pulling it down`() {
+        render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = 12)))
+
+        compose.onNode(hasScrollAction()).performTouchInput { swipeDown() }
+
+        assertTrue(
+            "pulling a populated list down must request a refresh, got $events",
+            events.contains(PodcastListEvent.PullToRefresh),
+        )
     }
 }
