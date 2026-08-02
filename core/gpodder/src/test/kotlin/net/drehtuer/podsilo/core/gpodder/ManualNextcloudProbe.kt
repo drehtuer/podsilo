@@ -3,8 +3,11 @@
 package net.drehtuer.podsilo.core.gpodder
 
 import kotlinx.coroutines.runBlocking
+import net.drehtuer.podsilo.core.model.port.EpisodeAction
+import net.drehtuer.podsilo.core.model.port.EpisodeActionType
 import net.drehtuer.podsilo.core.model.port.LoginResult
 import net.drehtuer.podsilo.core.sync.parseGpodderTimestamp
+import net.drehtuer.podsilo.core.sync.toGpodderTimestamp
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -37,7 +40,12 @@ private const val POLL_TIMEOUT_MINUTES = 15L
 
 fun main(args: Array<String>) {
     val host = args.firstOrNull() ?: error("usage: nextcloudProbe <host>  (e.g. cloud.example.org)")
-    val handoff = args.getOrNull(1)?.let(::File)
+    val handoff = args.getOrNull(1)?.takeIf { it.isNotBlank() }?.let(::File)
+
+    // Writes are opt-in *and* name the account they are allowed to touch. A login flow is approved
+    // by whoever is signed in to the browser, so without this the probe would happily post actions
+    // to a real account if the wrong session approved the link.
+    val writeAs = args.getOrNull(2)?.takeIf { it.isNotBlank() }
 
     // Generous timeouts: the poll deliberately blocks until a human acts.
     val http =
@@ -84,7 +92,14 @@ fun main(args: Array<String>) {
         }
         println("✓ gpoddersync is installed and answers")
 
+        if (writeAs != null && result.loginName != writeAs) {
+            println("✗ REFUSING TO WRITE: approved as '${result.loginName}', expected '$writeAs'")
+            println("  Nothing was written. Re-run and approve as the intended account.")
+            return@runBlocking
+        }
+
         listSubscriptions(http, result)
+        if (writeAs != null) verifyActionWrites(http, result)
     }
 }
 
@@ -154,3 +169,80 @@ private fun String.describeShape(): String =
         Regex("[+-]\\d{2}:\\d{2}$").containsMatchIn(this) -> "…±hh:mm"
         else -> "bare (no offset)"
     }
+
+/**
+ * The write half — **only** reached with an explicit `-Pwrite=<loginName>`, and only after the
+ * approved account matched that name.
+ *
+ * It exists to settle `docs/decisions/0008`, which has been "source-read-only" since it was written:
+ * `nextcloud-gpodder`'s controller filters posted actions down to `play` and returns 200 regardless,
+ * so a `DOWNLOAD` looks accepted and vanishes. That was read out of PHP, never observed. Everything
+ * downstream — the outbox, `syncedToServer`, mark-on-download — behaves differently depending on
+ * whether it is true.
+ *
+ * It also checks the mark-as-played encoding from `docs/decisions/0002`
+ * (`started = 0, position = total`) survives a round trip.
+ *
+ * Both actions name a **synthetic feed and episode** that no real subscription uses, so nothing the
+ * user actually listens to is touched.
+ */
+private suspend fun verifyActionWrites(
+    http: OkHttpClient,
+    result: LoginResult,
+) {
+    val client = RetrofitGpodderClientFactory(http).create(result.credentials)
+    val marker = System.currentTimeMillis()
+    val feed = "https://podsilo.invalid/probe-$marker.xml"
+    val downloadEpisode = "https://podsilo.invalid/probe-$marker-download.mp3"
+    val playEpisode = "https://podsilo.invalid/probe-$marker-play.mp3"
+    val stamp = marker.toGpodderTimestamp()
+
+    println()
+    println("WRITE PROBE (synthetic feed $feed — touches no real subscription)")
+
+    val before = client.fetchEpisodeActions(since = 0).actions.size
+    val posted =
+        client.postEpisodeActions(
+            listOf(
+                EpisodeAction(
+                    podcast = feed,
+                    episode = downloadEpisode,
+                    guid = "probe-$marker-download",
+                    action = EpisodeActionType.DOWNLOAD,
+                    timestamp = stamp,
+                ),
+                EpisodeAction(
+                    podcast = feed,
+                    episode = playEpisode,
+                    guid = "probe-$marker-play",
+                    action = EpisodeActionType.PLAY,
+                    timestamp = stamp,
+                    // docs/decisions/0002: "done with this episode" is a full-length PLAY.
+                    started = 0,
+                    position = 1800,
+                    total = 1800,
+                ),
+            ),
+        )
+    println("→ POST episode_action/create: ${if (posted.isSuccess) "2xx" else "failed: ${posted.exceptionOrNull()}"}")
+
+    val after = client.fetchEpisodeActions(since = 0).actions
+    val mine = after.filter { it.podcast == feed }
+    println("→ read back since=0: ${after.size} actions total (was $before), ${mine.size} of them ours")
+    mine.forEach {
+        println("   ${it.action}  guid=${it.guid}  started=${it.started} position=${it.position} total=${it.total}")
+    }
+
+    val keptDownload = mine.any { it.action == EpisodeActionType.DOWNLOAD }
+    val keptPlay = mine.any { it.action == EpisodeActionType.PLAY }
+
+    println()
+    println("ADR 0008 — does Nextcloud keep a DOWNLOAD action?")
+    if (keptDownload) {
+        println("  UNEXPECTED: it was kept. ADR 0008 needs revisiting.")
+    } else {
+        println("  CONFIRMED: discarded, exactly as the PHP said.")
+    }
+    println("ADR 0002 — does the mark-as-played PLAY survive?")
+    println(if (keptPlay) "  CONFIRMED: kept." else "  UNEXPECTED: the PLAY was dropped too.")
+}

@@ -1884,3 +1884,52 @@ needed a person using the thing.
 
 **Verified:** `ktlintCheck detekt test assembleDebug` green, 514 tests, 3 skipped; both behaviours
 confirmed on the emulator by driving the real screen.
+
+---
+
+## 2026-08-02 (very late) — ADR 0008, finally observed rather than inferred
+
+**Attempted:** the one claim in this project that had never been anything but a reading of someone
+else's source. `docs/decisions/0008` says `nextcloud-gpodder` filters posted episode actions down to
+`play` and returns 200 regardless, so a `DOWNLOAD` looks accepted and vanishes. That came out of
+`EpisodeActionController.php`. Nobody had watched it happen.
+
+Confirming it needs a **write**, which is why it waited for a test account.
+
+```
+→ POST episode_action/create: 2xx          two posted: one DOWNLOAD, one PLAY
+→ read back since=0: 1 actions total (was 0), 1 of them ours
+   PLAY  guid=probe-…-play  started=0 position=1800 total=1800
+```
+
+Two in, 2xx back, one stored. **The 2xx is the dangerous part** — nothing distinguishes "saved" from
+"silently dropped", so a client that trusts the status code believes mark-on-download works. That is
+precisely CLAUDE.md §1 requirement 9, and it is now measured rather than inferred: it cannot work
+through this server, and Podsilo emits `DOWNLOAD` anyway for the reasons ADR 0008 gives.
+
+The same run round-tripped ADR 0002's skip encoding — `started=0 position=1800 total=1800` came back
+byte-for-byte. That is a *positive* result from a run where the negative control also behaved as
+predicted, which is worth more than either alone.
+
+### The guard earned its keep immediately
+
+A login flow is approved by whoever happens to be signed in to the browser, so a write-mode probe
+could post to a real account by accident. `-Pwrite=<loginName>` names the account allowed to be
+written to, and the run aborts otherwise.
+
+I did not know the test account's name, so the first run went out with a deliberate placeholder:
+
+```
+✗ REFUSING TO WRITE: approved as 'podsilo', expected 'REPLACE_ME'
+  Nothing was written. Re-run and approve as the intended account.
+```
+
+It cost one extra approval and demonstrated the safety property before exercising it — which is the
+right order for anything that writes to someone else's server.
+
+**Also worth recording:** gpoddersync exposes no way to delete an episode action, so the probe's one
+`PLAY` row is permanent on the test account. Synthetic feed, harmless, but the asymmetry is real —
+this API can be appended to and never pruned, which is the same reason `since=0` grows without bound
+(CLAUDE.md §5).
+
+**Verified:** `ktlintCheck detekt test` green, 514 tests, 3 skipped.
