@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import net.drehtuer.podsilo.core.model.port.LoginFlowException
+import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 
@@ -97,19 +99,23 @@ class ConnectViewModel(
     private suspend fun connect(baseUrl: String) {
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.RequestingFlow, inlineError = null)
 
-        val flow = loginFlowClient.start(baseUrl).getOrElse { return fail(ConnectError.NOT_NEXTCLOUD) }
+        val flow =
+            loginFlowClient
+                .start(
+                    baseUrl,
+                ).getOrElse { return fail(it.asConnectError(ConnectError.NOT_NEXTCLOUD)) }
         emit(ConnectEffect.OpenBrowser(flow.loginUrl))
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.AwaitingAuthorization)
 
         // Cancellation propagates on its own: the client's contract is that a cancelled poll simply
         // stops asking, so Cancel needs no unwinding here.
-        val result = loginFlowClient.poll(flow).getOrElse { return fail(ConnectError.ABANDONED) }
+        val result = loginFlowClient.poll(flow).getOrElse { return fail(it.asConnectError(ConnectError.ABANDONED)) }
 
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.VerifyingGpodderSync)
         loginFlowClient.verifyGpodderSync(result.credentials).getOrElse {
             // The password is *not* stored: connecting to a Nextcloud without gpoddersync would
             // leave the user with an app that silently syncs nothing (docs/UI.md §8).
-            return fail(ConnectError.NO_GPODDERSYNC)
+            return fail(it.asConnectError(ConnectError.NO_GPODDERSYNC))
         }
 
         // Only now, and the server's own canonical URL rather than the typed one — a Nextcloud
@@ -164,3 +170,23 @@ private fun String.withoutScheme(): String = removePrefix("https://").removePref
 fun interface ConnectSyncTrigger {
     fun requestSyncNow()
 }
+
+/**
+ * Maps the client's typed failure onto the message S5 shows.
+ *
+ * [fallback] is what an *untyped* failure degrades to — the step's most likely cause. This mapping
+ * exists because collapsing every failure into one message is exactly the bug `docs/UI.md` §8's
+ * table was written to prevent: a mistyped host reported as "this doesn't look like a Nextcloud
+ * server" sends the user to check their server instead of their spelling. Found by running the
+ * manual probe against an address that does not resolve.
+ */
+internal fun Throwable.asConnectError(fallback: ConnectError): ConnectError =
+    when ((this as? LoginFlowException)?.failure) {
+        LoginFlowFailure.UNREACHABLE -> ConnectError.UNREACHABLE
+        LoginFlowFailure.TLS -> ConnectError.TLS
+        LoginFlowFailure.NOT_NEXTCLOUD -> ConnectError.NOT_NEXTCLOUD
+        LoginFlowFailure.NO_GPODDERSYNC -> ConnectError.NO_GPODDERSYNC
+        LoginFlowFailure.UNAUTHORIZED -> ConnectError.UNAUTHORIZED
+        LoginFlowFailure.ABANDONED -> ConnectError.ABANDONED
+        null -> fallback
+    }
