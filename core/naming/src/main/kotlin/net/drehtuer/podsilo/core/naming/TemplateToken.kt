@@ -23,7 +23,16 @@ sealed interface TemplateToken {
  */
 private val KNOWN_VARIABLES = setOf("podcast", "title", "description", "date", "guid_short")
 
-private val TOKEN_PATTERN = Regex("""\{(\w+)(?::([^}]*))?}""")
+/**
+ * Both braces are escaped, and the closing one is **not** optional politeness.
+ *
+ * Android's regex engine is ICU, not the JVM's `java.util.regex`, and ICU rejects a bare `}` as a
+ * syntax error where the JVM accepts it. An unescaped one compiles fine in every Tier 1 test — this
+ * module is pure JVM by design — and then throws `PatternSyntaxException` inside a static
+ * initialiser on the device, taking every filename with it. Found by running the app
+ * (`docs/journal.md`, 2026-08-02).
+ */
+private val TOKEN_PATTERN = Regex("""\{(\w+)(?::([^}]*))?\}""")
 
 /** Splits [template] into literal text runs and recognised `{variable}` tokens, in order. */
 fun tokenizeTemplate(template: String): List<TemplateToken> {

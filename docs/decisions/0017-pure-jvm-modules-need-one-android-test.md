@@ -1,0 +1,62 @@
+# 0017 — A pure-JVM module still needs one test that runs on Android
+
+**Status:** Accepted (2026-08-02)
+
+## Context
+
+`:core:model`, `:core:naming` and `:core:sync` have **no Android dependencies**, by design
+(CLAUDE.md §5), so their whole test suite is Tier 1: fast, hermetic, no emulator. That is the right
+shape, and this ADR does not change it.
+
+On the first run of the app on a device — Tier 4c, the day S1 became reachable — the file-naming
+preview rendered as `—`, its failure fallback. The cause:
+
+```kotlin
+private val TOKEN_PATTERN = Regex("""\{(\w+)(?::([^}]*))?}""")   // note the bare closing brace
+```
+
+Android's regex engine is **ICU**, not the JVM's `java.util.regex`. ICU rejects an unescaped `}` as
+a syntax error; the JVM accepts it. The pattern lives in a top-level `val`, so on the device it
+threw `PatternSyntaxException` inside a static initialiser and took *every filename in the app* with
+it — not only the preview, but the naming of every download.
+
+**Every one of the project's 400-plus JVM tests passed, and structurally could not have failed.**
+`:core:naming` runs on the JVM; the code path is identical; only the regex *engine* differs. The
+module's own exhaustive table tests — which CLAUDE.md §7 ranks as the fifth-highest coverage
+priority precisely because naming is the whole user experience of a download — were compiling that
+pattern with the wrong implementation.
+
+## Decision
+
+**Pure-JVM logic that ships inside the app gets at least one test that executes it on a real Android
+runtime.** Not a duplicate of its table tests — a thin one whose job is to *load the classes and
+compile the patterns* under the platform's own implementations.
+
+For `:core:naming` that is `app/src/androidTest/.../NamingOnAndroidTest.kt`, four tests that between
+them touch all four of the module's regexes plus the date formatting. It lives in `:app` rather than
+in `:core:naming` because adding an `androidTest` source set to that module would give it the
+Android dependency the architecture deliberately denies it.
+
+## Consequences
+
+- Tier 2 stops being purely a convenience. `docs/dev-environment.md` §6 already says it is minutes
+  per run against seconds for Tier 1, and that stays true — but there is now a class of bug that
+  **only** Tier 2 can see, and the emulator became usable (2026-08-02) in time to see this one.
+- The rule to apply when adding to a pure-JVM module: if it constructs a `Regex`, formats a date,
+  compares strings by locale, or normalises Unicode, it is using an implementation Android replaces.
+  Those are the places where a green JVM suite proves less than it appears to.
+- The cost is small and bounded: one file per module, not a mirrored suite. Duplicating the table
+  tests onto an emulator would trade minutes of CI for coverage that is already there.
+- CI still runs no emulator job (`docs/dev-environment.md` §6). This test therefore runs when someone
+  runs it, which is honest rather than satisfying; a CI emulator job is in `docs/backlog.md`.
+
+## Alternatives considered
+
+- **Escape the brace and move on.** That is the fix, but not a decision — it leaves the next
+  ICU/JVM divergence exactly as invisible as this one was.
+- **Move `:core:naming` to an Android library module** so Robolectric can run its existing suite.
+  Rejected: it would drop a pure-JVM module for a testing convenience, and Robolectric is not the
+  device either — it shims the framework, and whether it uses ICU's regex engine is one more thing
+  to be uncertain about. The test that proves ICU behaviour should run on ICU.
+- **Lint rule against unescaped `}` in a `Regex`.** Too narrow. The problem is the class of
+  divergence, not this one character.
