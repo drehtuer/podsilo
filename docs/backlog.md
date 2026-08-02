@@ -13,6 +13,10 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
+- **Non-MP3 tagging fixtures.** `audio/silence.mp3` is the only audio fixture, so M4A, OGG and Opus
+  tag and artwork writing is supported by jaudiotagger but never exercised by our tests
+  (`docs/decisions/0006`). Needs an encoder the dev container lacks; a few tiny committed fixtures
+  would close it permanently.
 - **A device test for the download pipeline end to end** — enclosure fetch → tag write → SAF copy →
   ledger → outbox. Blocked on nothing but a subscription: subscriptions come only from Nextcloud, and
   seeding the SQLite file directly does not help, because with no account configured S1 correctly

@@ -151,4 +151,31 @@ class AudioTagWriterTest {
             artist = "Der Podcast",
             album = "Der Podcast",
         )
+
+    @Test
+    fun `keeping the file's own artwork is a clean Success, not a reported skip`() {
+        // The distinction the flag has to keep: "this file already had a cover" is the intended
+        // outcome, not a limitation. Only a container that *cannot* hold artwork is worth flagging.
+        val file = copyOfSilenceFixture()
+        writer.writeTags(file, tagData().copy(artwork = cover))
+
+        val outcome = writer.writeTags(file, tagData().copy(artwork = cover))
+
+        assertEquals(TagWriteOutcome.Success, outcome)
+    }
+
+    @Test
+    fun `embedding into a file with no artwork is a clean Success`() {
+        val outcome = writer.writeTags(copyOfSilenceFixture(), tagData().copy(artwork = cover))
+
+        assertEquals(TagWriteOutcome.Success, outcome)
+    }
+
+    @Test
+    fun `supplying no artwork at all is a clean Success, not a skip`() {
+        // No cover was asked for, so nothing was skipped — the distinction the flag has to keep.
+        val outcome = writer.writeTags(copyOfSilenceFixture(), tagData().copy(artwork = null))
+
+        assertEquals(TagWriteOutcome.Success, outcome)
+    }
 }

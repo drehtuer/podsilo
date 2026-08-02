@@ -32,9 +32,16 @@ data class AudioTagData(
 sealed interface TagWriteOutcome {
     data object Success : TagWriteOutcome
 
-    /** One or more fields weren't representable in this file's tag format -- still a usable delivery. */
+    /**
+     * One or more fields weren't representable in this file's tag format -- still a usable delivery.
+     *
+     * @property artworkSkipped the cover could not be embedded: the container does not accept
+     *   artwork, or it already had its own. Reported rather than silent so "why has this episode no
+     *   cover" is answerable — every other field's failure is visible here, and artwork's was not.
+     */
     data class PartialSuccess(
         val skippedFields: List<FieldKey>,
+        val artworkSkipped: Boolean = false,
     ) : TagWriteOutcome
 
     /** The file couldn't be read as a supported audio container, or the tag write itself failed. */
@@ -69,11 +76,15 @@ class AudioTagWriter {
 
         val tag = audioFile.tagOrCreateAndSetDefault
         val skipped = writeFields(tag, data)
-        data.artwork?.let { embedArtworkIfAbsent(tag, it) }
+        val artworkEmbedded = data.artwork?.let { embedArtworkIfAbsent(tag, it) } ?: true
 
         return try {
             audioFile.commit()
-            if (skipped.isEmpty()) TagWriteOutcome.Success else TagWriteOutcome.PartialSuccess(skipped)
+            if (skipped.isEmpty() && artworkEmbedded) {
+                TagWriteOutcome.Success
+            } else {
+                TagWriteOutcome.PartialSuccess(skipped, artworkSkipped = !artworkEmbedded)
+            }
         } catch (
             @Suppress("TooGenericExceptionCaught") uncommittable: Exception,
         ) {
@@ -114,31 +125,24 @@ private fun Tag.trySetField(
     }
 
 /**
- * Adds [artwork] only when the tag has none.
+ * Adds [artwork] only when the tag has none. Returns whether the cover ended up on the file.
  *
  * `getFirstArtwork()` throws on some containers rather than returning null, so the check is wrapped:
  * "I could not tell whether art exists" must behave like "art exists" — writing over a publisher's
- * cover because we failed to read it would be the worse mistake.
+ * cover because we failed to read it would be the worse mistake. That case reports `true`: nothing
+ * was skipped, the file simply already had its own.
  *
- * Failure is silent by design. This is the most optional field in the most optional step of the
- * pipeline (CLAUDE.md §6), and the caller already reports skipped *fields*; a missing cover is not
- * worth turning a delivered episode into a partial success.
+ * A container that cannot hold artwork at all reports `false`, which the caller surfaces as a
+ * [TagWriteOutcome.PartialSuccess]. It never fails the write — the audio is already correct, and
+ * CLAUDE.md §6 is explicit that tagging must not cost a delivery.
  */
 private fun embedArtworkIfAbsent(
     tag: Tag,
     artwork: EpisodeArtwork,
-) {
-    val existing =
-        try {
-            tag.firstArtwork
-        } catch (
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") unreadable: Exception,
-        ) {
-            return
-        }
-    if (existing != null) return
+): Boolean {
+    if (alreadyHasArtwork(tag)) return true
 
-    try {
+    return try {
         tag.setField(
             AndroidArtwork().apply {
                 binaryData = artwork.bytes
@@ -146,9 +150,27 @@ private fun embedArtworkIfAbsent(
                 description = ""
             },
         )
+        true
     } catch (
         @Suppress("TooGenericExceptionCaught", "SwallowedException") unsupported: Exception,
     ) {
-        // This container cannot hold artwork. The audio is already written and correct.
+        // This container does not accept artwork (or rejected this image). Reported, not fatal.
+        false
     }
 }
+
+/**
+ * `true` also when the answer cannot be determined.
+ *
+ * `getFirstArtwork()` throws on some containers rather than returning null, and "I could not tell"
+ * has to behave like "it has one": writing over a publisher's cover because we failed to read the
+ * tag is the worse of the two mistakes.
+ */
+private fun alreadyHasArtwork(tag: Tag): Boolean =
+    try {
+        tag.firstArtwork != null
+    } catch (
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") unreadable: Exception,
+    ) {
+        true
+    }
