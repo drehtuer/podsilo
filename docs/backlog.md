@@ -13,12 +13,14 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
+- **A device test for the download pipeline end to end** — enclosure fetch → tag write → SAF copy →
+  ledger → outbox. Blocked on nothing but a subscription: subscriptions come only from Nextcloud, and
+  seeding the SQLite file directly does not help, because with no account configured S1 correctly
+  shows the *not configured* empty state instead of the list (`docs/UI.md` §4). Do it alongside the
+  real-device Nextcloud login.
 - **A `scripts/adb-connect-host.sh` helper** for Tier 3 (emulator on the Windows host, driven from
   the container). CLAUDE.md §4 asks for it explicitly; `docs/dev-environment.md` §6 records that
   neither it nor Tier 3 exists yet. Worth writing the first time someone actually needs a device.
-- **Instrumented tests for the two device-only pieces** — `KeystoreAppPasswordCipher` (ADR 0010) and
-  `SafDownloadTarget` (ADR 0011). Both are currently verified only by running the app, which has
-  never happened. This is the highest-value item here.
 - **Paging 3 for the episode list.** CLAUDE.md §3/§5 mandate it for long lists; the UI contract
   currently says "paging or a keyed `LazyColumn`" (`docs/UI_interface.md` §14.3). A 500-episode feed
   under the `All` filter is the case that decides it — measure before adding the dependency.

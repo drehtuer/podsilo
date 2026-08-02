@@ -51,3 +51,22 @@ Put encryption behind a one-method-pair interface,
 - The decrypted password is only ever materialised inside `SettingsRepository.nextcloudCredentials()`
   at the point of a sync pass, never held in a long-lived `Flow` — which is why that one accessor is
   a `suspend` read rather than an observable, unlike every other setting.
+
+## Verified on a device (2026-08-02)
+
+`KeystoreAppPasswordCipher` had **never executed** until now — the whole point of this ADR was that
+Robolectric has no `AndroidKeyStore` provider, and the consequence was that the guarantee "the app
+password is never persisted in plaintext" (CLAUDE.md §5) rested on code nothing had ever called.
+
+`core/datastore/src/androidTest/.../KeystoreAppPasswordCipherTest.kt` — six tests, green on
+`podsilo-ci(AVD)`, API 35:
+
+- round-trips a realistic Nextcloud app password, including non-ASCII and empty input;
+- the stored form never contains the plaintext;
+- encrypting twice yields different ciphertexts (a reused GCM IV is the one thing that must not
+  happen, and would be invisible to a round-trip test);
+- **a second instance decrypts what the first wrote** — the real usage, since S5 encrypts during
+  login and `SyncWorker` decrypts in a later process. A per-instance key would have failed only
+  after a restart, with no obvious cause;
+- the key is actually in the `AndroidKeyStore`, i.e. hardware-backed rather than an in-process
+  fallback.

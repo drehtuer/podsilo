@@ -61,3 +61,35 @@ accepted.
 - A lost grant (revoked, SD card removed, app data cleared) surfaces as
   `DownloadFolderUnavailableException` inside a `Result`, which the pipeline reports as a
   **non-retryable** failure — the user has to re-pick the folder, so backoff would just spin.
+
+## Verified on a device (2026-08-02)
+
+`SafDownloadTarget` had **never written a file**. It has now, through a real `DocumentsProvider` on
+`podsilo-ci(AVD)`, API 35 — `app/src/androidTest/.../SafDownloadTargetInstrumentedTest.kt`, six
+tests, green, with the results confirmed on the emulator's filesystem:
+
+```
+$ adb shell ls -la /sdcard/Podcasts/PodsiloInstrumentedTest/
+-rw-rw----  1 20260714_Wärme über Hamburg.mp3     ← umlauts survived SAF (CLAUDE.md §6)
+drwxrws---  4096 Nested Feed                       ← the {podcast} subfolder was created
+-rw-rw----  28 delivered.mp3                       ← bytes identical to the source
+-rw-rw----  8  retried.mp3                         ← "complete", not the 7-byte "partial"
+```
+
+That last one is the interesting assertion: a retry reuses the `writtenFileName` the ledger
+recorded, so delivering the same name twice must **overwrite** rather than produce `… (2)` beside a
+half-written predecessor. The byte count proves which happened.
+
+**The tests live in `:app`, not `:core:download`, and that is not arbitrary.** A persisted tree-URI
+grant belongs to a *package*; `:core:download`'s own test APK is a different one and would have no
+usable tree. Instrumentation tests run inside the target app's process, so they inherit the grant
+the app already holds.
+
+The consequence is that they need a folder to have been chosen once, through the real picker. They
+`assumeTrue` on that rather than failing: a missing grant is a setup gap, not a regression, and a
+red suite for a setup gap trains people to ignore red.
+
+**Also verified, by driving the real UI:** S1's *Choose folder* opens the system picker, the grant
+comes back with `takePersistableUriPermission` applied — `dumpsys` shows
+`mode=0x3 persistable=0x3 persisted=0x3` — and it **survives a process restart**, which is the exact
+failure CLAUDE.md §11 warns about.
