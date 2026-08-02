@@ -18,6 +18,13 @@ interface EpisodeDao {
     @Query("SELECT * FROM episodes WHERE episodeKey = :episodeKey")
     suspend fun get(episodeKey: String): EpisodeEntity?
 
+    /** Whole-table read, for `DatabaseArchiveStore` only — chunked by the caller, not held twice. */
+    @Query("SELECT * FROM episodes")
+    suspend fun getAll(): List<EpisodeEntity>
+
+    @Query("SELECT COUNT(*) FROM episodes")
+    suspend fun count(): Int
+
     /**
      * Newest publication date per feed, for S1's ordering. Undated episodes contribute nothing:
      * `MAX` skips NULLs, so a feed with only undated episodes is simply absent from the result and

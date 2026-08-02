@@ -2082,3 +2082,76 @@ nothing wires them together.
 **Not verified on a device:** no episode has been downloaded by the running app yet, so the artwork
 has never reached a real file through the real pipeline. That is the same gap as before, and it is
 still waiting on a download that needs a subscription.
+
+---
+
+## 2026-08-02 — Tag format support, database backup, and a bug SQLite handed me
+
+Three requests in one message: does the tagger handle formats that only support a subset of
+features; add a database import/export as zip; and delete a podcast's local data when Nextcloud
+drops it.
+
+### The third one was already done, and the literal reading of it is wrong
+
+`FeedDao.replaceAll` deletes feeds not in the server's list, `EpisodeEntity` has an
+`ON DELETE CASCADE` onto `feeds`, and `SubscriptionMirroringTest` covers it. But the wording — "the
+database entries for that podcast should be deleted locally as well" — would, taken literally,
+include the ledger rows, and CLAUDE.md §5 forbids exactly that: "keep its `EpisodeLedger` rows… if
+the author re-subscribes later we must not re-download the back catalogue." So the answer is "yes,
+already, except for the one table that must deliberately survive." Worth saying out loud rather than
+quietly implementing the safe half.
+
+### The tagger question turned up a gap that was mine, not the library's
+
+jaudiotagger covers every container a podcast realistically arrives in, artwork included. The only
+real hole is raw `.aac`, which CLAUDE.md §6 lists among the extensions to expect and which has no tag
+container at all — the file is delivered untagged. Documented in ADR 0006 rather than fixed, because
+it is the correct best-effort behaviour and `.aac` in feeds is nearly always AAC-in-MP4 as `.m4a`.
+
+What was actually wrong: artwork failures were **silent** while every other field's failure was
+reported through `PartialSuccess.skippedFields`. I shipped that a day ago. Now reported.
+
+I also wrote a test asserting that a file which already had its own cover should count as
+`artworkSkipped = true`, then had to correct it — the code was right and the test was wrong. Already
+having artwork is the intended outcome of the feature, not a limitation, and conflating the two would
+make the flag useless for spotting the container problems it exists to spot. A reminder that a
+failing test is not automatically evidence about the code.
+
+### The backup: SQLite fails open, and Robolectric caught it
+
+`SQLiteOpenHelper`'s default corruption handler **deletes and recreates** a database it cannot open.
+So handing Room a truncated archive does not throw — it returns a perfectly valid *empty* database.
+My first implementation would have read that as "restore zero rows" and faithfully replaced the
+user's ledger with nothing. The test named `a corrupt archive leaves the existing data exactly as it
+was` failed on its first run by reporting `Imported` instead of `Failed`, which is the single most
+valuable thing that happened today.
+
+The fix is two gates: the SQLite header before Room touches the file, and the manifest's recorded row
+counts against what was actually read, before the transaction opens. The second catches damage the
+header cannot see.
+
+The design decision worth recording (ADR 0018) is restoring **row by row into the live database**
+rather than swapping the file. Swapping means closing and rebuilding the Room singleton that every
+collected `Flow` is bound to, which in practice means an app restart. Reading the archive as a second
+Room instance — which is also what runs the migrations on an old backup — and copying inside one
+`withTransaction` gives all-or-nothing semantics and lets the invalidation tracker update the screens
+by itself.
+
+The restore warning is shown **before** the file picker, following `docs/decisions/0013`'s rule for
+the bulk mark: nothing about the warning depends on which file is chosen, so showing it first means
+no file is read until the user has agreed to what a restore does.
+
+### Prompt/approach note
+
+"Just dump the database as zip" was the right instruction to follow literally. Zipping the SQLite
+file gets schema evolution free through Room's own migrations; a JSON dump would have needed a second
+serialisation format, versioned and migrated in parallel with the real schema, to end up in the same
+place. The temptation to build the "cleaner" thing would have cost real code and bought nothing.
+
+**Verified:** `ktlintCheck detekt test assembleDebug` green, 549 tests.
+
+**Not verified on a device:** the backup has never run against real SAF. Robolectric's
+`ContentResolver` handles `file://` URIs, which is what the tests use; a real `content://` from
+`CreateDocument` is a different code path in the resolver, though the same one the download pipeline
+already uses successfully. The WAL checkpoint is likewise unexercised — Robolectric may not have the
+database in WAL mode at all, so that line is reasoned-about rather than proven.

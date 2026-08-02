@@ -13,6 +13,7 @@ import net.drehtuer.podsilo.feature.settings.ConnectViewModel
 import net.drehtuer.podsilo.feature.settings.NamingScreen
 import net.drehtuer.podsilo.feature.settings.NamingViewModel
 import net.drehtuer.podsilo.feature.settings.SettingsEffect
+import net.drehtuer.podsilo.feature.settings.SettingsEvent
 import net.drehtuer.podsilo.feature.settings.SettingsScreen
 import net.drehtuer.podsilo.feature.settings.SettingsViewModel
 
@@ -35,6 +36,14 @@ internal fun SettingsDestination(
             SettingsEffect.ChooseFolder -> host.onChooseFolder()
             SettingsEffect.OpenActivity -> host.navController.navigate(Routes.ACTIVITY)
             SettingsEffect.OpenErrorLog -> host.navController.navigate(Routes.ERROR_LOG)
+            // The picked document goes back in as an event, so the view model — not the activity —
+            // owns what happens to it and can report the outcome.
+            is SettingsEffect.CreateBackupFile ->
+                host.onCreateBackupFile(effect.suggestedName) {
+                    viewModel.onEvent(SettingsEvent.BackupDestinationChosen(it))
+                }
+            SettingsEffect.OpenBackupFile ->
+                host.onOpenBackupFile { viewModel.onEvent(SettingsEvent.BackupSourceChosen(it)) }
             is SettingsEffect.ShowMessage -> host.snackbar.showSnackbar(effect.text)
         }
     }

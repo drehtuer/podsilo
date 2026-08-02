@@ -312,6 +312,8 @@ data class SettingsUiState(
     val errorLogCount: Int,
     val version: String,
     val pendingBulk: BulkPreview?,          // non-null while the preview dialog is up
+    val restoreConfirmationVisible: Boolean,// the restore warning, shown BEFORE the file picker
+    val archiveBusy: Boolean,               // a zip is being written or read; both backup rows dead
 )
 
 data class NextcloudUi(val instanceUrl: String?, val loginName: String?, val connectedAt: Instant?, val lastSyncAt: Instant?, val outboxDepth: Int)
@@ -331,8 +333,19 @@ sealed interface SettingsEvent {
     data object BulkConfirmed : SettingsEvent
     data object BulkCancelled : SettingsEvent
     data class ThemeChanged(val theme: ThemePreference) : SettingsEvent
+    data object ExportDatabaseClicked : SettingsEvent
+    data object RestoreDatabaseClicked : SettingsEvent      // opens the warning, not the picker
+    data object RestoreConfirmed : SettingsEvent
+    data object RestoreCancelled : SettingsEvent
+    data class BackupDestinationChosen(val uri: String) : SettingsEvent   // back from CreateDocument
+    data class BackupSourceChosen(val uri: String) : SettingsEvent       // back from OpenDocument
 }
 ```
+
+The backup rows go through `DatabaseArchive` (`docs/decisions/0018`). The picked document comes back
+to the ViewModel as an event rather than being handled in the activity, because S4 has to report what
+happened to it — which is why `HostActions` carries a callback for these two and not for the download
+folder.
 
 The two swipe dropdowns **cannot hold the same action**: `SwipeChanged` swaps them in the ViewModel
 rather than rejecting the input, so the pair is always valid and the swipe background can be

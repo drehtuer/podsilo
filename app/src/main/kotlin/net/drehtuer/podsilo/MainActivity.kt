@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -15,7 +16,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -27,6 +31,9 @@ import net.drehtuer.podsilo.ui.HostActions
 import net.drehtuer.podsilo.ui.PodsiloNavHost
 import net.drehtuer.podsilo.ui.theme.PodsiloTheme
 import javax.inject.Inject
+
+/** What the export is written as, and the first filter the restore picker offers. */
+private const val ZIP_MIME = "application/zip"
 
 /**
  * Single activity, as `docs/UI_interface.md` §9 specifies: one `NavHost`, S1 the start destination.
@@ -64,6 +71,24 @@ class MainActivity : ComponentActivity() {
                     if (uri != null) scope.launch { downloadFolderAccess.remember(uri) }
                 }
 
+            // Unlike the folder picker, these two hand their result back to whoever asked, because
+            // S4 reports the outcome of the backup rather than the activity doing it silently. The
+            // pending callback is held across the picker; if the process is recreated while the
+            // picker is open the callback is gone and the operation simply does not happen — which
+            // is the safe direction, since nothing has been written at that point.
+            var pendingPick by remember { mutableStateOf<((String) -> Unit)?>(null) }
+
+            fun deliver(uri: Uri?) {
+                val callback = pendingPick
+                pendingPick = null
+                if (uri != null) callback?.invoke(uri.toString())
+            }
+
+            val backupCreator =
+                rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(ZIP_MIME)) { deliver(it) }
+            val backupOpener =
+                rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { deliver(it) }
+
             PodsiloTheme(preference = preference) {
                 PodsiloNavHost(
                     factory = viewModelFactory,
@@ -73,6 +98,16 @@ class MainActivity : ComponentActivity() {
                             chooseFolder = { folderPicker.launch(null) },
                             copy = ::copyToClipboard,
                             share = ::shareText,
+                            createBackupFile = { name, onPicked ->
+                                pendingPick = onPicked
+                                backupCreator.launch(name)
+                            },
+                            openBackupFile = { onPicked ->
+                                pendingPick = onPicked
+                                // Some file managers hand zips out under other types, so the
+                                // wildcard is there to stop a real backup looking un-pickable.
+                                backupOpener.launch(arrayOf(ZIP_MIME, "application/octet-stream", "*/*"))
+                            },
                         ),
                 )
             }

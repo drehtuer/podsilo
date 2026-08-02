@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
+import net.drehtuer.podsilo.core.model.port.DatabaseArchive
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
@@ -54,6 +55,7 @@ class EpisodeViewModelFactory
         private val settingsFolderStatus: SettingsFolderStatusAdapter,
         private val settingsCounts: SettingsCountsAdapter,
         private val syncStatus: SyncStatusAdapter,
+        private val databaseArchive: DatabaseArchive,
         private val namingSample: NamingSampleSourceAdapter,
         private val loginFlowClient: NextcloudLoginFlowClient,
         private val syncTrigger: ConnectSyncTrigger,
@@ -114,6 +116,7 @@ class EpisodeViewModelFactory
                     counts = settingsCounts,
                     namingSummary = { namingPreview.render(it) },
                     syncStatus = syncStatus,
+                    archive = databaseArchive,
                     clock = clock,
                     version = appVersion,
                 )

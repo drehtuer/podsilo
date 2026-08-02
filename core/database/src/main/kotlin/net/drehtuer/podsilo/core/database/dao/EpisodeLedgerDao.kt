@@ -29,6 +29,20 @@ interface EpisodeLedgerDao {
     @Query("SELECT * FROM episode_ledger")
     suspend fun getAll(): List<EpisodeLedgerEntity>
 
+    @Query("SELECT COUNT(*) FROM episode_ledger")
+    suspend fun count(): Int
+
+    /**
+     * Restore only — `DatabaseArchiveStore` is the sole caller, deliberately.
+     *
+     * Emptying this table is the worst thing the app can do to itself: CLAUDE.md §5 calls the ledger
+     * "the ONE table that must never be lost", and without it every episode the user ever handled
+     * comes back as new. It exists so a restore can replace the table inside one transaction, and
+     * nothing else should ever reach for it.
+     */
+    @Query("DELETE FROM episode_ledger")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM episode_ledger WHERE episodeKey = :episodeKey")
     suspend fun get(episodeKey: String): EpisodeLedgerEntity?
 

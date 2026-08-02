@@ -8,7 +8,10 @@ import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.Feed
+import net.drehtuer.podsilo.core.model.port.ArchiveContents
+import net.drehtuer.podsilo.core.model.port.ArchiveOutcome
 import net.drehtuer.podsilo.core.model.port.BulkScope
+import net.drehtuer.podsilo.core.model.port.DatabaseArchive
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
@@ -243,5 +246,23 @@ class RecordingSyncTrigger : ConnectSyncTrigger {
 
     override fun requestSyncNow() {
         syncs++
+    }
+}
+
+/** Records what it was asked to do and returns whatever [outcome] is set to. */
+class FakeDatabaseArchive(
+    var outcome: ArchiveOutcome = ArchiveOutcome.Exported(ArchiveContents(2, 40, 7)),
+) : DatabaseArchive {
+    val exported = mutableListOf<String>()
+    val imported = mutableListOf<String>()
+
+    override suspend fun exportTo(destinationUri: String): ArchiveOutcome {
+        exported += destinationUri
+        return outcome
+    }
+
+    override suspend fun importFrom(sourceUri: String): ArchiveOutcome {
+        imported += sourceUri
+        return outcome
     }
 }

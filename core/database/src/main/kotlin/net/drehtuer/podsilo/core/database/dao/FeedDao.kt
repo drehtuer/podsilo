@@ -17,6 +17,9 @@ interface FeedDao {
     @Query("SELECT * FROM feeds")
     suspend fun getAll(): List<FeedEntity>
 
+    @Query("SELECT COUNT(*) FROM feeds")
+    suspend fun count(): Int
+
     @Query("SELECT * FROM feeds WHERE url = :url")
     suspend fun get(url: String): FeedEntity?
 

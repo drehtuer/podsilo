@@ -47,6 +47,7 @@ internal fun SettingsRow(
     subtitle: String?,
     onClick: (() -> Unit)?,
     isWarning: Boolean = false,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -55,7 +56,9 @@ internal fun SettingsRow(
         Column(
             modifier = Modifier.weight(1f),
         ) {
-            SettingsRowBody(title, subtitle, onClick, isWarning)
+            // A disabled row keeps its chevron but drops its click: the backup rows disable while a
+            // zip is being written, and a row that vanished mid-operation would read as a crash.
+            SettingsRowBody(title, subtitle, onClick.takeIf { enabled }, isWarning)
         }
         // The affordance, not a control — the whole row is the tap target (docs/UI.md §18).
         if (onClick != null) PodsiloIcon(PodsiloIcons.ChevronRight, contentDescription = null)

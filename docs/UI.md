@@ -400,10 +400,13 @@ block-beta
   r11["Mark ALL episodes as played\nEvery undecided episode in every podcast  [ Preview & apply ]"]
   g4["APPEARANCE"]
   r12["Theme    ( Light )  ( Dark )  ( System )"]
-  g5["TROUBLESHOOTING"]
-  r13["Error log            3 entries today    ›"]
-  g6["ABOUT"]
-  r14["Version 0.1.0 · GPL-3.0-or-later\nOpen source licences               ›"]
+  g5["BACKUP"]
+  r13["Export database\nSave podcasts, episodes and download history as a zip   ›"]
+  r14["Restore from backup\nReplaces everything currently on this device           ›"]
+  g6["TROUBLESHOOTING"]
+  r15["Error log            3 entries today    ›"]
+  g7["ABOUT"]
+  r16["Version 0.1.0 · GPL-3.0-or-later\nOpen source licences               ›"]
 ```
 
 **Nextcloud group**
@@ -474,6 +477,23 @@ second note in the preview states it plainly rather than warning against it. Fur
 
 **Appearance group** — **Theme**: 3-option segmented control **Light / Dark / System** (default
 `System`), persisted in DataStore, applied immediately without an activity restart (§12.7).
+
+**Backup group** (`docs/decisions/0018`)
+
+- **Export database** — a SAF `CreateDocument`, offered as `podsilo-backup-YYYY-MM-DD.zip` so
+  successive backups sit beside each other rather than one silently replacing the last. The subtitle
+  names what is inside; the snackbar afterwards names the counts.
+- **Restore from backup** — opens a **warning dialog first, then** the file picker. A restore
+  replaces the ledger, which is the app's only memory of what has already been handled, and that has
+  to be said in words before a file is read — the same rule the bulk-mark preview follows (§7,
+  `docs/decisions/0013`). The dialog also states the reassuring half, which is true rather than
+  soothing: Nextcloud is untouched, and the next sync pulls back whatever happened after the backup.
+- Both rows go **dead while either operation runs**, so a second tap cannot start a second export
+  over the same file. They grey out rather than disappearing — a row that vanished mid-operation
+  reads as a crash.
+- Failures are four separate sentences, not one: *not a Podsilo backup*, *made by a newer Podsilo —
+  update the app first*, *couldn't be read, nothing was changed*, *couldn't be written*. Each has a
+  different next step for the user.
 
 **Troubleshooting group** — **Error log** row with an entry count → S8.
 

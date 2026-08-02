@@ -57,6 +57,10 @@ interface LogDao {
     @Insert
     suspend fun insert(entry: LogEntryEntity)
 
+    /** Restore only — see [EpisodeLedgerDao.deleteAll]. Keeps the archived rows' own ids. */
+    @Insert
+    suspend fun insertAll(entries: List<LogEntryEntity>)
+
     /**
      * Ring buffer: keep the newest [MAX_ENTRIES] **collapsed** entries. "Or 7 days, whichever is
      * larger" (`docs/UI.md` §11) needs no clause — an age-based rule can only ever delete rows this

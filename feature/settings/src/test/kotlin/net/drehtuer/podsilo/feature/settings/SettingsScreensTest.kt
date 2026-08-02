@@ -132,6 +132,41 @@ class SettingsScreensTest {
         assertTrue(settingsEvents.contains(SettingsEvent.BulkCancelled))
     }
 
+    /**
+     * Tapping *Restore* must open a warning, never a file picker. The whole safeguard is that the
+     * user reads what a restore does before choosing anything.
+     */
+    @Test
+    fun `restore asks for confirmation before it asks for a file`() {
+        renderSettings(SettingsUiState(version = "0.1.0"))
+
+        compose.onNodeWithText("Restore from backup").performScrollTo().performClick()
+
+        assertEquals(listOf(SettingsEvent.RestoreDatabaseClicked), settingsEvents)
+    }
+
+    @Test
+    fun `the restore warning says it cannot be undone and that Nextcloud is untouched`() {
+        renderSettings(SettingsUiState(version = "0.1.0", restoreConfirmationVisible = true))
+
+        compose.onNode(hasText("cannot be undone", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("Nextcloud account is not touched", substring = true)).assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertTrue(settingsEvents.contains(SettingsEvent.RestoreCancelled))
+    }
+
+    /** A second tap mid-zip would start a second export over the same file. */
+    @Test
+    fun `both backup rows go dead while one is running`() {
+        renderSettings(SettingsUiState(version = "0.1.0", archiveBusy = true))
+
+        compose.onNodeWithText("Export database").performScrollTo().performClick()
+        compose.onNodeWithText("Restore from backup").performScrollTo().performClick()
+
+        assertTrue(settingsEvents.isEmpty())
+    }
+
     @Test
     fun `the remainder line keeps the listed numbers adding up to the title`() {
         val many = (1..8).map { FeedCount("Feed $it", 10) }

@@ -9,6 +9,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import net.drehtuer.podsilo.core.database.DatabaseArchiveStore
 import net.drehtuer.podsilo.core.database.PODSILO_MIGRATIONS
 import net.drehtuer.podsilo.core.database.PodsiloDatabase
 import net.drehtuer.podsilo.core.database.repository.EpisodeLedgerRepositoryImpl
@@ -17,6 +18,7 @@ import net.drehtuer.podsilo.core.database.repository.EpisodeRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.FeedRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.LogRepositoryImpl
 import net.drehtuer.podsilo.core.database.repository.SyncStateRepositoryImpl
+import net.drehtuer.podsilo.core.model.port.DatabaseArchive
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
@@ -72,6 +74,14 @@ object DatabaseModule {
     @Singleton
     fun provideSyncStateRepository(database: PodsiloDatabase): SyncStateRepository =
         SyncStateRepositoryImpl(database.syncStateDao())
+
+    /** The zip backup of the whole database (`docs/decisions/0018`). */
+    @Provides
+    @Singleton
+    fun provideDatabaseArchive(
+        @ApplicationContext context: Context,
+        database: PodsiloDatabase,
+    ): DatabaseArchive = DatabaseArchiveStore(context, database)
 
     @Provides
     @Singleton
