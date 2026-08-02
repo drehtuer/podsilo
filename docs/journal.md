@@ -2212,3 +2212,63 @@ listed), no server listening (tested on port 5999, leaving 5037 alone), and cont
 
 **Not verified:** the Windows-side `adb -a -P 5037 nodaemon server` variant with `ADB_SERVER_SOCKET`.
 Still never run; still marked ❌ in §1.
+
+---
+
+## 2026-08-02 (later still) — The backup feature on a real phone
+
+First real-device session: a Pixel 5 (`redfin`, Android 14 / API 34) over usbip, driving the app
+with `adb input` and `screencap`. The target was the one thing the suite structurally cannot reach —
+SAF `content://` URIs — which `docs/decisions/0018` listed as the feature's unverified half.
+
+### What held up
+
+- **Export through the real `CreateDocument` picker.** The picker opened on Downloads with the zip
+  MIME and the suggested name `podsilo-backup-2026-08-02.zip`; the file landed at 1,705 bytes with
+  exactly two entries, and a manifest reading `schemaVersion=4 archiveFormat=1 feeds=0 episodes=0
+  ledgerRows=0`. Snackbar: *"Backup saved — 0 podcasts, 0 handled episodes."*
+- **The WAL checkpoint is doing something.** The copied `podsilo.db` contains the full schema —
+  all five tables plus `room_master_table`. A freshly created Room database writes its schema
+  through the WAL, so without `wal_checkpoint(TRUNCATE)` the copy would have been missing it. That
+  line was reasoned-about when written; it is now evidenced.
+- **Restore with real rows.** Since there is no Nextcloud account on this phone, I built a seeded
+  archive instead: took the device's own export, inserted two feeds, three episodes, two ledger rows
+  and a `sync_state` with `sqlite3`, fixed the manifest counts, re-zipped and pushed it. Restoring it
+  reported *"Restored 2 podcasts and 2 handled episodes"*, and pulling the live database back off the
+  device showed every row intact — including `writtenFileName` and `syncedToServer = 0`, the two
+  fields that exist nowhere else.
+- **The live-refresh claim, which was the interesting one.** ADR 0018 argues for copying rows into
+  the live database rather than swapping the file, on the grounds that Room's invalidation tracker
+  then updates the screens by itself. Confirmed directly: a second archive carrying three
+  `error_log` rows flipped Settings' *Error log* row from **"0 entries" to "3 entries" while it was
+  on screen** — no navigation, no restart.
+- **The failure path, on real SAF.** A zip containing one text file produced *"That file isn't a
+  Podsilo backup."* and the error log still read 3 entries afterwards — the "nothing was changed"
+  guarantee, visible rather than asserted.
+
+### What the device found that the tests could not
+
+After restoring onto an install with no Nextcloud account, **S1 still says "No subscriptions —
+connect Nextcloud"** while the snackbar says two podcasts were restored. Both are true:
+`PodcastListViewModel.contentFor` short-circuits on `!configured` before it looks at the feed list,
+and credentials live in DataStore, which the archive deliberately does not carry. So the feature
+behaved exactly as designed and the *combination* still reads as a failure.
+
+I spent a while assuming this was the invalidation claim failing, and only settled it by pulling the
+database off the device: the rows were all there. Worth noting as a diagnostic habit — "the UI does
+not show it" and "it was not written" are different claims, and the second is the one you can check
+directly. Filed in `docs/backlog.md` rather than fixed, along with a second on-device annoyance: the
+restore picker's `*/*` fallback makes the zip filter a no-op, so it lists every PDF and photo in
+Downloads.
+
+### Housekeeping
+
+Test artefacts removed from the phone's Downloads folder, and `pm clear` run to drop the seeded
+rows — the install was fresh this session and had never been connected, so nothing real was lost.
+
+**Verified:** export, restore-with-data, live refresh, and the not-a-backup failure path, all on a
+physical Pixel 5 through the real SAF pickers.
+
+**Still not verified:** a restore over an install that *is* connected to Nextcloud (needs a login on
+the phone), and the download pipeline end to end — no episode has yet been fetched, tagged and
+written to a SAF folder by the running app.
