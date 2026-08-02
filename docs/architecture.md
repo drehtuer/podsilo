@@ -1002,10 +1002,10 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 | 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
-| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ◐ **S1–S3 built and navigable**; S4–S8 not written | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
+| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`) | ◐ **S1–S6 built and navigable**; S7/S8 not written | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
 | 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
-**Everything below the UI is built and green** (437 tests, 3 skipped as of 2026-08-02), and so is
+**Everything below the UI is built and green** (479 tests, 3 skipped as of 2026-08-02), and so is
 everything the UI *binds to* — every port in `docs/UI_interface.md` §8 is implemented, not just
-declared. **S1, S2 and S3 render and are navigable**, and the app has been installed and launched on
-the in-container emulator. What is missing is S4–S8. Nothing blocks them.
+declared. **S1–S6 render and are navigable**, and the app has been installed, launched and driven
+through all six on the in-container emulator. What is missing is S7 and S8. Nothing blocks them.

@@ -10,14 +10,19 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import net.drehtuer.podsilo.BuildConfig
 import net.drehtuer.podsilo.core.download.SyncTrigger
 import net.drehtuer.podsilo.core.gpodder.RetrofitGpodderClientFactory
+import net.drehtuer.podsilo.core.gpodder.RetrofitNextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
 import net.drehtuer.podsilo.core.model.port.GpodderClientFactory
+import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
+import net.drehtuer.podsilo.feature.settings.ConnectSyncTrigger
 import net.drehtuer.podsilo.system.AndroidConnectivityMonitor
 import net.drehtuer.podsilo.work.WorkScheduler
 import okhttp3.OkHttpClient
 import java.time.Clock
+import javax.inject.Named
 import javax.inject.Singleton
 
 /** Process-wide singletons every other module builds on: HTTP, the clock, WorkManager. */
@@ -47,6 +52,29 @@ object AppModule {
     @Singleton
     fun provideGpodderClientFactory(okHttpClient: OkHttpClient): GpodderClientFactory =
         RetrofitGpodderClientFactory(okHttpClient)
+
+    /** Login Flow v2 lives on Nextcloud core, before any credentials exist — see the port's KDoc. */
+    @Provides
+    @Singleton
+    fun provideLoginFlowClient(okHttpClient: OkHttpClient): NextcloudLoginFlowClient =
+        RetrofitNextcloudLoginFlowClient(okHttpClient)
+
+    /**
+     * S5 enqueues the first sync as soon as credentials land, so S1 fills in by itself.
+     *
+     * An adapter rather than a second interface on `WorkScheduler`: `:core:download` and
+     * `:feature:settings` each declare their own one-method port for this, which is the ports rule
+     * working as intended — neither module should have to know the other exists.
+     */
+    @Provides
+    @Singleton
+    fun provideConnectSyncTrigger(workScheduler: WorkScheduler): ConnectSyncTrigger =
+        ConnectSyncTrigger { workScheduler.requestSyncNow() }
+
+    /** Shown in S4's About row. Named because a bare String binding would be ambiguous. */
+    @Provides
+    @Named("appVersion")
+    fun provideAppVersion(): String = BuildConfig.VERSION_NAME
 }
 
 /** `@Binds` needs an abstract class, so it can't live in the `object` module above. */

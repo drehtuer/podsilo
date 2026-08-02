@@ -19,6 +19,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.Flow
@@ -66,6 +67,10 @@ fun PodsiloNavHost(
                 val feedUrl = Uri.decode(entry.arguments?.getString(Routes.ARG_FEED_URL).orEmpty())
                 EpisodesDestination(feedUrl, factory, host)
             }
+            composable(Routes.SETTINGS) { SettingsDestination(factory, host) }
+            // A dialog destination: S5 sits over S4 rather than replacing it (docs/UI_interface.md §9).
+            dialog(Routes.CONNECT) { ConnectDestination(factory, host) }
+            composable(Routes.NAMING) { NamingDestination(factory, host) }
             composable(
                 Routes.EPISODE_DETAIL,
                 arguments = listOf(navArgument(Routes.ARG_EPISODE_KEY) { type = NavType.StringType }),
@@ -102,9 +107,9 @@ private fun PodcastsDestination(
         when (effect) {
             is PodcastListEffect.OpenEpisodes -> host.navController.navigate(Routes.episodes(effect.feedUrl))
             PodcastListEffect.ChooseFolder, PodcastListEffect.ResolvePausedQueue -> host.onChooseFolder()
-            PodcastListEffect.OpenSettings -> host.snackbar.notBuiltYet("Settings")
-            PodcastListEffect.OpenConnect -> host.snackbar.notBuiltYet("The Nextcloud connection dialog")
-            PodcastListEffect.OpenNaming -> host.snackbar.notBuiltYet("The naming editor")
+            PodcastListEffect.OpenSettings -> host.navController.navigate(Routes.SETTINGS)
+            PodcastListEffect.OpenConnect -> host.navController.navigate(Routes.CONNECT)
+            PodcastListEffect.OpenNaming -> host.navController.navigate(Routes.NAMING)
             PodcastListEffect.OpenActivity -> host.snackbar.notBuiltYet("Activity")
             is PodcastListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
         }
@@ -162,14 +167,14 @@ private fun DetailDestination(
  * view model, and re-collecting the old one's channel would deliver its effects to the new screen.
  */
 @Composable
-private fun <T> OnEffect(
+internal fun <T> OnEffect(
     effects: Flow<T>,
     handle: suspend (T) -> Unit,
 ) {
     LaunchedEffect(effects) { effects.collect { handle(it) } }
 }
 
-private suspend fun SnackbarHostState.notBuiltYet(screen: String) {
+internal suspend fun SnackbarHostState.notBuiltYet(screen: String) {
     showSnackbar("$screen is not built yet.")
 }
 

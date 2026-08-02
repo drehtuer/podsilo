@@ -26,6 +26,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 
@@ -48,6 +49,7 @@ dependencies {
     implementation(project(":core:naming"))
     implementation(project(":core:sync"))
     implementation(project(":feature:episodes"))
+    implementation(project(":feature:settings"))
 
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.work)

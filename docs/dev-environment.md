@@ -32,7 +32,7 @@ below differ enormously in how well-proven they are.
 | Dev container builds and starts | ✅ Verified | Repeatedly, incl. 2026-07-31 |
 | Android SDK provisioning (`post-create.sh`) | ✅ Verified | Idempotent, installs into the named volume |
 | Portability across hosts with different UID/GID | ✅ Verified | 2026-07-31: second machine, uid 1002 / docker gid 108 — see [§4](#4-host-uidgid-portability) |
-| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-02, after Tier 4c's S1/S2/S3: 437 tests, 3 skipped, exit 0 |
+| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-02, after Tier 4c's S1–S6: 479 tests, 3 skipped, exit 0 |
 | `./gradlew assembleDebug` | ✅ Verified | 29 MB debug APK |
 | opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green (3 tests, 0 skipped) |
 | `docker` from inside the container | ✅ Verified | Host daemon, group aligned at runtime by `post-create.sh` |
@@ -43,7 +43,7 @@ below differ enormously in how well-proven they are.
 | **Tier 3 — adb over TCP to a Windows emulator** | ❌ **Never run** | No `scripts/adb-connect-host.sh` exists |
 | `KeystoreAppPasswordCipher` round-trip | ❌ Never run | Needs a real device/emulator (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ❌ Never run | Needs a real `DocumentsProvider` (ADR 0011) |
-| **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator, launched, rendered S1. Its first run found the ICU regex bug (`docs/decisions/0017`) |
+| **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through S1–S6. Its first run found the ICU regex bug (`docs/decisions/0017`) |
 
 **In short: Tier 1 is the everyday path and Tier 2 now works when you need a real device.** Tier 1 is
 where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is slow enough (≈28 s to boot,
