@@ -59,4 +59,18 @@ class EpisodeImageParsingTest {
     fun `a feed with no episode images at all parses with null throughout`() {
         parse("valid_minimal.xml").episodes.forEach { assertNull(it.imageUrl) }
     }
+
+    /**
+     * `<enclosure length>` — advisory, and only when positive.
+     *
+     * Feeds write `length="0"` when they mean "no idea", and a row reading "0 MB" is worse than a row
+     * with no size at all, so zero is dropped rather than stored.
+     */
+    @Test
+    fun `the enclosure length is parsed as the advertised size`() {
+        val episodes = parse("valid_minimal.xml").episodes
+
+        assertEquals(12_345_678L, episodes.first { it.enclosureUrl.endsWith("ep2.mp3") }.sizeBytes)
+        assertEquals(10_000_000L, episodes.first { it.enclosureUrl.endsWith("ep1.mp3") }.sizeBytes)
+    }
 }

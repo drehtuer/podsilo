@@ -76,5 +76,29 @@ val MIGRATION_3_4: Migration =
         }
     }
 
+/**
+ * v5 — `episodes.sizeBytes`, the enclosure length a feed advertises.
+ *
+ * Additive and nullable, and deliberately not backfilled: `episodes` is a disposable cache of parsed
+ * RSS (`docs/architecture.md` §4), so the next refresh fills it in. Same shape as [MIGRATION_3_4].
+ */
+val MIGRATION_4_5: Migration =
+    object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE episodes ADD COLUMN sizeBytes INTEGER")
+            // AND CLEAR THE CONDITIONAL-GET VALIDATORS, or the new column stays empty for weeks.
+            //
+            // `FeedFetcher` sends If-None-Match/If-Modified-Since and a 304 skips the parse entirely
+            // (`docs/architecture.md` §7), so an unchanged feed never re-parses and never fills a
+            // newly added column. Observed on the author's phone: v5 applied, every `sizeBytes` null,
+            // and a refresh that dutifully did nothing because all four feeds answered 304.
+            //
+            // Dropping the validators costs exactly one full fetch per feed, once. Any migration that
+            // adds a column to `episodes` needs this line — the alternative is a column that fills in
+            // whenever the publisher next happens to post, which is not a schedule we control.
+            db.execSQL("UPDATE feeds SET httpEtag = NULL, httpLastModified = NULL")
+        }
+    }
+
 /** Every migration, in order — what `:app` hands to `Room.databaseBuilder().addMigrations(...)`. */
-val PODSILO_MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+val PODSILO_MIGRATIONS: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

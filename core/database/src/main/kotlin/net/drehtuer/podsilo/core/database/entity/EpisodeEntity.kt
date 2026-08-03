@@ -36,5 +36,8 @@ data class EpisodeEntity(
     val durationMs: Long?,
     // Schema v2. The episode's own page, for "Open in browser" — never the enclosure, which is audio.
     val link: String? = null,
+    // Schema v4. The item's own artwork; the podcast's is the fallback when embedding on download.
     val imageUrl: String? = null,
+    /** Schema v5: `<enclosure length>`, advisory. See `Episode.sizeBytes`. */
+    val sizeBytes: Long? = null,
 )

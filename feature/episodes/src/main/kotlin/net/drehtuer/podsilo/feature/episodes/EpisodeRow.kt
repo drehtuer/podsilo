@@ -176,7 +176,7 @@ internal fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
     }
 
 internal fun EpisodeUi.metaLine(zone: ZoneId): String =
-    listOfNotNull(publishedAt?.formatDate(zone), duration?.formatDuration())
+    listOfNotNull(publishedAt?.formatDate(zone), duration?.formatDuration(), sizeBytes?.formatSize())
         .joinToString(" · ")
 
 internal fun EpisodeUi.statusLine(): String? =

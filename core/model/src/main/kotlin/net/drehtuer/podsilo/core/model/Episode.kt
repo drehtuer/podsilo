@@ -35,4 +35,13 @@ data class Episode(
     val durationMs: Long?,
     val link: String? = null,
     val imageUrl: String? = null,
+    /**
+     * `<enclosure length>` in bytes, when the feed supplies it.
+     *
+     * Advisory, like `durationMs`: it is what the publisher claims, not what the server will send,
+     * and plenty of feeds omit it or state it wrongly. Shown to help a download decision — a 400 MB
+     * episode is a different proposition from a 20 MB one — and never used to verify a download or
+     * to compute anything.
+     */
+    val sizeBytes: Long? = null,
 )
