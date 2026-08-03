@@ -12,11 +12,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -28,13 +29,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloIcon
+import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.ZoneId
 
 /**
  * S3 — the episode detail sheet (`docs/UI.md` §6).
  *
- * A **read step inside triage**, open for every episode regardless of state including the
+ * A **full screen**, open for every episode regardless of state including the
  * de-emphasised ones. Its buttons come from [EpisodeUi.actions] and its labels from the same
  * [labelFor] the row uses, so the sheet and the row it opened from cannot offer different actions
  * (`docs/UI.md` §12.6) — which is also why *Choose folder* replaces *Retry* here too.
@@ -47,14 +50,40 @@ fun EpisodeDetailSheet(
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
-    ModalBottomSheet(
-        onDismissRequest = { onEvent(EpisodeDetailEvent.Dismissed) },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    // A FULL SCREEN, NOT A BOTTOM SHEET.
+    //
+    // It was a `ModalBottomSheet` rendered inside a full-screen `composable` navigation destination,
+    // which is a contradiction: the destination owns the whole window and had nothing in it, so the
+    // sheet floated over an empty page. Dragging the sheet down dismissed it and revealed that empty
+    // page — the "pull down leads to a white screen" the author reported. Nothing had navigated
+    // away, so `Dismissed` never popped the backstack either; the screen was simply blank.
+    //
+    // Made a real screen rather than teaching the sheet to survive a drag: show notes run to
+    // paragraphs and the sheet was already `skipPartiallyExpanded`, i.e. always full height. It was
+    // a full screen wearing a sheet's clothes. `docs/UI.md` §6 amended to match.
+    Scaffold(
         modifier = modifier,
-    ) {
+        topBar = {
+            TopAppBar(
+                // No title: the header immediately below already names the podcast, the date and the
+                // duration, and repeating the feed title in the bar just spends the one line a long
+                // episode title needs. The bar is here for the back affordance.
+                title = {},
+                navigationIcon = {
+                    IconButton(
+                        onClick = { onEvent(EpisodeDetailEvent.Dismissed) },
+                        modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+                    ) {
+                        PodsiloIcon(PodsiloIcons.Back, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(
             modifier =
                 Modifier
+                    .padding(padding)
                     .padding(horizontal = RowPadding)
                     .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(SheetSpacing),

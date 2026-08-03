@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import net.drehtuer.podsilo.core.model.ErrorCause
@@ -172,5 +173,30 @@ class EpisodeDetailSheetTest {
             listOf(EpisodeDetailEvent.Triage(EpisodeUiAction.MARK_AS_PLAYED)),
             events,
         )
+    }
+
+    /**
+     * S3 is a **full screen**, not a bottom sheet.
+     *
+     * It was a `ModalBottomSheet` inside a full-screen navigation destination — so a downward drag
+     * dismissed the sheet and revealed the empty destination behind it, which is the white screen the
+     * author reported. A back affordance is the only way out now, and there is nothing to pull.
+     */
+    @Test
+    fun `the detail screen has a back affordance and cannot be pulled away`() {
+        render()
+
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed()
+        // No sheet handle, and the content is not draggable off-screen.
+        compose.onAllNodes(hasText("Warum Hamburg immer regnet")).assertCountEquals(1)
+    }
+
+    @Test
+    fun `back emits Dismissed so the host can pop the backstack`() {
+        render()
+
+        compose.onNodeWithContentDescription("Back").performClick()
+
+        assertTrue(events.contains(EpisodeDetailEvent.Dismissed))
     }
 }

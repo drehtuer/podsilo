@@ -76,6 +76,7 @@ fun EpisodeListScreen(
                     }
                     if (state.isOffline) OfflineBanner()
                     FilterChips(state.filter, onEvent)
+                    MarkAllRow(state, onEvent)
 
                     when (val content = state.content) {
                         EpisodeListUiState.Content.Loading -> LoadingRows()
@@ -90,6 +91,9 @@ fun EpisodeListScreen(
 
     state.pendingBulk?.let { preview ->
         DownloadAllDialog(preview, onEvent)
+    }
+    state.pendingMarkAll?.let { keys ->
+        MarkAllDialog(keys, onEvent)
     }
 }
 
@@ -229,13 +233,21 @@ private fun EpisodeRows(
         items(items, key = { it.episodeKey }) { episode ->
             val header = state.sections.firstOrNull { it.firstIndex == items.indexOf(episode) }
             if (header != null) MonthHeader(header)
-            EpisodeRow(
+            SwipeableEpisodeRow(
                 episode = episode,
-                selected = state.selection?.keys?.contains(episode.episodeKey) == true,
-                inSelectionMode = state.inSelectionMode,
+                mapping = state.swipeMapping,
+                // Selection mode owns the gesture surface while it is active.
+                enabled = !state.inSelectionMode,
                 onEvent = onEvent,
-                zone = zone,
-            )
+            ) {
+                EpisodeRow(
+                    episode = episode,
+                    selected = state.selection?.keys?.contains(episode.episodeKey) == true,
+                    inSelectionMode = state.inSelectionMode,
+                    onEvent = onEvent,
+                    zone = zone,
+                )
+            }
             HorizontalDivider()
         }
     }

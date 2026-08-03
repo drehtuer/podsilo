@@ -122,6 +122,8 @@ sealed interface SettingsEvent {
         val theme: ThemePreference,
     ) : SettingsEvent
 
+    data object SourceCodeClicked : SettingsEvent
+
     data object ExportDatabaseClicked : SettingsEvent
 
     /** Opens the warning. The picker only follows once it is confirmed. */
@@ -156,6 +158,11 @@ sealed interface SettingsEffect {
     /** The SAF picker — an Activity result, so only the host can launch it. */
     data object ChooseFolder : SettingsEffect
 
+    /** The host opens it in a browser; S4 has no other reason to leave the app. */
+    data class OpenUrl(
+        val url: String,
+    ) : SettingsEffect
+
     /** `CreateDocument`, with the name the file should be offered under. */
     data class CreateBackupFile(
         val suggestedName: String,
@@ -181,3 +188,6 @@ interface SettingsCounts {
 
     fun observeOutboxDepth(): Flow<Int>
 }
+
+/** Where the source lives. GPL-3.0 obliges us to be able to point at it; this is that pointer. */
+const val PODSILO_REPOSITORY_URL: String = "https://github.com/drehtuer/podsilo"

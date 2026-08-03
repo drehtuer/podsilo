@@ -24,7 +24,7 @@ internal fun ActivityDestination(
 
     OnEffect(viewModel.effect) { effect ->
         when (effect) {
-            is ActivityEffect.OpenEpisodes -> host.navController.navigate(Routes.episodes(effect.feedUrl))
+            is ActivityEffect.OpenEpisodeDetail -> host.navController.navigate(Routes.episodeDetail(effect.episodeKey))
             ActivityEffect.OpenErrorLog -> host.navController.navigate(Routes.ERROR_LOG)
             ActivityEffect.ChooseFolder -> host.onChooseFolder()
             is ActivityEffect.ShowMessage -> host.snackbar.showSnackbar(effect.text)

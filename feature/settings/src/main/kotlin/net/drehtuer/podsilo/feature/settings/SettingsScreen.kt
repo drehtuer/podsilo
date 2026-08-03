@@ -81,7 +81,7 @@ fun SettingsScreen(
                 AppearanceGroup(state.theme, onEvent)
                 BackupGroup(state, onEvent)
                 TroubleshootingGroup(state.errorLogCount, onEvent)
-                AboutGroup(state.version)
+                AboutGroup(state.version, onEvent)
             }
         }
     }
@@ -335,8 +335,17 @@ private fun TroubleshootingGroup(
     )
 }
 
+/** The source is the licence in practice: GPL-3.0 means little without somewhere to get the code. */
 @Composable
-private fun AboutGroup(version: String) {
+private fun AboutGroup(
+    version: String,
+    onEvent: (SettingsEvent) -> Unit,
+) {
     GroupHeader("ABOUT")
     SettingsRow(title = "Version $version", subtitle = "GPL-3.0-or-later", onClick = null)
+    SettingsRow(
+        title = "Source code",
+        subtitle = PODSILO_REPOSITORY_URL,
+        onClick = { onEvent(SettingsEvent.SourceCodeClicked) },
+    )
 }

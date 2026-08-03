@@ -193,4 +193,41 @@ class ActivityScreenTest {
         assertEquals(WaitReason.NETWORK, waitReason(FolderState.GRANTED, online = false))
         assertEquals(WaitReason.WIFI, waitReason(FolderState.GRANTED, online = true))
     }
+
+    /**
+     * *Clear list* empties the delivered list and **must not read as deleting anything**.
+     *
+     * The list is projected from `DOWNLOADED` ledger rows, which are the record that stops an
+     * episode being fetched again (CLAUDE.md §11) — so the label says "list", and the word "Delete"
+     * must stay absent from this screen for the same reason it always has.
+     */
+    @Test
+    fun `clear list is offered and never called delete`() {
+        render(
+            ActivityUiState(
+                recent =
+                    listOf(
+                        DeliveredUi(
+                            fileName = "20260630_Hafen-Kran-Kaffee.mp3",
+                            folderLabel = "Der Podcast",
+                            episodeKey = "e1",
+                            feedUrl = "https://example.org/feed.xml",
+                        ),
+                    ),
+            ),
+        )
+
+        compose.onNodeWithText("Clear list").performClick()
+
+        assertTrue(events.contains(ActivityEvent.ClearDeliveredClicked))
+        compose.onAllNodes(hasText("Delete", substring = true)).assertCountEquals(0)
+    }
+
+    /** Nothing to clear, nothing to offer — an empty list must not show a button that does nothing. */
+    @Test
+    fun `clear list is absent when nothing has been delivered`() {
+        render(ActivityUiState())
+
+        compose.onAllNodes(hasText("Clear list")).assertCountEquals(0)
+    }
 }

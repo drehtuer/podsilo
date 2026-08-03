@@ -443,13 +443,16 @@ sealed interface ActivityEvent {
     data class RetryClicked(val episodeKey: String) : ActivityEvent
     data class MarkAsPlayedClicked(val episodeKey: String) : ActivityEvent
     data class DetailsClicked(val episodeKey: String) : ActivityEvent
-    data class RowClicked(val episodeKey: String) : ActivityEvent     // jumps to S2
+    data class RowClicked(val episodeKey: String) : ActivityEvent     // opens S3 for that episode
     data object PausedBannerActionClicked : ActivityEvent
     data object ErrorLogClicked : ActivityEvent
 }
 ```
 
-`recent` exists to answer "did it actually land?" and nothing else. There is **no** delete, no
+`recent` exists to answer "did it actually land?" and nothing else. A **Clear list** button empties it
+when it is non-empty. That is a *display cursor* — `SettingsRepository.observeDeliveredClearedAt` —
+and deletes no file and no ledger row: those rows are what stop an episode being downloaded again
+(CLAUDE.md §11), so the label says "list" (added 2026-08-03). There is **no** delete, no
 open-file, and no existence check — Podsilo is not a file manager (README).
 
 A `FOLDER_UNAVAILABLE` failure carries `retryable = false`, so its row renders **Choose folder** and

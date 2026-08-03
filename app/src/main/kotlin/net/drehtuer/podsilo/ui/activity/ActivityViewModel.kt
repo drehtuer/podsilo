@@ -58,6 +58,8 @@ class ActivityViewModel(
     private val scheduler: EpisodeScheduler,
     private val triageWriter: TriageWriter,
     private val syncNow: ActivitySyncTrigger,
+    // Injected rather than System.currentTimeMillis(), so the clear cursor is testable (CLAUDE.md §7).
+    private val clock: java.time.Clock = java.time.Clock.systemUTC(),
 ) : ViewModel() {
     private val effects = Channel<ActivityEffect>(Channel.BUFFERED)
     val effect: Flow<ActivityEffect> = effects.receiveAsFlow()
@@ -68,9 +70,20 @@ class ActivityViewModel(
             folderStatus.observe(),
             connectivityMonitor.observe(),
             syncStatus.observeLastSyncAt(),
-            settingsRepository.observeNextcloudAccount(),
-        ) { rows, folder, connectivity, lastSync, account ->
-            Snapshot(rows.map { it.episodeKey to it }.toMap(), folder, connectivity.online, lastSync, account != null)
+            combine(
+                settingsRepository.observeNextcloudAccount(),
+                settingsRepository.observeDeliveredClearedAt(),
+                ::Pair,
+            ),
+        ) { rows, folder, connectivity, lastSync, accountAndCleared ->
+            Snapshot(
+                rows.map { it.episodeKey to it }.toMap(),
+                folder,
+                connectivity.online,
+                lastSync,
+                accountAndCleared.first != null,
+                accountAndCleared.second,
+            )
         }.map { snapshot -> snapshot.toUiState() }
             .stateIn(
                 scope = viewModelScope,
@@ -105,8 +118,12 @@ class ActivityViewModel(
             recent =
                 ledger.values
                     .asSequence()
-                    .filter { it.state == LedgerState.DOWNLOADED && it.writtenFileName != null }
-                    .sortedByDescending { it.actionedAt }
+                    // `deliveredClearedAt` hides rows without deleting them — see SettingsRepository.
+                    .filter {
+                        it.state == LedgerState.DOWNLOADED &&
+                            it.writtenFileName != null &&
+                            it.actionedAt > deliveredClearedAt
+                    }.sortedByDescending { it.actionedAt }
                     .take(RECENT_LIMIT)
                     .map {
                         DeliveredUi(
@@ -142,7 +159,11 @@ class ActivityViewModel(
             is ActivityEvent.RetryClicked -> viewModelScope.launch { retry(event.episodeKey) }
             is ActivityEvent.MarkAsPlayedClicked -> viewModelScope.launch { markAsPlayed(event.episodeKey) }
             is ActivityEvent.DetailsClicked -> emit(ActivityEffect.OpenErrorLog)
-            is ActivityEvent.RowClicked -> emit(ActivityEffect.OpenEpisodes(event.feedUrl))
+            is ActivityEvent.RowClicked -> emit(ActivityEffect.OpenEpisodeDetail(event.episodeKey))
+            // Hides the list; never deletes a ledger row. Those rows are what stop an episode being
+            // downloaded a second time (CLAUDE.md §11), so "clear" here means "stop showing me these".
+            ActivityEvent.ClearDeliveredClicked ->
+                viewModelScope.launch { settingsRepository.setDeliveredClearedAt(clock.millis()) }
             ActivityEvent.PausedBannerActionClicked -> emit(ActivityEffect.ChooseFolder)
             ActivityEvent.ErrorLogClicked -> emit(ActivityEffect.OpenErrorLog)
         }
@@ -185,6 +206,7 @@ class ActivityViewModel(
         val online: Boolean,
         val lastSyncAt: java.time.Instant?,
         val configured: Boolean,
+        val deliveredClearedAt: Long,
     )
 }
 

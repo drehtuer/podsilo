@@ -62,6 +62,18 @@ interface SettingsRepository {
     suspend fun setAllowMobileData(allowed: Boolean)
 
     /**
+     * When the user last cleared S7's *delivered* list.
+     *
+     * A **display cursor, not a delete.** That list is projected from `DOWNLOADED` ledger rows, and
+     * those rows are the record that stops an episode being fetched again (CLAUDE.md §11) — clearing
+     * them would re-download everything the user has ever downloaded. So the rows stay and the list
+     * hides anything actioned at or before this instant. `0` means never cleared.
+     */
+    fun observeDeliveredClearedAt(): Flow<Long>
+
+    suspend fun setDeliveredClearedAt(millis: Long)
+
+    /**
      * The *mark old episodes as played* cutoff (`docs/decisions/0013`). [OlderThan.OFF] by default:
      * this rule **writes** `SKIPPED` rows and emits `PLAY` actions other clients will see, so it is
      * opt-in and its first bulk application always goes through the counted preview.

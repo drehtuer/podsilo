@@ -192,6 +192,17 @@ private fun Groups(
         group("QUEUED", state.queued, { it.episode.episodeKey }) { QueuedRow(it, onEvent) }
         group("FAILED", state.failed, { it.episodeKey }) { FailedRow(it, onEvent) }
         group("RECENTLY DOWNLOADED", state.recent, { it.episodeKey }) { DeliveredRow(it, onEvent) }
+        if (state.recent.isNotEmpty()) {
+            item {
+                // "Clear" empties the LIST, not the folder and not the ledger. Podsilo never deletes a
+                // downloaded file (CLAUDE.md §1), and the ledger row is what stops the episode being
+                // fetched again (§11) — so the label says "list" and the subtitle says the rest.
+                TextButton(
+                    onClick = { onEvent(ActivityEvent.ClearDeliveredClicked) },
+                    modifier = Modifier.padding(horizontal = RowPadding).sizeIn(minHeight = MinTouchTarget),
+                ) { Text("Clear list") }
+            }
+        }
     }
 }
 
