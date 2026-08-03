@@ -141,7 +141,5 @@ class AndroidDeviationsTest {
 
         assertEquals("20260714", DateTimeFormatter.ofPattern("yyyyMMdd").format(instant))
         assertEquals("2026-07-14", DateTimeFormatter.ofPattern("yyyy-MM-dd").format(instant))
-        // ADR 0004's missing-date fallback must stay sortable and eight characters wide.
-        assertEquals(8, "00000000".length)
     }
 }

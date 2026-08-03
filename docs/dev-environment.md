@@ -1,4 +1,3 @@
-| **The device test set** | ✅ **Verified** | 2026-08-03: 41 instrumented tests green on a Pixel 5 (Android 14) via `./scripts/device-test.sh` — `:app` runs outside Gradle, see [§6](#6-testing-tiers) || **The device test set** | ✅ **Verified** | 2026-08-03: 41 instrumented tests green on a Pixel 5 (Android 14) via `./scripts/device-test.sh` — see [§6](#6-testing-tiers) |
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 # Development environment
@@ -48,6 +47,7 @@ below differ enormously in how well-proven they are.
 | **The download pipeline end to end** | ✅ **Verified** | 2026-08-02: two real episodes fetched, tagged (TIT2/TPE1/TALB/TCON/TYER/COMM **and APIC**) and written through SAF on a Pixel 5 |
 | **The foreground-service notification** | ✅ **Verified** | 2026-08-02 — after fixing the manifest crash it caused on API 34 (`docs/journal.md`) |
 | **Backup / restore with real data** | ✅ **Verified** | 2026-08-02: 9,565 episodes round-tripped; a ledger row created after the export was correctly removed by the restore |
+| **The device test set** | ◐ **Partly** | 2026-08-03: 41 declared, **35 executed, 6 skipped**. `SafDownloadTargetInstrumentedTest` opts out without a SAF grant — which the set's own uninstall removes — and `am instrument` reports those skips as `OK`. The script now fails on a skip rather than calling it green; see [§6](#6-testing-tiers) |
 | `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (ADR 0010) |
 | `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (ADR 0011) |
 | SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |

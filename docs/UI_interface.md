@@ -56,7 +56,9 @@ Android-free domain, not a place screens put their projections.
  * (`port.EpisodeAction`, architecture §5). Two different things called EpisodeAction in one
  * module is a compile error at best and a silent mix-up at worst.
  */
-enum class EpisodeUiAction { DOWNLOAD, DOWNLOAD_AGAIN, MARK_AS_PLAYED, RETRY, CANCEL, CHOOSE_FOLDER, OPEN_IN_BROWSER, COPY_LINK }
+enum class EpisodeUiAction { DOWNLOAD, DOWNLOAD_AGAIN, MARK_AS_PLAYED, RETRY, CANCEL, OPEN_IN_BROWSER, COPY_LINK }
+// No CHOOSE_FOLDER: a folder failure is carried by FailureUi.remedy, which relabels RETRY rather
+// than adding an action. Verified against the code 2026-08-03.
 
 /** One row in S2/S3/S7. Wraps the existing EpisodeListItem with UI-resolved bits. */
 data class EpisodeUi(
@@ -99,6 +101,10 @@ sealed interface QueueStatus {
     enum class PauseCause { FOLDER_NOT_CHOSEN, FOLDER_REVOKED, DISK_FULL }
 }
 
+// NOT IMPLEMENTED — kept as the shape a shared effect type would take if one were ever wanted.
+// Each screen declares its own instead (`PodcastListEffect`, `SettingsEffect`, `ConnectEffect`,
+// `EpisodeListEffect`, `ErrorLogEvent`), which is what shipped and works; there is no `UiEffect` in
+// the codebase. Verified 2026-08-03.
 sealed interface UiEffect {
     data class Snackbar(val text: SnackbarText) : UiEffect
     data class Navigate(val route: Route) : UiEffect
@@ -648,7 +654,7 @@ enum class OlderThan { OFF, MONTH_1, MONTH_3, MONTH_6, YEAR_1 }
 data class SwipeMapping(val right: SwipeAction, val left: SwipeAction)
 enum class LogCategory { SYNC, FEED, DOWNLOAD, STORAGE, AUTH }
 enum class WaitReason { WIFI, NETWORK, FOLDER, RESUMING }
-enum class BlockedReason { OFFLINE, NOT_CONFIGURED, SYNC_IN_FLIGHT }
+enum class BlockedReason { OFFLINE, NOT_CONFIGURED }   // no SYNC_IN_FLIGHT — never produced
 
 /**
  * NOT a new type: this is `DownloadFolderAccess.State`, as built in Tier 4b, reproduced here only
@@ -766,7 +772,9 @@ never disagree. `FOREGROUND_SERVICE_TYPE_DATA_SYNC`, as built.
 
 These are state and semantics decisions, so they belong here rather than in a style guide:
 
-- **Selection mode is reachable without a long-press.** When a touch-exploration service is active,
+- **Selection mode is reachable without a long-press.** **NOT IMPLEMENTED** —
+  `showsSelectionAffordance` does not exist on `EpisodeListUiState`; selection is long-press only.
+  Verified 2026-08-03. When a touch-exploration service is active,
   a checkbox appears on the leading artwork of every row. That is a state input the ViewModel needs:
   `EpisodeListUiState.showsSelectionAffordance: Boolean`, driven by `AccessibilityManager`, not by a
   `LocalInspectionMode`-style guess.
