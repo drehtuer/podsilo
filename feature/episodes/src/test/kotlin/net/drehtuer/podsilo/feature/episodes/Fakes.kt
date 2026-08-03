@@ -44,6 +44,7 @@ fun episode(
     description: String? = null,
     link: String? = null,
     enclosureUrl: String = "https://example.org/$key.mp3",
+    imageUrl: String? = null,
 ): Episode =
     Episode(
         episodeKey = key,
@@ -55,6 +56,7 @@ fun episode(
         pubDate = pubDate,
         durationMs = durationMs,
         link = link,
+        imageUrl = imageUrl,
     )
 
 @Suppress("LongParameterList")

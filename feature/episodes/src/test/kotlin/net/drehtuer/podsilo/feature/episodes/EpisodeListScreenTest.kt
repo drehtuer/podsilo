@@ -279,6 +279,17 @@ class EpisodeListScreenTest {
     }
 
     /**
+     * Artwork was specified in `docs/UI.md` §5's row anatomy and never drawn — Coil was approved
+     * (ADR 0015), added to the catalog, and depended on by no module at all.
+     */
+    @Test
+    fun `an episode row draws its artwork`() {
+        render(listOf(row()))
+
+        compose.onNodeWithContentDescription("cover art for Warum Hamburg immer regnet").assertIsDisplayed()
+    }
+
+    /**
      * S2's half of the missing-refresh bug (see `PodcastListScreenTest`): the event and its handler
      * existed, and **no affordance anywhere on this screen emitted it** — so a feed whose fetch had
      * failed could not be retried from the screen that shows the failure.

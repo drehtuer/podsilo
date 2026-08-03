@@ -2376,3 +2376,57 @@ Pixel 5 against a real Nextcloud.
 correctly discarded it and there was nothing on the server to come back — the mechanism is untested,
 not disproved. Also untested on device: the restore row's **disabled** state, which would need the
 account disconnected and re-approved.
+
+---
+
+## 2026-08-03 — The artwork that was never drawn
+
+**Reported:** "the podcast list is missing the podcast images, the episode list is missing the
+episode picture."
+
+Same shape as yesterday's missing pull-to-refresh, and that is the part worth recording. Coil was
+proposed, argued for, approved as a dependency, given its own ADR (0015), and added to
+`gradle/libs.versions.toml` — and **referenced by no module's `build.gradle.kts` at all.** There was
+not one `AsyncImage` in the repository.
+
+Everything around the hole was in place, which is why nobody noticed:
+
+- `PodcastRow` reserved `heightIn(min = ArtworkSize + RowPadding)` — space for an image.
+- `FeedUi.artworkUrl` and `EpisodeUi.artworkUrl` were plumbed from the DAO through the view models.
+- `:core:feed` populated `Feed.imageUrl` and `Episode.imageUrl` from `<itunes:image>`.
+- `docs/UI.md` §18 specified the monogram fallback in detail.
+
+All four correct, and the pixels blank. On the author's account: 4 of 4 feeds and 9,558 of 9,565
+episodes had image URLs sitting in the database, being rendered by nothing.
+
+### A second bug was hiding behind the first
+
+`EpisodeListItem.toUi` set `artworkUrl = feedArtworkUrl` unconditionally, ignoring
+`Episode.imageUrl`. `docs/UI.md` §5 asks for "episode image if the feed supplies one, else the
+feed's". It could not possibly have been noticed before, because nothing drew either one.
+
+### And a third, found by looking at the screen
+
+With three feeds showing their covers, `heute journal (VIDEO)` showed **neither an image nor a
+monogram** — a blank square. Its cover is advertised over plain `http://`, which Android blocks as
+cleartext, and my first implementation passed `error = null` to `AsyncImage`, so a failed load drew
+nothing. The comment two lines above it claimed the monogram was "the fallback if it fails". The
+comment was aspirational; the code was not.
+
+Fixed by drawing the monogram *underneath* and the image on top, which gets the fallback for free,
+costs nothing when the image loads, and avoids `SubcomposeAsyncImage` — worth avoiding in a list that
+is 9,490 rows long in this author's own subscriptions. Cleartext enclosures are noted in
+`docs/backlog.md`; none of the 9,565 episodes currently use one.
+
+### The pattern, now three for three
+
+Pull-to-refresh, the foreground-service type, and now artwork: **every bug this week has been a
+connection that was never made, between two pieces that were each correct and each tested.** The
+test suites covered both sides of every seam. A dependency in the catalog, an event with a handler,
+a permission in the manifest — all present, none wired.
+
+What would have caught them is not more unit tests. It is asking, once per feature, *"what draws
+this?"* and following the answer to a call site. That question takes seconds and I did not ask it
+three times.
+
+**Verified:** `ktlintCheck detekt test` green, 571 tests, and the covers now render on the device.

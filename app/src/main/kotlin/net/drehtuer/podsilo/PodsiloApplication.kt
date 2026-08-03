@@ -5,6 +5,11 @@ package net.drehtuer.podsilo
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +29,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class PodsiloApplication :
     Application(),
-    Configuration.Provider {
+    Configuration.Provider,
+    SingletonImageLoader.Factory {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
@@ -34,7 +40,24 @@ class PodsiloApplication :
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var httpClient: dagger.Lazy<okhttp3.OkHttpClient>
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Coil, on the OkHttp this app already pins.
+     *
+     * That reuse is the whole reason `coil-network-okhttp` is in the catalog rather than Coil's
+     * default engine (`docs/decisions/0015`) — one connection pool, one TLS config, one place where
+     * timeouts are set. Without this factory Coil silently builds a second HTTP stack.
+     */
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader
+            .Builder(context)
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { httpClient.get() })) }
+            .crossfade(true)
+            .build()
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()

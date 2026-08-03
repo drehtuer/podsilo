@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -223,6 +224,13 @@ class PodcastListScreenTest {
         assertEquals("5 min ago", relativeTime(then, then.plusSeconds(300)))
         assertEquals("2 h ago", relativeTime(then, then.plusSeconds(7_200)))
         assertEquals("3 d ago", relativeTime(then, then.plusSeconds(259_200)))
+    }
+
+    @Test
+    fun `a podcast row draws its artwork, and its monogram before the first fetch`() {
+        render(feeds(FeedUi(url = "a", title = "Der Podcast", artworkUrl = null, undecidedCount = 3)))
+
+        compose.onNodeWithContentDescription("cover art for Der Podcast").assertIsDisplayed()
     }
 
     /**
