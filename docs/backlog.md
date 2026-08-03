@@ -13,6 +13,14 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
+- **Two `ErrorCause` values are unreachable by design.** `FEED_PARSE` and `TAG_WRITE` are declared
+  and never produced anywhere: a tag-write failure must never fail a download (CLAUDE.md §6), so no
+  ledger row can carry `TAG_WRITE`; and feed failures are recorded in the *error log*
+  (`LogCategory.FEED`) rather than on an episode ledger row, so `FEED_PARSE` has no writer either.
+  They are safe to delete — nothing has ever persisted them, so no stored `lastErrorCause` can hold
+  one — but `ErrorCause` is a persisted vocabulary, which makes it the author's call rather than a
+  tidy-up. Found by a repo-wide producer scan on 2026-08-03.
+
 - **Cleartext `http://` URLs in feeds.** Android blocks them by default at `targetSdk` 28+, and the
   author's `heute journal` feed advertises its cover art over `http://` — so that one podcast shows
   the monogram rather than its image. Harmless there, since `PodsiloArtwork` falls back cleanly. The

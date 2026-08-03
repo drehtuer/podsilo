@@ -2514,3 +2514,69 @@ were reverted rather than left in place.
 
 **Verified:** 41 instrumented tests green end to end via the script on a Pixel 5 — 6 + 8 + 6 through
 Gradle and 21 in `:app`.
+
+---
+
+## 2026-08-03 (later) — An audit, and a claim of mine that did not survive it
+
+**Asked:** is all the code and every test still used and relevant; can anything be deleted,
+simplified or joined.
+
+### The most important finding is that I over-claimed yesterday
+
+`SafDownloadTargetInstrumentedTest` opts out with `assumeTrue` when no SAF folder has been granted.
+The device test set **uninstalls the app**, which removes the grant. So the six tests covering the
+one component ADR 0011 calls out as untestable-by-any-other-means are the six most likely to skip —
+and `am instrument` prints **`OK (6 tests)`** for six tests that all threw
+`AssumptionViolatedException` in 0.135 s between them.
+
+My script grepped for `FAILURES!!!`, saw none, and reported green. "41 instrumented tests green end
+to end" was wrong: **35 ran, 6 skipped.**
+
+I had flagged this exact hazard in an earlier session — *"a silent `assumeTrue` skip looks like a
+pass"* — written it in the journal, and then built a test runner that fell for it. Knowing a trap
+exists is not the same as checking whether your own tool walks into it.
+
+Fixed: the run is parsed with `-r` (raw), skips are counted from `AssumptionViolatedException`, and a
+run with any skip exits non-zero as `INCOMPLETE` rather than green.
+
+### What the audit actually found in the code
+
+Very little, which is worth recording as a result rather than a non-event:
+
+- **Unused imports and unused private members: none.** Guaranteed by the passing build — ktlint's
+  `no-unused-imports` and detekt's `UnusedPrivateMember` already cover them, so hand-searching would
+  have been theatre.
+- **Every port method has a production caller.** Scanned all of `:core:model/port`.
+- **No unused top-level types.** The eleven the scan flagged were Hilt modules, manifest-referenced
+  classes, and types used inside their own file.
+- **Two genuinely dead enum values:** `ErrorCause.FEED_PARSE` and `ErrorCause.TAG_WRITE`, neither
+  ever produced, both unreachable *by design*. Filed rather than deleted — `ErrorCause` is persisted.
+
+### My scan was wrong once, and the correction matters
+
+I first reported `EpisodeUiAction.CHOOSE_FOLDER` and `BlockedReason.SYNC_IN_FLIGHT` as dead code.
+They are not code at all: they exist only in `docs/UI_interface.md`. I had fed the scan enum member
+names taken from the *documentation* and then reported the misses as unused declarations — a method
+error that manufactures findings rather than discovering them. Checking the code confirmed the enums
+never had them.
+
+That turned four "dead code" findings into two, plus four **doc-vs-code gaps**, which are now marked
+in `UI_interface.md` rather than left to read as implemented: `UiEffect` (never built — each screen
+has its own effect type), `showsSelectionAffordance` (never built — the documented
+accessibility affordance does not exist), and the two phantom enum members.
+
+### On joining tests
+
+`SanitizationTest` is the most fragmented in the repo — 18 tests, 20 assertions — and should stay
+that way. Each name states a distinct rule from CLAUDE.md §6 (*trailing dots and spaces are
+stripped*, *leading dots are preserved*, *umlauts survive by default*). Collapsing them into a table
+would trade eighteen self-documenting requirements for one name and a data block, in the area the
+brief says to get exactly right. Fragmentation is not automatically duplication.
+
+One assertion was genuinely worthless and was mine, written yesterday:
+`assertEquals(8, "00000000".length)` — a tautology about a string literal, dressed as a check on the
+missing-date fallback. Deleted.
+
+**Verified:** `ktlintCheck detekt test` green, 571 tests; device set re-measured honestly at 21 in
+`:app` with 6 skipped.

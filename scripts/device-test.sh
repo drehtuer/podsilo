@@ -92,11 +92,31 @@ echo "==> :app via adb + am instrument (see the comment in this script for why)"
 adb install -r -g app/build/outputs/apk/debug/app-debug.apk >/dev/null
 adb install -r -g -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk >/dev/null
 
-# `am instrument` exits 0 even when tests fail, so the summary line is what decides.
-result="$(adb shell am instrument -w net.drehtuer.podsilo.test/androidx.test.runner.AndroidJUnitRunner 2>&1)"
-echo "$result" | tail -20
-if echo "$result" | grep -qE "^(FAILURES!!!|INSTRUMENTATION_CODE: 0)"; then
+# `-r` (raw) rather than the pretty summary, because THE SUMMARY LIES ABOUT SKIPS.
+#
+# A test that opts out with `assumeTrue` is neither run nor reported: `am instrument` prints
+# "OK (6 tests)" for six tests that all threw `AssumptionViolatedException` and took 0.135 s between
+# them. `SafDownloadTargetInstrumentedTest` skips exactly that way when no SAF folder has been
+# granted — and this script's own uninstall removes the grant, so the six tests it most needs to run
+# are the six most likely to silently not.
+#
+# That is not hypothetical: it is how "41 instrumented tests green" got claimed on 2026-08-03 when
+# 35 had run. Skips are now counted and reported, and the run is not called green while any exist.
+result="$(adb shell am instrument -w -r net.drehtuer.podsilo.test/androidx.test.runner.AndroidJUnitRunner 2>&1)"
+
+failures="$(echo "$result" | grep -c 'INSTRUMENTATION_STATUS_CODE: -2' || true)"
+skipped="$(echo "$result" | grep -c 'AssumptionViolatedException' || true)"
+total="$(echo "$result" | grep -oE 'numtests=[0-9]+' | head -1 | cut -d= -f2)"
+
+echo "    :app — ${total:-?} tests, ${failures} failed, ${skipped} skipped"
+if [ "$failures" -gt 0 ]; then
+    echo "$result" | grep -A6 'INSTRUMENTATION_STATUS: stack=' | head -40
     echo "==> :app FAILED" >&2
+    exit 1
+fi
+if [ "$skipped" -gt 0 ]; then
+    echo "$result" | grep -oE 'AssumptionViolatedException: .*' | sort -u | sed 's|^|    skipped: |'
+    echo "==> :app INCOMPLETE — ${skipped} test(s) opted out; a skip is not a pass" >&2
     exit 1
 fi
 
