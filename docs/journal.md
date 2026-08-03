@@ -2580,3 +2580,71 @@ missing-date fallback. Deleted.
 
 **Verified:** `ktlintCheck detekt test` green, 571 tests; device set re-measured honestly at 21 in
 `:app` with 6 skipped.
+
+---
+
+## 2026-08-03 (later still) — Swiping, and a bug my own test nearly waved through
+
+**Reported:** "Swiping has not been implemented for episodes."
+
+Correct, and it is the **third** affordance in this project specified, wired at both ends, and left
+with no gesture in the middle — after pull-to-refresh and the artwork slot. `SwipeCommitted` was
+declared, handled by `EpisodeListViewModel`, covered by view-model tests, backed by a persisted
+`SwipeMapping` and two working dropdowns in S4. Nothing emitted it.
+
+### This time I looked for the whole class, not the instance
+
+Rather than fix swipe and wait to be told about the next one, I scanned every `*Event` sealed
+interface for members that are declared and handled but emitted by no UI. My first scan was useless —
+it attributed every `data object` in a file to the first sealed interface in it and returned 76
+false positives. Scoped properly to each interface's own body, it returns five, and they are two
+features:
+
+- `SwipeCommitted` — the swipe gesture (now built).
+- `SelectionStarted`, `SelectionCleared`, `SelectAllInFilter`, `BulkConfirmed` — **selection mode**,
+  `docs/UI.md` §5's long-press batch triage. The `Selection` state type, `inSelectionMode`, the
+  per-row `selected` parameter and the bulk write path all exist. There is no long-press.
+
+Reported rather than built: the ask was swipe, and selection mode is a feature, not a fix.
+
+### The bug that matters
+
+The obvious `SwipeToDismissBox` implementation does the work in `confirmValueChange` and returns
+`false` so the row springs back instead of leaving a hole. That callback is **a predicate consulted
+repeatedly while the drag settles, not a commit hook**, and vetoing the change keeps it being
+re-asked: one swipe fired `SwipeCommitted` **fourteen times**. Fourteen ledger writes and fourteen
+posted episode actions, in an app whose triage decisions have no undo.
+
+Two of my three first tests asserted `events.contains(SwipeCommitted(...))`. Both passed. The bug
+was caught only by the third, which happened to compare the exact list — and I had written the loose
+form first, twice, because "it committed" felt like the property under test. It is not; **"it
+committed once" is.** Those two assertions are now exact, with a comment saying why.
+
+The fix reacts to the settled `currentValue` and calls `reset()`, which fires once and returns the
+row to place.
+
+**Verified:** `ktlintCheck detekt test` green, 577 tests.
+
+### Same session, five more findings from the author
+
+Reported while the swipe work was still open, and all five were real:
+
+1. **Tapping an episode in S7 opened its podcast, not the episode.** `RowClicked` navigated to S2
+   with the feed URL, leaving the user to find the row again — which reads as being bounced back to
+   the podcast. A row in Activity names one episode; it now opens that episode.
+2. **The About group should link to the source.** GPL-3.0 says little without somewhere to get the
+   code, so the licence line and the link now sit together.
+3. **Pulling down in the detail view gave a white screen.** The best find of the five. S3 was a
+   `ModalBottomSheet` rendered *inside a full-screen navigation destination* — the destination owned
+   the window and held nothing, so the sheet floated over an empty page and a downward drag revealed
+   it. Nothing had navigated, so `Dismissed` never popped the backstack either. It is now a real
+   screen, which is what it always was: the sheet was `skipPartiallyExpanded`, i.e. permanently full
+   height. `docs/UI.md` §6 amended, since the doc specified the sheet.
+4. **Mark all as played on the Downloaded filter.** Behind a confirmation naming the count, saying
+   the files stay and that the state reaches Nextcloud.
+5. **Clear all on the delivered list.** The one that needed care: that list is projected straight
+   from `DOWNLOADED` ledger rows, and those rows are what stop an episode being downloaded a second
+   time (CLAUDE.md §11). A literal clear would have re-downloaded the user's entire history. It is a
+   persisted *display cursor* instead — the rows stay, the list hides anything older — and the button
+   says "Clear list" rather than "Clear", because the word has to promise only what it does.
+

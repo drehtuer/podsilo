@@ -36,6 +36,15 @@ data class EpisodeListUiState(
     val downloadAllCount: Int = 0,
     /** Non-null while the *Download all* confirmation is up. Nothing is written until it is confirmed. */
     val pendingBulk: BulkPreview? = null,
+    /**
+     * Non-null while *Mark all as played* is being confirmed.
+     *
+     * A separate field from [pendingBulk] on purpose: the two dialogs say different things and one
+     * of them writes `PLAY` actions to a shared log that no undo reaches (`docs/decisions/0013`).
+     * Sharing a field would make it possible to render the download wording over a mark-as-played
+     * confirmation.
+     */
+    val pendingMarkAll: List<String>? = null,
 ) {
     sealed interface Content {
         data object Loading : Content
@@ -110,6 +119,13 @@ sealed interface EpisodeListEvent {
         val action: EpisodeUiAction,
         val keys: Set<String>,
     ) : EpisodeListEvent
+
+    /** Opens the confirmation for marking every episode in the current filter as played. */
+    data object MarkAllRequested : EpisodeListEvent
+
+    data object MarkAllConfirmed : EpisodeListEvent
+
+    data object MarkAllDismissed : EpisodeListEvent
 
     data object DownloadAllRequested : EpisodeListEvent
 

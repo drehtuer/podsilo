@@ -60,6 +60,7 @@ class EpisodeListViewModel(
     private val selection = MutableStateFlow<Selection?>(null)
     private val refreshing = MutableStateFlow(false)
     private val pendingBulk = MutableStateFlow<BulkPreview?>(null)
+    private val pendingMarkAll = MutableStateFlow<List<String>?>(null)
 
     private val effects = Channel<EpisodeListEffect>(Channel.BUFFERED)
     val effect: Flow<EpisodeListEffect> = effects.receiveAsFlow()
@@ -81,16 +82,17 @@ class EpisodeListViewModel(
             selection,
             // Nested because `combine` tops out at five sources; these three are the screen's
             // chrome — the indicator, the dialog and the paused banner — rather than its content.
-            combine(refreshing, pendingBulk, folderStatus.observe(), ::Triple),
+            combine(refreshing, pendingBulk, folderStatus.observe(), pendingMarkAll, ::Chrome),
             settingsRepository.observeSwipeMapping(),
             connectivityMonitor.observe(),
         ) { current, currentSelection, chrome, mapping, connectivity ->
             Snapshot(
                 filter = current,
                 selection = currentSelection,
-                refreshing = chrome.first,
-                pendingBulk = chrome.second,
-                folder = chrome.third,
+                refreshing = chrome.refreshing,
+                pendingBulk = chrome.pendingBulk,
+                folder = chrome.folder,
+                pendingMarkAll = chrome.pendingMarkAll,
                 mapping = mapping,
                 online = connectivity.online,
             )
@@ -132,6 +134,7 @@ class EpisodeListViewModel(
             selection = selection,
             isRefreshing = refreshing,
             pendingBulk = pendingBulk,
+            pendingMarkAll = pendingMarkAll,
             isOffline = !online,
             swipeMapping = mapping,
             // The overflow reads "Download all (n)"; n is the *undecided* count, so the item is
@@ -172,6 +175,21 @@ class EpisodeListViewModel(
                     triage(event.keys, EpisodeUiAction.DOWNLOAD)
                 }
             EpisodeListEvent.DownloadAllDismissed -> pendingBulk.value = null
+            // Confirmed before writing, like every other bulk mark-as-played: these become `PLAY`
+            // actions on a shared log and no undo reaches them (docs/decisions/0013).
+            EpisodeListEvent.MarkAllRequested ->
+                pendingMarkAll.value =
+                    (state.value.content as? EpisodeListUiState.Content.Episodes)
+                        ?.items
+                        ?.map { it.episodeKey }
+                        ?.takeIf { it.isNotEmpty() }
+            EpisodeListEvent.MarkAllConfirmed ->
+                viewModelScope.launch {
+                    val keys = pendingMarkAll.value.orEmpty()
+                    pendingMarkAll.value = null
+                    if (keys.isNotEmpty()) triage(keys, EpisodeUiAction.MARK_AS_PLAYED)
+                }
+            EpisodeListEvent.MarkAllDismissed -> pendingMarkAll.value = null
             EpisodeListEvent.PullToRefresh -> refresh()
             // The fix lives outside this screen (the SAF picker, or the user freeing space), so the
             // host handles it; S2 only reports that the queue is held.
@@ -279,6 +297,15 @@ class EpisodeListViewModel(
         val folder: FolderState,
         val mapping: SwipeMapping,
         val online: Boolean,
+        val pendingMarkAll: List<String>?,
+    )
+
+    /** `combine` tops out at five sources; these four are all "transient chrome". */
+    private data class Chrome(
+        val refreshing: Boolean,
+        val pendingBulk: BulkPreview?,
+        val folder: FolderState,
+        val pendingMarkAll: List<String>?,
     )
 }
 

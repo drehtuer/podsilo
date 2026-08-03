@@ -101,6 +101,13 @@ class DataStoreSettingsRepository(
         dataStore.edit { it[Keys.MARK_OLD_OLDER_THAN] = value.name }
     }
 
+    override fun observeDeliveredClearedAt(): Flow<Long> =
+        dataStore.data.map { prefs -> prefs[Keys.DELIVERED_CLEARED_AT] ?: 0L }
+
+    override suspend fun setDeliveredClearedAt(millis: Long) {
+        dataStore.edit { it[Keys.DELIVERED_CLEARED_AT] = millis }
+    }
+
     override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = dataStore.data.map { it.toNextcloudAccount() }
 
     override suspend fun nextcloudCredentials(): NextcloudCredentials? {
@@ -154,6 +161,7 @@ class DataStoreSettingsRepository(
         val SWIPE_LEFT = stringPreferencesKey("swipe_left")
         val ALLOW_MOBILE_DATA = booleanPreferencesKey("allow_mobile_data")
         val MARK_OLD_OLDER_THAN = stringPreferencesKey("mark_old_older_than")
+        val DELIVERED_CLEARED_AT = longPreferencesKey("delivered_cleared_at")
         val FOLDER_TEMPLATE = stringPreferencesKey("folder_template")
         val FILE_TEMPLATE = stringPreferencesKey("file_template")
         val TRANSLITERATE = booleanPreferencesKey("transliterate")

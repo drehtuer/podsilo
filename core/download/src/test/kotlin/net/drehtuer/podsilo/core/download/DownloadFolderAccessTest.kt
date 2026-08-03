@@ -108,6 +108,10 @@ private class MutableSettingsRepository : SettingsRepository {
 
     override suspend fun setAllowMobileData(allowed: Boolean) = error("not needed by these tests")
 
+    override fun observeDeliveredClearedAt(): kotlinx.coroutines.flow.Flow<Long> = kotlinx.coroutines.flow.flowOf(0L)
+
+    override suspend fun setDeliveredClearedAt(millis: Long) = Unit
+
     override fun observeMarkOldOlderThan(): Flow<OlderThan> = MutableStateFlow(OlderThan.OFF)
 
     override suspend fun setMarkOldOlderThan(value: OlderThan) = error("not needed by these tests")

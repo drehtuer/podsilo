@@ -74,7 +74,13 @@ sealed interface ActivityEvent {
         val episodeKey: String,
     ) : ActivityEvent
 
-    /** Jumps to that episode in S2. */
+    /**
+     * Opens **that episode**, not its podcast.
+     *
+     * It navigated to S2 (the feed's whole episode list) and left the user to find the row again —
+     * which reads as being bounced back to the podcast rather than opening what was tapped. A row in
+     * Activity names one episode; tapping it should show that episode.
+     */
     data class RowClicked(
         val feedUrl: String,
         val episodeKey: String,
@@ -82,12 +88,15 @@ sealed interface ActivityEvent {
 
     data object PausedBannerActionClicked : ActivityEvent
 
+    /** Empties the *delivered* list. A display cursor — no file and no ledger row is touched. */
+    data object ClearDeliveredClicked : ActivityEvent
+
     data object ErrorLogClicked : ActivityEvent
 }
 
 sealed interface ActivityEffect {
-    data class OpenEpisodes(
-        val feedUrl: String,
+    data class OpenEpisodeDetail(
+        val episodeKey: String,
     ) : ActivityEffect
 
     data object OpenErrorLog : ActivityEffect

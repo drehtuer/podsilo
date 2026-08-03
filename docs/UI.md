@@ -298,6 +298,12 @@ notoriously unreliable — it must never block a decision). When durations are u
 episodes the size is not estimated and no warning is shown. Free space is read once, when the dialog
 opens.
 
+**Mark all as played** — on the **Downloaded** filter only, reading *"Mark all n as played"*, behind
+a confirmation naming the count. Scoped there because *To decide* already has S4's per-feed preview
+and *Played / handled* would be a no-op; it answers "these are all on the phone now, stop offering
+them anywhere else". The dialog states that the files stay — Podsilo never deletes them — and that
+the state reaches Nextcloud (added 2026-08-03).
+
 **Filter** — chips: `To decide` (default) / `Downloaded` / `Played / handled` / `All`. Mapping to
 `LedgerFilter` (architecture §5):
 
@@ -330,10 +336,16 @@ date").
 
 ---
 
-## 6. S3 — Episode detail sheet
+## 6. S3 — Episode detail (full screen)
 
-A modal bottom sheet — a read step inside triage, dismissable with one downward flick. Reachable for
-**every** episode regardless of state, including greyed-out ones (explicit requirement).
+**A full screen** — a read step inside triage, left with the back affordance. Reachable for **every**
+episode regardless of state, including greyed-out ones (explicit requirement).
+
+**Amended 2026-08-03.** This was specified as a modal bottom sheet and built as one *inside a
+full-screen navigation destination*, which is a contradiction: the destination owned the window and
+held nothing, so a downward drag dismissed the sheet and revealed a blank page. Since the sheet was
+already `skipPartiallyExpanded` (always full height) and show notes run to paragraphs, it was a full
+screen wearing a sheet's clothes. There is no pull-to-dismiss.
 
 ```mermaid
 block-beta
@@ -477,6 +489,9 @@ second note in the preview states it plainly rather than warning against it. Fur
 
 **Appearance group** — **Theme**: 3-option segmented control **Light / Dark / System** (default
 `System`), persisted in DataStore, applied immediately without an activity restart (§12.7).
+
+**About group** — version and licence, plus a **Source code** row linking to the repository. GPL-3.0
+means little without somewhere to get the code, so the licence line and the link belong together.
 
 **Backup group** (`docs/decisions/0018`)
 

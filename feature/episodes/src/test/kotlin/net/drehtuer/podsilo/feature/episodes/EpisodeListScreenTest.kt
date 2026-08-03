@@ -305,4 +305,45 @@ class EpisodeListScreenTest {
             events.contains(EpisodeListEvent.PullToRefresh),
         )
     }
+
+    /**
+     * *Mark all as played* on the **Downloaded** filter (the author's request).
+     *
+     * Scoped to that filter: *To decide* already has S4's per-feed preview, and on *Played /
+     * handled* it would be a no-op. It confirms first because this writes `PLAY` actions to a shared
+     * log that other clients act on, and no undo reaches them (`docs/decisions/0013`).
+     */
+    @Test
+    fun `Downloaded offers Mark all as played with its count`() {
+        render(downloaded(row(key = "a"), row(key = "b")))
+
+        compose.onNodeWithText("Mark all 2 as played").performClick()
+
+        assertTrue(events.contains(EpisodeListEvent.MarkAllRequested))
+    }
+
+    @Test
+    fun `Mark all is absent on the To decide filter`() {
+        render(listOf(row()))
+
+        compose.onAllNodes(hasText("Mark all", substring = true)).assertCountEquals(0)
+    }
+
+    @Test
+    fun `the Mark all dialog names the count and says the state reaches Nextcloud`() {
+        render(downloaded(row(key = "a"), row(key = "b")).copy(pendingMarkAll = listOf("a", "b")))
+
+        compose.onNode(hasText("Mark 2 downloaded episodes as played?", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("sent to Nextcloud", substring = true)).assertIsDisplayed()
+        // Podsilo never deletes a file, and the dialog has to say so or "mark as played" reads as tidy-up.
+        compose.onNode(hasText("never deletes files", substring = true)).assertIsDisplayed()
+    }
+
+    private fun downloaded(vararg rows: EpisodeUi) =
+        EpisodeListUiState(
+            feedUrl = FEED_URL,
+            feedTitle = "Der Podcast",
+            filter = EpisodeFilter.DOWNLOADED,
+            content = EpisodeListUiState.Content.Episodes(rows.toList()),
+        )
 }

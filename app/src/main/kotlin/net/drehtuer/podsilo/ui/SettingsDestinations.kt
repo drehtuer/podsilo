@@ -44,6 +44,7 @@ internal fun SettingsDestination(
                 }
             SettingsEffect.OpenBackupFile ->
                 host.onOpenBackupFile { viewModel.onEvent(SettingsEvent.BackupSourceChosen(it)) }
+            is SettingsEffect.OpenUrl -> host.onOpenUrl(effect.url)
             is SettingsEffect.ShowMessage -> host.snackbar.showSnackbar(effect.text)
         }
     }

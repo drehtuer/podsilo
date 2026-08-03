@@ -136,6 +136,7 @@ class SettingsViewModel(
             is SettingsEvent.BulkPreviewRequested -> viewModelScope.launch { preview(event.scope) }
             SettingsEvent.BulkConfirmed -> viewModelScope.launch { applyBulk() }
             SettingsEvent.BulkCancelled -> pendingBulk.value = null
+            SettingsEvent.SourceCodeClicked -> emit(SettingsEffect.OpenUrl(PODSILO_REPOSITORY_URL))
             SettingsEvent.ExportDatabaseClicked -> emit(SettingsEffect.CreateBackupFile(backupFileName()))
             SettingsEvent.RestoreDatabaseClicked -> viewModelScope.launch { requestRestore() }
             SettingsEvent.RestoreCancelled -> archiveUi.update { it.copy(confirmingRestore = false) }
