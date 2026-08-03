@@ -566,9 +566,15 @@ sequenceDiagram
     NC-->>D: { server, loginName, appPassword }
     D->>NC: GET /index.php/apps/gpoddersync/subscriptions (authenticated)
     alt 200
-        D->>DS: store server URL + loginName + encrypted appPassword
-        D->>W: enqueue expedited SyncWorker (pull all subscriptions)
-        D->>U: dialog closes, S4 shows the instance; S1 fills in
+        D->>U: "Connect as {loginName}?"
+        alt Connect
+            D->>DS: store server URL + loginName + encrypted appPassword
+            D->>W: enqueue expedited SyncWorker (pull all subscriptions)
+            D->>U: dialog closes, S4 shows the instance; S1 fills in
+        else Use a different account
+            D->>B: open the server root so the session can be ended
+            D->>U: back to the address field, with the browser-session hint
+        end
     else 404 / 401 / network
         D->>U: stay open, inline error under the field, input restored
     end
@@ -577,6 +583,36 @@ sequenceDiagram
 Success is only ever claimed after that authenticated `GET /subscriptions` returns 200 — a completed
 login flow is not proof that gpoddersync is installed. On failure the app password is discarded, not
 stored.
+
+### The account is confirmed before anything is stored
+
+**Amended 2026-08-03 — see `docs/decisions/0019`.** This section used to store the credentials the
+moment gpoddersync answered 200. It no longer does, because Login Flow v2 **has no account chooser**:
+if the browser already holds a Nextcloud session, the grant page reads *"Currently logged in as X"*
+above a single **Grant access** button, and X is simply whoever that browser was signed in as. The
+app sends no username and cannot influence this — verified on a real device, where the flow URL
+redirects to `/login/v2/flow?user=&direct=0` with the parameter empty.
+
+```mermaid
+block-beta
+  columns 1
+  t["Connect as podsilo?"]
+  h["This is the account your browser was signed in to. Nextcloud doesn't\noffer a choice here, so check the name before connecting."]
+  w["Podsilo will mark episodes as downloaded and played in this account."]
+  b["[ Connect ]        [ Use a different account ]"]
+```
+
+- **The login name is the dialog title**, so it is the question being answered rather than a detail
+  inside a paragraph.
+- **The consequence is stated**, because it is the reason this confirmation exists at all: connecting
+  the wrong account writes `DOWNLOAD` and `PLAY` actions into *that* account's log from then on, and
+  those are not retractable.
+- ***Use a different account*** discards the app password unstored and opens the **server root** —
+  not the flow URL. Requesting authorization again against a live session returns the same account
+  however many times it is tried, so the browser is the only place the problem can be fixed. The
+  dialog then says so next to the address field.
+- The granted app password is left on the server. It is harmless and revocable under *Security* in
+  Nextcloud; revoking it automatically is in `docs/backlog.md`.
 
 **Inline error messages** (under the field, plain language, never a stack trace; each also written to
 S8):

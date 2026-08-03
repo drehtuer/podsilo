@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import net.drehtuer.podsilo.core.model.port.LoginFlowException
 import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
+import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 
@@ -29,6 +30,11 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
  * `GET /subscriptions` returns 200.** A completed login flow proves the server is a Nextcloud and
  * the password works; it says nothing about gpoddersync being installed. On any failure the app
  * password is discarded rather than stored.
+ *
+ * And even then it is not stored: **the user confirms the account first**
+ * ([ConnectUiState.Phase.ConfirmingAccount], `docs/decisions/0019`). The flow returns whichever
+ * account the *browser* was signed into, which is not a choice the app gets to make or even
+ * influence — so the one thing it can do is show the name before acting on it.
  */
 class ConnectViewModel(
     private val loginFlowClient: NextcloudLoginFlowClient,
@@ -42,6 +48,15 @@ class ConnectViewModel(
     val effect: Flow<ConnectEffect> = effects.receiveAsFlow()
 
     private var flowJob: Job? = null
+
+    /**
+     * The granted credentials, held **only** between the grant and the user confirming the account.
+     *
+     * Deliberately not in [ConnectUiState]: that is a data class whose `toString` a crash reporter,
+     * a log line or a Compose state inspector will happily print, and it carries the app password
+     * (CLAUDE.md §5). The UI is given the login name and nothing else.
+     */
+    private var pendingCredentials: NextcloudCredentials? = null
 
     /** Pre-fills the field when changing an existing instance, and re-titles the dialog. */
     fun prefillFromCurrentAccount() {
@@ -64,7 +79,38 @@ class ConnectViewModel(
                 }
             ConnectEvent.Submit -> submit()
             ConnectEvent.Cancel -> cancel()
+            ConnectEvent.ConfirmAccount -> confirmAccount()
+            ConnectEvent.RejectAccount -> rejectAccount()
         }
+    }
+
+    /** The only path that stores credentials. */
+    private fun confirmAccount() {
+        val credentials = pendingCredentials ?: return
+        pendingCredentials = null
+        viewModelScope.launch {
+            settingsRepository.setNextcloudCredentials(credentials)
+            syncTrigger.requestSyncNow()
+            emit(ConnectEffect.Connected)
+        }
+    }
+
+    /**
+     * Discards the app password **without storing it** and opens the server so the user can log out
+     * there.
+     *
+     * That detour is the actual fix, unintuitive as it looks: the flow has no account chooser, so a
+     * second attempt against a live browser session returns the same account however many times it is
+     * retried. The session is the thing to change, and only the browser can change it. The password
+     * granted here is left behind on the server — harmless, revocable under *Security* in Nextcloud,
+     * and noted in `docs/backlog.md` as worth revoking automatically one day.
+     */
+    private fun rejectAccount() {
+        val server = pendingCredentials?.serverUrl
+        pendingCredentials = null
+        _state.value =
+            _state.value.copy(phase = ConnectUiState.Phase.Editing, showSwitchAccountHint = true)
+        server?.let { emit(ConnectEffect.OpenBrowser(it)) }
     }
 
     private fun submit() {
@@ -75,6 +121,7 @@ class ConnectViewModel(
             return
         }
         flowJob?.cancel()
+        pendingCredentials = null
         flowJob = viewModelScope.launch { connect(normaliseHost(host)) }
     }
 
@@ -85,6 +132,9 @@ class ConnectViewModel(
     private fun cancel() {
         flowJob?.cancel()
         flowJob = null
+        // Backing out of the confirmation must not leave a granted password sitting in memory for a
+        // later Submit to pick up and store against a host the user has since retyped.
+        pendingCredentials = null
         if (_state.value.phase == ConnectUiState.Phase.Editing) {
             emit(ConnectEffect.Dismiss)
         } else {
@@ -97,7 +147,12 @@ class ConnectViewModel(
     // matters — that nothing is persisted until the last step succeeds.
     @Suppress("ReturnCount")
     private suspend fun connect(baseUrl: String) {
-        _state.value = _state.value.copy(phase = ConnectUiState.Phase.RequestingFlow, inlineError = null)
+        _state.value =
+            _state.value.copy(
+                phase = ConnectUiState.Phase.RequestingFlow,
+                inlineError = null,
+                showSwitchAccountHint = false,
+            )
 
         val flow =
             loginFlowClient
@@ -118,11 +173,16 @@ class ConnectViewModel(
             return fail(it.asConnectError(ConnectError.NO_GPODDERSYNC))
         }
 
-        // Only now, and the server's own canonical URL rather than the typed one — a Nextcloud
-        // behind a reverse proxy legitimately returns a different host.
-        settingsRepository.setNextcloudCredentials(result.credentials)
-        syncTrigger.requestSyncNow()
-        emit(ConnectEffect.Connected)
+        // STILL NOT STORED. The flow proved the server is a Nextcloud with gpoddersync and handed
+        // back a working app password — it did not prove this is the account the user meant. Login
+        // Flow v2 has no account chooser, so a browser already signed in as someone else grants that
+        // someone else silently, and the first the user would hear of it is their other account's
+        // episodes going missing. `Phase.ConfirmingAccount` names the account and waits.
+        //
+        // The credentials carry the server's own canonical URL rather than the typed one — a
+        // Nextcloud behind a reverse proxy legitimately returns a different host.
+        pendingCredentials = result.credentials
+        _state.value = _state.value.copy(phase = ConnectUiState.Phase.ConfirmingAccount(result.loginName))
     }
 
     private fun fail(error: ConnectError) {

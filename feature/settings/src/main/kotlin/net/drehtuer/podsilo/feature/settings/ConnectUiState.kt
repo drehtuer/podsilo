@@ -9,12 +9,15 @@ package net.drehtuer.podsilo.feature.settings
  *   prefix, and a pasted scheme is stripped rather than rejected.
  * @property isChangingExisting re-titles the dialog and shows the caution line that the download
  *   history is kept — true, because the ledger has no foreign key to feeds (architecture §4).
+ * @property showSwitchAccountHint set after *Use a different account*: explains that the account is
+ *   decided by the browser's Nextcloud session, which is the one thing the app cannot choose for you.
  */
 data class ConnectUiState(
     val host: String = "",
     val phase: Phase = Phase.Editing,
     val inlineError: ConnectError? = null,
     val isChangingExisting: Boolean = false,
+    val showSwitchAccountHint: Boolean = false,
 ) {
     sealed interface Phase {
         data object Editing : Phase
@@ -26,10 +29,29 @@ data class ConnectUiState(
 
         /** The authenticated `GET /subscriptions`. Success is not claimed before this returns 200. */
         data object VerifyingGpodderSync : Phase
+
+        /**
+         * Authorization succeeded and the server named an account — **nothing is stored yet**.
+         *
+         * Login Flow v2 has no account chooser: if the browser already holds a Nextcloud session,
+         * the grant page reads *"Currently logged in as X"* and offers a single *Grant access*
+         * button. So the account is whichever one the browser happened to be signed into, and the
+         * app used to persist it without ever showing the name. Connecting the wrong account is not
+         * a cosmetic mistake — every triage decision from then on writes `DOWNLOAD` and `PLAY`
+         * actions into *that* account's log, and those are not retractable.
+         *
+         * @property loginName the server's own `loginName`, never anything the app guessed.
+         */
+        data class ConfirmingAccount(
+            val loginName: String,
+        ) : Phase
     }
 
     /** While anything is in flight the dialog cannot be dismissed by tapping outside (§8). */
     val isBusy: Boolean get() = phase != Phase.Editing
+
+    /** Non-null exactly when the user still has to accept or reject the account that came back. */
+    val confirming: Phase.ConfirmingAccount? get() = phase as? Phase.ConfirmingAccount
 }
 
 /** Each maps to one plain-language sentence — never a stack trace (`docs/UI.md` §8). */
@@ -43,6 +65,15 @@ sealed interface ConnectEvent {
     data object Submit : ConnectEvent
 
     data object Cancel : ConnectEvent
+
+    /** Accepts the named account. **The only path that stores credentials.** */
+    data object ConfirmAccount : ConnectEvent
+
+    /**
+     * Rejects it. Discards the app password unstored and opens the server so the user can log out
+     * of the browser session — the only way to be offered a different account next time.
+     */
+    data object RejectAccount : ConnectEvent
 }
 
 sealed interface ConnectEffect {

@@ -2741,3 +2741,54 @@ only takes effect on the *next* release, so it was not worth blocking this one o
 
 Nothing was built this session. The release is a packaging act, and the code it packages was verified
 on hardware in the previous one.
+
+---
+
+## 2026-08-03 — "the login always sets the username podsilo"
+
+The report was that the app assumes a username. It doesn't, and finding that out took three probes
+that are worth recording because each one ruled out a different suspect.
+
+1. **`grep '"podsilo"'` across the sources** — one hit, `settings.gradle.kts`'s project name. The
+   stored username is `LoginPollDto.loginName`, straight from the server.
+2. **`setNextcloudCredentials`** writes URL, username and password together and removes them
+   together, so no stale value can outlive a reconnect either.
+3. **The server, over curl with no cookies.** The flow URL redirects to
+   `/login/v2/flow?user=&direct=0` — the `user` parameter comes back **empty**. The app sends no name.
+
+Then the actual cause, on the device: Firefox held a Nextcloud session, and tapping *Log in* on the
+flow page did not show a login form. It went straight to *"Account access — Currently logged in as
+podsilo (podsilo)"* with one **Grant access** button. **Login Flow v2 has no account chooser.** The
+account is whichever one the browser was signed into, and no query parameter overrides that.
+
+So the bug was real but sat one layer up from where it was reported: the app was silently persisting
+an account it had never shown the user. Connecting the wrong one is not cosmetic — every triage
+decision afterwards writes `DOWNLOAD` and `PLAY` into *that* account's log, and the author has both a
+`podsilo` test account and a personal account on this server with a standing rule that the personal
+one must never have episodes marked played.
+
+The fix is `Phase.ConfirmingAccount`: the flow now names the account and stops. ADR 0019 has the
+reasoning, including why the credentials live in a private view-model field rather than in
+`ConnectUiState` (a data class whose `toString` logs and inspectors print, carrying the app password)
+and why *Use a different account* opens the **server root** rather than retrying — retrying against a
+live session returns the same account forever.
+
+### The device leg is incomplete, and the reason is that it should be
+
+Granting on the phone hit Nextcloud's re-authentication step: *"This action needs authentication,
+please confirm it by entering your password."* That is the account password, which the agent has no
+business typing and does not have. So the new confirmation dialog is **verified by tests but not yet
+seen on hardware** — the two Compose tests cover its content and both buttons, and the four view
+model tests cover the store/reject/re-confirm paths, but nobody has watched it appear after a real
+grant.
+
+Left the phone clean: dialog cancelled, still connected as `podsilo`, nothing written.
+
+Two smaller things the device run turned up:
+
+- **Firefox is the default browser here, not Chrome.** An earlier manual probe had left a granted
+  flow page in Chrome, and a stale tab swallowed the first grant attempt — ten minutes of "waiting
+  for authorization" that looked like an app bug and wasn't. Worth checking which browser actually
+  receives the `ACTION_VIEW` before diagnosing a stuck poll.
+- The rejected app password stays live on the server. Filed in `docs/backlog.md` rather than fixed,
+  with the reasoning: it is a new endpoint added to the one code path whose job is to store nothing.

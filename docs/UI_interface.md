@@ -370,12 +370,14 @@ data class ConnectUiState(
     val phase: Phase,
     val inlineError: ConnectError?,
     val isChangingExisting: Boolean,
+    val showSwitchAccountHint: Boolean,        // set by RejectAccount — "log out in the browser"
 ) {
     sealed interface Phase {
         data object Editing : Phase
         data object RequestingFlow : Phase
         data object AwaitingAuthorization : Phase   // field read-only, Cancel aborts the poll
         data object VerifyingGpodderSync : Phase    // the authenticated GET /subscriptions
+        data class ConfirmingAccount(val loginName: String) : Phase   // granted, NOT yet stored
     }
 }
 
@@ -385,12 +387,22 @@ sealed interface ConnectEvent {
     data class HostChanged(val value: String) : ConnectEvent   // a typed scheme is stripped, not rejected
     data object Submit : ConnectEvent
     data object Cancel : ConnectEvent
+    data object ConfirmAccount : ConnectEvent   // the only path that stores credentials
+    data object RejectAccount : ConnectEvent    // discards it, opens the server root to log out
 }
 ```
 
 **Success is claimed only after `VerifyingGpodderSync` returns 200.** On failure the app password is
 discarded, never stored. The dialog is not dismissable by tapping outside while a request is in
 flight.
+
+**And a 200 still does not store anything** (ADR 0019). Login Flow v2 has no account chooser, so the
+account is whichever one the browser was signed into; `ConfirmingAccount` names it and waits.
+`ConfirmAccount` is the only path to `setNextcloudCredentials`.
+
+The granted `NextcloudCredentials` are held in a **private field on the view model**, never in
+`ConnectUiState` — the state is a data class whose `toString` gets printed by logs and inspectors,
+and it would carry the app password. The UI receives `loginName` and nothing else.
 
 Uses `NextcloudLoginFlowClient` (§8), implemented in `:core:gpodder`.
 

@@ -254,6 +254,40 @@ class SettingsScreensTest {
     }
 
     @Test
+    fun `the confirmation names the account and offers a way out of it`() {
+        compose.setContent {
+            ConnectDialog(
+                state = ConnectUiState(phase = ConnectUiState.Phase.ConfirmingAccount("podsilo")),
+                onEvent = { connectEvents += it },
+            )
+        }
+
+        // The name is the question, not a detail buried in a sentence (docs/decisions/0019).
+        compose.onNodeWithText("Connect as podsilo?").assertIsDisplayed()
+        compose.onNode(hasText("your browser was signed in to", substring = true)).assertIsDisplayed()
+
+        compose.onNodeWithText("Use a different account").performClick()
+        assertTrue(connectEvents.contains(ConnectEvent.RejectAccount))
+
+        compose.onNodeWithText("Connect").performClick()
+        assertTrue(connectEvents.contains(ConnectEvent.ConfirmAccount))
+    }
+
+    @Test
+    fun `after rejecting, the dialog says the browser session is what has to change`() {
+        compose.setContent {
+            ConnectDialog(
+                state = ConnectUiState(host = "cloud.example.org", showSwitchAccountHint = true),
+                onEvent = { connectEvents += it },
+            )
+        }
+
+        // Retrying without logging out returns the same account, so the instruction has to say so.
+        compose.onNode(hasText("Log out of Nextcloud", substring = true)).assertIsDisplayed()
+        compose.onNodeWithText("Request authorization").assertIsDisplayed()
+    }
+
+    @Test
     fun `each connection failure has a plain sentence, never a stack trace`() {
         ConnectError.entries.forEach { error ->
             val message = error.message

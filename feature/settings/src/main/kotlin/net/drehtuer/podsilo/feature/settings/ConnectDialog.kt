@@ -38,28 +38,69 @@ fun ConnectDialog(
     onEvent: (ConnectEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val confirming = state.confirming
     AlertDialog(
         modifier = modifier,
         // Not dismissable from outside while a request is in flight (§8).
         onDismissRequest = { if (!state.isBusy) onEvent(ConnectEvent.Cancel) },
-        title = { Text(if (state.isChangingExisting) "Change Nextcloud instance" else "Connect Nextcloud") },
-        text = { ConnectBody(state, onEvent) },
+        title = {
+            Text(
+                when {
+                    confirming != null -> "Connect as ${confirming.loginName}?"
+                    state.isChangingExisting -> "Change Nextcloud instance"
+                    else -> "Connect Nextcloud"
+                },
+            )
+        },
+        text = { if (confirming != null) AccountConfirmation() else ConnectBody(state, onEvent) },
         confirmButton = {
-            if (!state.isBusy) {
-                TextButton(
-                    onClick = { onEvent(ConnectEvent.Submit) },
-                    modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
-                ) { Text("Request authorization") }
+            when {
+                confirming != null ->
+                    TextButton(
+                        onClick = { onEvent(ConnectEvent.ConfirmAccount) },
+                        modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+                    ) { Text("Connect") }
+                !state.isBusy ->
+                    TextButton(
+                        onClick = { onEvent(ConnectEvent.Submit) },
+                        modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+                    ) { Text("Request authorization") }
+                // Mid-flight: Cancel is the only button, as before.
+                else -> Unit
             }
         },
         dismissButton = {
             // Stays enabled while busy — it is what aborts the poll.
             TextButton(
-                onClick = { onEvent(ConnectEvent.Cancel) },
+                onClick = {
+                    onEvent(if (confirming != null) ConnectEvent.RejectAccount else ConnectEvent.Cancel)
+                },
                 modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
-            ) { Text("Cancel") }
+            ) { Text(if (confirming != null) "Use a different account" else "Cancel") }
         },
     )
+}
+
+/**
+ * Why an account the user never picked can turn up, and what to do about it.
+ *
+ * The name itself is in the dialog title, where it is the question being asked rather than a detail
+ * inside a paragraph. What is left here is the part that is genuinely surprising: the account came
+ * from the *browser's* session, so retrying without logging out returns the same one.
+ */
+@Composable
+private fun AccountConfirmation() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "This is the account your browser was signed in to. Nextcloud doesn't offer a choice " +
+                "here, so check the name before connecting.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            "Podsilo will mark episodes as downloaded and played in this account.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
 }
 
 /** `null` while editing. Each phase says what it is waiting for rather than showing a bare spinner. */
@@ -70,6 +111,8 @@ internal val ConnectUiState.busyLabel: String?
             ConnectUiState.Phase.RequestingFlow -> "Contacting the server…"
             ConnectUiState.Phase.AwaitingAuthorization -> "Waiting for authorization in your browser…"
             ConnectUiState.Phase.VerifyingGpodderSync -> "Checking for GPodder Sync…"
+            // Not busy — it is waiting for the user, and the dialog shows the account instead.
+            is ConnectUiState.Phase.ConfirmingAccount -> null
         }
 
 /** Plain language, one sentence, never a stack trace — the table in `docs/UI.md` §8. */
@@ -130,6 +173,17 @@ private fun ConnectBody(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+        }
+        if (state.showSwitchAccountHint) {
+            // Shown after *Use a different account*, next to the address field the user is about to
+            // resubmit — because the useful instruction is what to do in the browser tab that just
+            // opened, and repeating the request from here without logging out returns the same
+            // account (docs/decisions/0019).
+            Text(
+                "Log out of Nextcloud in the browser that just opened, then request authorization " +
+                    "again to sign in as someone else.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
         if (state.isChangingExisting) {
             Text(

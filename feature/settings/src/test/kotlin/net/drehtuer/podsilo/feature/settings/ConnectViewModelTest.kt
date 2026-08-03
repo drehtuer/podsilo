@@ -56,6 +56,10 @@ class ConnectViewModelTest {
                     ConnectEffect.OpenBrowser("https://cloud.example.org/login/flow"),
                     awaitItem(),
                 )
+                // A granted flow no longer connects on its own: the account is confirmed first
+                // (docs/decisions/0019).
+                assertNull(settings.storedCredentials)
+                viewModel.onEvent(ConnectEvent.ConfirmAccount)
                 assertEquals(ConnectEffect.Connected, awaitItem())
             }
 
@@ -225,5 +229,102 @@ class ConnectViewModelTest {
 
                 assertEquals(ConnectEffect.Dismiss, awaitItem())
             }
+        }
+
+    /**
+     * The reported bug, as a test (`docs/decisions/0019`).
+     *
+     * Login Flow v2 returns whichever account the *browser* was signed into and offers no chooser,
+     * so the app's only defence is to name it and stop. This asserts the stopping: the flow is fully
+     * granted and verified, and still nothing is stored and no sync is triggered.
+     */
+    @Test
+    fun `a granted flow names the account and stores nothing until it is confirmed`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                assertEquals(ConnectEffect.OpenBrowser("https://cloud.example.org/login/flow"), awaitItem())
+                expectNoEvents()
+            }
+
+            // The server's own loginName, never anything the app guessed or defaulted to.
+            assertEquals(
+                ConnectUiState.Phase.ConfirmingAccount("author"),
+                viewModel.state.value.phase,
+            )
+            assertNull(settings.storedCredentials)
+            assertEquals(0, syncTrigger.syncs)
+        }
+
+    @Test
+    fun `rejecting the account stores nothing and opens the server so the session can be ended`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                assertEquals(ConnectEffect.OpenBrowser("https://cloud.example.org/login/flow"), awaitItem())
+
+                viewModel.onEvent(ConnectEvent.RejectAccount)
+
+                // The server root, not the flow URL: retrying the flow against a live session
+                // returns the same account, so the browser is where the fix has to happen.
+                assertEquals(ConnectEffect.OpenBrowser("https://cloud.example.org"), awaitItem())
+            }
+
+            assertNull(settings.storedCredentials)
+            assertEquals(0, syncTrigger.syncs)
+            assertEquals(ConnectUiState.Phase.Editing, viewModel.state.value.phase)
+            assertTrue(viewModel.state.value.showSwitchAccountHint)
+            // The address survives, because it was never the wrong part.
+            assertEquals("cloud.example.org", viewModel.state.value.host)
+        }
+
+    /**
+     * The dangerous version of rejecting: the discarded password must not be lying around for a
+     * later confirmation to pick up. Without clearing it, *Use a different account* followed by
+     * `ConfirmAccount` would store exactly the account the user just refused.
+     */
+    @Test
+    fun `a rejected account cannot be confirmed afterwards`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.RejectAccount)
+                skipItems(1)
+
+                viewModel.onEvent(ConnectEvent.ConfirmAccount)
+
+                expectNoEvents()
+            }
+
+            assertNull(settings.storedCredentials)
+            assertEquals(0, syncTrigger.syncs)
+        }
+
+    @Test
+    fun `cancelling the confirmation discards the granted password too`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.Cancel)
+                viewModel.onEvent(ConnectEvent.ConfirmAccount)
+
+                expectNoEvents()
+            }
+
+            assertNull(settings.storedCredentials)
         }
 }
