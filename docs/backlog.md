@@ -61,6 +61,16 @@ noted here before that date was instead either built, declined in conversation, 
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.
+- **Revoke the app password when the account is rejected.** S5 now confirms the account before
+  storing it (ADR 0019), so *Use a different account* throws away a password that Nextcloud has
+  already issued and still lists under *Security*. `DELETE /ocs/v2.php/core/apppassword`
+  authenticated with that password would clean it up. Left out of the fix deliberately: it is a new
+  endpoint with its own failure modes, added to the one code path whose job is to store nothing, and
+  the leftover is harmless and user-revocable. Worth doing if rejection turns out to be common.
+- **An "alternative log in using app password" path.** Nextcloud offers it on its own flow page, and
+  it is the only way to name the account directly rather than inheriting the browser's session
+  (ADR 0019). It needs the author's decision first: it reverses ADR 0010 and CLAUDE.md's rule that
+  this module never shows a username/password form.
 
 ## Declined, with reasons
 
