@@ -13,6 +13,15 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
+- **Cleartext `http://` URLs in feeds.** Android blocks them by default at `targetSdk` 28+, and the
+  author's `heute journal` feed advertises its cover art over `http://` — so that one podcast shows
+  the monogram rather than its image. Harmless there, since `PodsiloArtwork` falls back cleanly. The
+  question is **enclosures**: none of the author's 9,565 episodes currently use `http://`, but a feed
+  that did would fail to download with a network error and no obvious cause. Options are a
+  network-security config permitting cleartext (weakens every request), permitting it per-domain
+  (unmaintainable), or upgrading `http://` to `https://` and falling back — decide when a feed
+  actually needs it, not before.
+
 - **The restore file picker shows every file, not just zips.** `MainActivity` passes
   `arrayOf("application/zip", "application/octet-stream", "*/*")` to `OpenDocument`, and the `*/*`
   makes the filter a no-op — in a real Downloads folder the picker lists PDFs, APKs and photos. The

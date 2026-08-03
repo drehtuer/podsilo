@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.ui.ArtworkSize
 import net.drehtuer.podsilo.core.ui.MaxContentWidth
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloArtwork
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
@@ -207,6 +208,9 @@ private fun PodcastRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(RowPadding),
     ) {
+        // The row reserved `ArtworkSize` height from the day it was written and never drew anything
+        // into it — Coil was in the catalog, approved (ADR 0015), and used by no module at all.
+        PodsiloArtwork(url = feed.artworkUrl, title = feed.displayTitle)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 // The URL until the first fetch supplies a title — never "Unknown podcast".

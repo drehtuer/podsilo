@@ -1,4 +1,4 @@
-# Podsilo Architecture
+ Also `PodsiloArtwork`, the artwork slot with its monogram fallback (ADR 0015).# Podsilo Architecture
 
 This document is the implementation reference for Podsilo. It turns CLAUDE.md's requirements (§5, §6)
 into a concrete module design, database schema, interface contracts, and sequence diagrams. Follow

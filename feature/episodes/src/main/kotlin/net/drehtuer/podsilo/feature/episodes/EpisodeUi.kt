@@ -128,7 +128,10 @@ fun EpisodeListItem.toUi(
         feedUrl = episode.feedUrl,
         feedTitle = feedTitle,
         title = episode.title,
-        artworkUrl = feedArtworkUrl,
+        // "episode image if the feed supplies one, else the feed's" (docs/UI.md §5). `Episode.imageUrl`
+        // has existed since schema v4 and was ignored here — every row showed the podcast's cover
+        // even for the 9,558-of-9,565 episodes in the author's own feeds that carry their own.
+        artworkUrl = episode.imageUrl ?: feedArtworkUrl,
         publishedAt = EpochTime.ofMillisOrNull(episode.pubDate),
         duration = EpochTime.durationOfMillis(episode.durationMs),
         // Stripped here, not at write time: the raw HTML stays in the database so the detail sheet

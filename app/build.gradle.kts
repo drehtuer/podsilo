@@ -38,6 +38,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.coil.network.okhttp)
     // :app is the only module that sees every adapter: it binds each :core:model port to its
     // implementation (docs/architecture.md §2's ports-and-adapters rule).
     implementation(project(":core:model"))

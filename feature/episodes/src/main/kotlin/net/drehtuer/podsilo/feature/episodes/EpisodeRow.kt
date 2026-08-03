@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.ui.MinRowHeight
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
+import net.drehtuer.podsilo.core.ui.PodsiloArtwork
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
@@ -49,7 +50,7 @@ internal fun EpisodeRow(
     onEvent: (EpisodeListEvent) -> Unit,
     zone: ZoneId,
 ) {
-    Column(
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -65,7 +66,24 @@ internal fun EpisodeRow(
                 }.background(
                     if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
                 ).padding(RowPadding),
+        horizontalArrangement = Arrangement.spacedBy(RowPadding),
     ) {
+        // Leading artwork, per docs/UI.md §5's row anatomy — the episode's own image when the feed
+        // supplied one, otherwise the podcast's. `EpisodeUi.artworkUrl` already resolves that.
+        PodsiloArtwork(url = episode.artworkUrl, title = episode.title)
+        EpisodeRowBody(episode, onEvent, zone, Modifier.weight(1f))
+    }
+}
+
+/** The text column beside the artwork — split out only so [EpisodeRow] stays readable. */
+@Composable
+private fun EpisodeRowBody(
+    episode: EpisodeUi,
+    onEvent: (EpisodeListEvent) -> Unit,
+    zone: ZoneId,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
         Text(
             text = episode.title,
             style = MaterialTheme.typography.titleMedium,

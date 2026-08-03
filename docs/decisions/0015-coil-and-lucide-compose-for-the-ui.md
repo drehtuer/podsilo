@@ -91,3 +91,30 @@ Two consequences that follow from it, both real:
   listed here has no call site" enforceable rather than aspirational.
 
 The `assets/icons/` fallback path stays as written, and is now less likely to be needed.
+
+## Follow-up, 2026-08-03 — Coil was approved, added, and then never used
+
+The author reported that the podcast list showed no podcast images and the episode list no episode
+images. The cause was the same shape as the missing pull-to-refresh a day earlier: **the dependency
+was in `gradle/libs.versions.toml` and referenced by no module's `build.gradle.kts` at all.** There
+was not a single `AsyncImage` in the repository.
+
+The rows had reserved the space — `PodcastRow` carried `heightIn(min = ArtworkSize + RowPadding)`
+from the day it was written, and `FeedUi.artworkUrl` / `EpisodeUi.artworkUrl` were plumbed all the
+way from the DAO — but nothing ever drew into the slot, and there was no monogram fallback either,
+so the space was simply blank.
+
+Resolved by adding `coil-compose` to `:core:ui` (beside the icons, since every screen with a slot
+needs it) and `coil-network-okhttp` to `:app`, where `PodsiloApplication` now implements
+`SingletonImageLoader.Factory` and builds the loader on **the OkHttp this project already pins**.
+That reuse is the reason `coil-network-okhttp` was chosen over Coil's default engine in the first
+place; without the factory Coil quietly starts a second HTTP stack with its own pool and timeouts.
+
+The shared slot is `PodsiloArtwork` in `:core:ui`, which also implements `docs/UI.md` §18's monogram
+fallback — a rule that had been written for a slot that did not exist.
+
+**A second bug was hiding behind the first.** `EpisodeListItem.toUi` set `artworkUrl = feedArtworkUrl`
+unconditionally, ignoring `Episode.imageUrl` (schema v4). `docs/UI.md` §5 asks for "episode image if
+the feed supplies one, else the feed's", and in the author's own subscriptions 9,558 of 9,565
+episodes carry their own — so every episode row would have shown the podcast's cover instead. That
+could only be noticed once artwork rendered at all.
