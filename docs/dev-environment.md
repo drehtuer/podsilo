@@ -1,3 +1,4 @@
+| **The device test set** | ✅ **Verified** | 2026-08-03: 41 instrumented tests green on a Pixel 5 (Android 14) via `./scripts/device-test.sh` — `:app` runs outside Gradle, see [§6](#6-testing-tiers) || **The device test set** | ✅ **Verified** | 2026-08-03: 41 instrumented tests green on a Pixel 5 (Android 14) via `./scripts/device-test.sh` — see [§6](#6-testing-tiers) |
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 # Development environment
@@ -340,6 +341,50 @@ real window, no nested virtualisation), which remains the recommended path for i
   confusingly — see §9.3. The container has **platform-tools 37.0.1 / adb 1.0.41**.
 
 That Windows-server variant is still **untested**; only the WSL-server variant above has been run.
+
+### The device test set
+
+```bash
+./scripts/device-test.sh          # everything under src/androidTest/
+./scripts/device-test.sh :app     # one module
+```
+
+⚠ **It uninstalls and reinstalls the app, so it wipes the app's data** — the Nextcloud login, the
+SAF grant and the episode ledger. Downloaded files are untouched (they are in the user's folder, not
+app storage). Export a backup from Settings first if the install holds anything worth keeping, and
+expect to reconnect afterwards; restoring that backup is itself gated on being connected again
+(`docs/decisions/0018`), which is the intended order.
+
+**It never runs on CI, and that isolation is structural rather than a matter of tagging.**
+`.github/workflows/ci.yml` runs `ktlintCheck`, `detekt`, `test` and `assembleDebug` — nothing else.
+A test in `src/test/` runs on CI; a test in `src/androidTest/` runs only here. Do not add
+`connectedAndroidTest` to the workflow: GitHub's runners have no device, so the job could only be
+skipped, fail, or boot an emulator whose whole purpose is to *not* be the thing these tests check.
+
+What the set covers, in rough order of what it has actually caught:
+
+| Area | Class | What it exists for |
+|---|---|---|
+| Android-vs-JVM deviations | `AndroidDeviationsTest` | ICU regex strictness (ADR 0017), locale-sensitive case, astral code points, NFC, ICU date patterns |
+| | `NamingOnAndroidTest` | `:core:naming` compiled by ICU — the module is pure JVM by design, so its own suite cannot reach this |
+| | `RoomOnDeviceSqliteTest` | the schema and migrations on the phone's SQLite, not Robolectric's; pins that removing a feed keeps its ledger |
+| Platform surfaces | `PlatformSurfacesTest` | the foreground-service type as installed, its permission, and that cleartext `http://` is refused |
+| | `SafDownloadTargetInstrumentedTest` | the actual SAF write (ADR 0011) |
+| | `KeystoreAppPasswordCipherTest` | the real Keystore round trip (ADR 0010) |
+| UI conformance | `PodcastListConformanceTest` | S1 against `docs/UI.md` §4 / §12.5 / §17 / §18 |
+| | `SettingsConformanceTest` | S4/S5 against §7/§8 — no password field, restore gating, the bulk preview |
+| | `EpisodeListScreenInstrumentedTest` | S2 rows on a real Compose runtime |
+
+**`:app` is run by `adb install` + `am instrument`, not by Gradle.** UTP's installer cannot place the
+~58 MB app APK on a usbip-attached phone and fails with `ErrorCode: 2002` over a report reading
+`tests="0" failures="0"`. Stale packages, install timeouts, permission flags and disabling UTP were
+each ruled out by experiment; the script records all four. The library modules, which install only
+their own small test APK, run through Gradle normally.
+
+The UI conformance tests duplicate assertions that also exist under Robolectric. That is deliberate:
+three of the bugs found on the author's phone were things a Robolectric render agreed with and a
+device did not — an ICU regex, a manifest attribute, and a dependency that was never on the compile
+classpath.
 
 ---
 

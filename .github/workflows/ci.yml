@@ -4,6 +4,15 @@
 # without an emulator (see CLAUDE.md §4/§7). Instrumented tests (Tier 2) are
 # deliberately not run here; §4 asks for Tier 1 + Tier 3 as the supported path.
 #
+# DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
+# `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
+# docs/dev-environment.md §6), and it exists precisely to check the things a
+# hosted runner cannot: ICU regex strictness, the device's SQLite, the installed
+# manifest, the cleartext policy, a real Compose runtime. A runner has no device,
+# so such a job could only be skipped, fail, or boot an emulator — and an
+# emulator agreeing with Robolectric is what let three of this project's worst
+# bugs through. The split by source set is the isolation; keep it.
+#
 # The debug APK (installable as-is: AGP auto-signs it with the debug keystore —
 # there is no release signing config, so `assembleRelease` would produce an
 # unsigned, uninstallable APK) is uploaded every run as a short-lived workflow

@@ -2430,3 +2430,87 @@ this?"* and following the answer to a call site. That question takes seconds and
 three times.
 
 **Verified:** `ktlintCheck detekt test` green, 571 tests, and the covers now render on the device.
+
+---
+
+## 2026-08-03 (later) — A device test set, and what building it taught
+
+**Asked for:** a test set that never runs on CI, only against the real device; UI conformance to
+`docs/UI.md` and `docs/UI_interface.md`, updating those if they are outdated; anything else only a
+device can test; and the known Android-vs-JVM deviations.
+
+### The docs were not outdated
+
+I diffed every documented state class against the built one before writing a line of test code.
+`PodcastListUiState`, `EpisodeUi`, `SettingsUiState` and the event hierarchies all match, including
+`EpisodeUi.actions` being computed in an `init` rather than passed in, which the document already
+called out. So the right move was not to rewrite the documents but to make the tests **enforce**
+them: each conformance test names the clause it checks, and a failure means either the screen
+drifted or the document did.
+
+### The isolation is structural, not a tag
+
+CI runs `ktlintCheck`, `detekt`, `test`, `assembleDebug`. A test in `src/test/` runs there; a test in
+`src/androidTest/` cannot. No annotation, no filter, nothing to remember. `ci.yml` now carries a
+comment saying why `connectedAndroidTest` must never be added: a hosted runner has no device, so the
+job could only skip, fail, or boot an emulator — and *an emulator agreeing with Robolectric is
+exactly how three of this week's bugs got through*.
+
+### Two things the build taught me while I was writing it
+
+**Dex rejects punctuation in method names.** Backticked sentence names — used freely in every
+`src/test/` class here — fail the *build* under R8: `Method name '…, not a theoretical concern'
+cannot be represented in dex format`. Commas did it; apostrophes are the other offender. The
+existing instrumented tests already used camelCase for exactly this reason **and nowhere said so**,
+so I rediscovered it at the cost of two builds. Now written down in the deviation test itself.
+
+**Running the set wipes the app.** `connectedAndroidTest` reinstalls, and an install that cannot
+replace the existing package uninstalls it first. I hit `DELETE_FAILED_INTERNAL_ERROR`, cleared it
+with `adb uninstall`, and thereby destroyed the author's Nextcloud login, SAF grant and
+9,565-episode database on their own phone. The downloaded files survived, being outside app storage.
+
+That is a genuinely useful thing to have learned and a bad way to learn it. I should have exported a
+backup first — the feature for doing so exists, I built it two days ago, and I did not think to use
+it. The ⚠ now at the top of `scripts/device-test.sh` and in `docs/dev-environment.md` §6 is the
+warning I should have written before running the thing rather than after.
+
+### One test was wrong, and it was mine
+
+`everyMigrationAppliesOnTheDevice` asserted `syncStateDao().get()` was non-null on a fresh database.
+It is null until a sync pass writes a cursor — a fresh install legitimately has none. The assertion
+was a guess about the schema rather than a statement about it, and the device said so. Corrected to
+assert what the test actually means: every table is queryable after the migration chain runs.
+
+10 of 11 passed first time; that one was the exception.
+
+**Verified:** 11/11 in `:app`'s device package on a Pixel 5 (Android 14).
+
+### Postscript: I diagnosed the install failure wrong twice
+
+`:app`'s device tests failed with `Failed to install APK … ErrorCode: 2002` over a report reading
+`tests="0" failures="0"`, which Gradle summarises as *"There were failing tests"* though none ran.
+
+I guessed twice before testing anything. First a stale test package, because a `DELETE_FAILED`
+appeared alongside it — wrong; clearing every package changed nothing. Then AGP's install timeout,
+because the APK is ~58 MB on a slow usbip link and the run died at about the time a manual install
+takes — also wrong; `installation { timeOutInMs }` at 30 minutes made no difference. I wrote the
+first guess into the troubleshooting notes before disproving it, which is the worse of the two
+mistakes.
+
+Only then did I test alternatives one at a time: `adb install -r -g` of both APKs succeeds every
+time, so it is not the flags; `useUnifiedTestPlatform=false` is deprecated and ignored in AGP 9, so
+UTP cannot be sidestepped. What is left is **UTP's own installer failing on the large app APK over
+usbip**.
+
+The discriminating fact was in the very first run and I walked past it twice: **the library modules
+passed and `:app` did not.** Library modules install only their own small test APK; `:app` installs
+the 58 MB one. That single contrast rules out packages, flags and timeouts at once, and it was on
+screen before I formed either hypothesis.
+
+`scripts/device-test.sh` now runs the library modules through Gradle and `:app` through
+`adb install` + `am instrument` — the same runner Gradle would have used. The four ruled-out
+hypotheses are recorded in the script so the next person does not repeat them, and both failed fixes
+were reverted rather than left in place.
+
+**Verified:** 41 instrumented tests green end to end via the script on a Pixel 5 — 6 + 8 + 6 through
+Gradle and 21 in `:app`.
