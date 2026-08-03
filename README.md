@@ -6,11 +6,12 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: all eight screens built, and the app runs.** Subscription mirroring, feed refresh, the
-> download pipeline, GPodder sync, Nextcloud login, naming and tagging are built and tested (502 JVM
-> tests, green), and every screen in `docs/UI.md` renders and is reachable on an emulator.
-> **Nothing has yet been tested against a real Nextcloud** — that is the remaining gap, and it is not
-> a coding one.
+> **Status: [v0.1.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
+> end to end.** Subscription mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud
+> login, naming and tagging are built and tested (589 JVM tests, green), and all eight screens in
+> `docs/UI.md` render and are reachable. Verified against a **real Nextcloud on a real phone** —
+> login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and backup/restore.
+> The released APK is debug-signed: sideload it on your own device, don't distribute it.
 
 ## The idea
 
