@@ -2714,3 +2714,30 @@ already run there) and refreshing: 0 → **9,568** episodes with a size.
 Worth noting how close this came to shipping unnoticed: the unit tests were green, the migration test
 was green, the schema was v5, and the feature was invisible. Only running it against feeds that had
 already been fetched showed it.
+
+---
+
+## 2026-08-03 — v0.1.0, the first release
+
+Tagged `v0.1.0` at `9f2a337` and published it. CI's `release: published` trigger rebuilds and
+attaches the debug APK, which is the point of publishing rather than drafting: workflow artifacts
+expire after 7 days, release assets don't.
+
+Two judgement calls worth recording, since both could reasonably have gone the other way:
+
+**Not marked as a pre-release.** `0.1.0` already says early, and GitHub's pre-release flag suppresses
+the *Latest release* badge on the repo page — a first release that the landing page doesn't show is
+the worse outcome. The debug-signing caveat went at the top of the notes instead, where it is
+actually read, rather than encoded in a flag.
+
+**The README status block was stale and had to go first.** It claimed 502 tests and — worse —
+"Nothing has yet been tested against a real Nextcloud", which stopped being true several sessions
+ago. That block is the first thing a visitor reads, and a public release is the moment it stops being
+an internal note. A landing page can be out of date privately; it can't be wrong publicly.
+
+One rough edge left deliberately: the attached asset is named `app-debug.apk`, because that is the
+path CI uploads. `podsilo-0.1.0.apk` would be better and is a two-line change to the workflow, but it
+only takes effect on the *next* release, so it was not worth blocking this one on.
+
+Nothing was built this session. The release is a packaging act, and the code it packages was verified
+on hardware in the previous one.
