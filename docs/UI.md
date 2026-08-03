@@ -255,7 +255,7 @@ block-beta
 ```
 
 **Row anatomy** — episode artwork (episode image if the feed supplies one, else the feed's), title
-(2 lines max), meta line `date · duration` (each part omitted when unknown — duration is
+(2 lines max), meta line `date · duration · size` (each part omitted when unknown — duration is
 "notoriously unreliable", never faked), description snippet (2 lines, HTML stripped for the snippet),
 status badge/progress, overflow `⋮`.
 

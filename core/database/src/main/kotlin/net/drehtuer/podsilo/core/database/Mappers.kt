@@ -53,6 +53,7 @@ internal fun EpisodeEntity.toDomain(): Episode =
         durationMs = durationMs,
         link = link,
         imageUrl = imageUrl,
+        sizeBytes = sizeBytes,
     )
 
 internal fun Episode.toEntity(): EpisodeEntity =
@@ -67,6 +68,7 @@ internal fun Episode.toEntity(): EpisodeEntity =
         durationMs = durationMs,
         link = link,
         imageUrl = imageUrl,
+        sizeBytes = sizeBytes,
     )
 
 internal fun EpisodeLedgerEntity.toDomain(): EpisodeLedgerRow =

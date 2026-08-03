@@ -134,4 +134,49 @@ class MigrationTest {
             assertEquals("20260714_Folge-1.mp3", cursor.getString(1))
         }
     }
+
+    @Test
+    fun `migrate 4 to 5 adds the advertised size and keeps the ledger intact`() {
+        helper.createDatabase(TEST_DB, 4).use { v4 ->
+            v4.execSQL(
+                "INSERT INTO feeds (url, title, imageUrl, firstSeenAt, lastRefreshedAt, httpEtag, httpLastModified) " +
+                    "VALUES ('https://example.com/feed.xml', 'Der Podcast', NULL, 1000, NULL, " +
+                    "'etag-1', 'Mon, 14 Jul 2026 09:00:00 GMT')",
+            )
+            v4.execSQL(
+                "INSERT INTO episodes (episodeKey, feedUrl, guid, enclosureUrl, title, description, pubDate, " +
+                    "durationMs, link, imageUrl) VALUES ('ep-1', 'https://example.com/feed.xml', 'ep-1', " +
+                    "'https://example.com/ep1.mp3', 'Folge 1', NULL, 2000, NULL, NULL, NULL)",
+            )
+            v4.execSQL(
+                "INSERT INTO episode_ledger (episodeKey, feedUrl, enclosureUrl, state, actionedAt, syncedToServer, " +
+                    "attempts, lastError, lastErrorCause, lastErrorRetryable, writtenFileName, durationSeconds) " +
+                    "VALUES ('ep-1', 'https://example.com/feed.xml', 'https://example.com/ep1.mp3', 'DOWNLOADED', " +
+                    "3000, 1, 0, NULL, NULL, NULL, '20260714_Folge-1.mp3', 1800)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5)
+
+        db.query("SELECT title, sizeBytes FROM episodes").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("the cached episode survived", "Folge 1", cursor.getString(0))
+            // Unbackfilled, like imageUrl in v4: the next refresh supplies it, and a migration is the
+            // wrong place to do network I/O.
+            assertTrue("size starts unknown rather than zero", cursor.isNull(1))
+        }
+        // Without this the new column stays null until a publisher happens to change the feed: a 304
+        // skips the parse, so an unchanged feed never refills the cache (docs/architecture.md §7).
+        db.query("SELECT httpEtag, httpLastModified FROM feeds").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue("the ETag must be dropped so one full re-fetch happens", cursor.isNull(0))
+            assertTrue("Last-Modified too", cursor.isNull(1))
+        }
+        db.query("SELECT writtenFileName FROM episode_ledger").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            // CLAUDE.md §5's one table that must never be lost. A size column on a different table
+            // has no business touching it.
+            assertEquals("20260714_Folge-1.mp3", cursor.getString(0))
+        }
+    }
 }

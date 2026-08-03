@@ -31,6 +31,8 @@ data class EpisodeUi(
     val artworkUrl: String?,
     val publishedAt: Instant?,
     val duration: Duration?,
+    /** `<enclosure length>` in bytes, when the feed gave one. Advisory — see `Episode.sizeBytes`. */
+    val sizeBytes: Long? = null,
     val descriptionSnippet: String,
     val ledgerState: LedgerState?,
     val progress: DownloadProgress? = null,
@@ -134,6 +136,7 @@ fun EpisodeListItem.toUi(
         artworkUrl = episode.imageUrl ?: feedArtworkUrl,
         publishedAt = EpochTime.ofMillisOrNull(episode.pubDate),
         duration = EpochTime.durationOfMillis(episode.durationMs),
+        sizeBytes = episode.sizeBytes,
         // Stripped here, not at write time: the raw HTML stays in the database so the detail sheet
         // can render it properly (architecture §4). This is only the two-line list preview.
         descriptionSnippet = sanitizeEpisodeHtml(episode.description).text.replace('\n', ' ').trim(),

@@ -2648,3 +2648,69 @@ Reported while the swipe work was still open, and all five were real:
    persisted *display cursor* instead — the rows stay, the list hides anything older — and the button
    says "Clear list" rather than "Clear", because the word has to promise only what it does.
 
+
+---
+
+## 2026-08-03 (evening) — Episode size, and a perl substitution that ate a field
+
+Author approved the schema change, so `Episode.sizeBytes` is in: `<enclosure length>` from
+rssparser's `RawEnclosure.length`, schema **v5**, additive and nullable and unbackfilled — the same
+shape as `imageUrl` in v4, because `episodes` is a disposable cache the next refresh rebuilds.
+
+Three judgement calls worth recording, all about *rendering a number for a decision rather than for
+accounting*:
+
+- **Zero is dropped at parse time.** Feeds write `length="0"` when they mean "no idea", and a row
+  reading "0 MB" is worse than a row with no size.
+- **MB throughout, never GB.** A list where most rows say "48 MB" and one says "1.2 GB" makes the
+  outlier harder to compare at a glance, and comparing is the only job this number has.
+- **Whole megabytes.** The source is a publisher's claim; decimals imply a precision it does not
+  have. Same reason durations render in whole minutes.
+
+### The mistake
+
+My `perl -0pi` to add the field matched `val imageUrl: String? = null,\n)` and replaced it — so
+`sizeBytes` did not get added *after* `imageUrl`, it got added *instead of* it. In both `Episode` and
+`EpisodeEntity`. The compiler caught it immediately ("No parameter with name 'imageUrl' found"), so
+the cost was two minutes rather than a lost column, but it is the second time this session a
+regex-based edit has silently deleted the line it was supposed to anchor to — the earlier one
+duplicated a table row in `dev-environment.md` three times over.
+
+The pattern is the same each time: an anchor that includes the thing being kept, with a replacement
+that forgets to reproduce it. Editing structured code by regex is fine for a one-line insertion and
+a poor idea for anything that has to preserve its surroundings.
+
+**Verified:** `ktlintCheck detekt test` green, 589 tests.
+
+### Verified on the Pixel 5
+
+All six changes driven on the device, with the author's real account and download folder:
+
+| | Result |
+|---|---|
+| Episode size | `Jul 31, 2026 · 55 min · 69 MB` — 9,568 episodes carrying a size |
+| Swipe | ledger went 11 → **12** rows for one swipe. The 14× bug is genuinely fixed on hardware |
+| Detail screen | full screen with a back arrow; **the pull-down did nothing** |
+| S7 row tap | opened *that episode*, not its podcast |
+| Clear list | the section vanished and **all 4 `DOWNLOADED` ledger rows survived** — the display cursor holds |
+| About | *Source code · https://github.com/drehtuer/podsilo* |
+| Mark all | dialog named the count, said files stay and that state reaches Nextcloud; cancelled, ledger unchanged |
+
+### The v5 migration needed a second statement, and the device found it
+
+`sizeBytes` shipped, the migration applied, and **every row stayed null**. The cause is not the
+parser — `<enclosure length="36678425">` is right there in the author's feed and the unit test parses
+it correctly. It is `FeedFetcher`'s conditional GET: an unchanged feed answers **304**, the parse is
+skipped entirely (`docs/architecture.md` §7), and a newly added column therefore stays empty until
+the publisher next happens to post.
+
+So `MIGRATION_4_5` now also runs `UPDATE feeds SET httpEtag = NULL, httpLastModified = NULL`. One
+full re-fetch per feed, once. **Any migration that adds a column to `episodes` needs that line** —
+otherwise the column fills in on the publisher's schedule rather than ours.
+
+Confirmed by reproducing the same state on the device (clearing the validators by hand, since v5 had
+already run there) and refreshing: 0 → **9,568** episodes with a size.
+
+Worth noting how close this came to shipping unnoticed: the unit tests were green, the migration test
+was green, the schema was v5, and the feature was invisible. Only running it against feeds that had
+already been fetched showed it.

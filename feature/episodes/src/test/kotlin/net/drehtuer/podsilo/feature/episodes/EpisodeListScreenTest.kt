@@ -48,6 +48,7 @@ class EpisodeListScreenTest {
         failure: FailureUi? = null,
         publishedAt: Instant? = Instant.parse("2026-07-14T09:00:00Z"),
         durationMinutes: Long? = 48,
+        sizeBytes: Long? = null,
     ) = EpisodeUi(
         episodeKey = key,
         feedUrl = FEED_URL,
@@ -56,6 +57,7 @@ class EpisodeListScreenTest {
         artworkUrl = null,
         publishedAt = publishedAt,
         duration = durationMinutes?.let { java.time.Duration.ofMinutes(it) },
+        sizeBytes = sizeBytes,
         descriptionSnippet = "Eine Folge über Regen",
         ledgerState = ledgerState,
         progress = progress,
@@ -346,4 +348,35 @@ class EpisodeListScreenTest {
             filter = EpisodeFilter.DOWNLOADED,
             content = EpisodeListUiState.Content.Episodes(rows.toList()),
         )
+
+    /**
+     * The size the feed advertises, beside the duration (the author's request).
+     *
+     * Whole megabytes and never a decimal: the source is `<enclosure length>`, a publisher's claim,
+     * and decimals imply a precision it does not have — the same reason durations render in whole
+     * minutes.
+     */
+    @Test
+    fun `the meta line carries the advertised size beside the duration`() {
+        render(listOf(row(sizeBytes = 29_947_412)))
+
+        compose.onNode(hasText("29 MB", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("48 min", substring = true)).assertIsDisplayed()
+    }
+
+    /** A feed that gives no size simply has no size part — never "0 MB", never "unknown". */
+    @Test
+    fun `an episode with no advertised size shows no size part`() {
+        render(listOf(row(sizeBytes = null)))
+
+        compose.onAllNodes(hasText("MB", substring = true)).assertCountEquals(0)
+    }
+
+    /** "0 MB" reads as free. A feed advertising a few hundred bytes is wrong, not generous. */
+    @Test
+    fun `a sub-megabyte size does not render as zero`() {
+        render(listOf(row(sizeBytes = 4_096)))
+
+        compose.onNode(hasText("<1 MB", substring = true)).assertIsDisplayed()
+    }
 }

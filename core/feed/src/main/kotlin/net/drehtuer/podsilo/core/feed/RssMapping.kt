@@ -62,6 +62,9 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
         // itunes:image first: it is the per-episode cover feeds actually use. A bare <image> on an
         // item is rare but legal, and costs nothing to accept.
         imageUrl = (itunesItemData?.image ?: image)?.trim()?.takeIf(String::isNotEmpty),
+        // Advisory, and only when positive: feeds write `length="0"` when they mean "no idea", and a
+        // row reading "0 MB" is worse than one with no size at all.
+        sizeBytes = rawEnclosure?.length?.takeIf { it > 0 },
     )
 }
 
