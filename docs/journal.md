@@ -2963,3 +2963,57 @@ answer questions phrased in terms of source names.**
 Still missing for store listings: a 512×512 raster. Play and F-Droid both want one and neither reads
 it from the APK, and this container has no image tooling at all — no ImageMagick, no rsvg, not even
 python3. Filed with the Fastlane metadata it belongs beside.
+
+---
+
+## 2026-08-04 — v0.2.0, and the release pipeline proving itself before the tag
+
+Tagged and published `v0.2.0`: a signed, R8-minified **4.6 MB** APK, the 39 MB debug build beside it,
+and the gzipped R8 mapping. v0.1.0 could only ship a debug APK, so this is the first release that is
+one.
+
+### The keystore secret was fine; `base64 -d` was fussy
+
+The main build went red on `Decode release keystore` with `base64: invalid input` — which reads as
+"your signing key is broken" and was nothing of the sort. Tested all three shapes against the real
+keystore:
+
+| secret form | old code | new code |
+|---|---|---|
+| `base64 -w0` (flat) | ok | ok |
+| `base64` (76-column wrapped) | ok | ok |
+| **the same bytes with CRLF** | **`invalid input`** | ok |
+
+The author develops on Windows. Stripping whitespace before decoding fixes all three, and the fix
+proved itself on the real secret immediately: `Decoded keystore: 4298 bytes`, matching the local file
+exactly.
+
+Two judgement calls in that step worth keeping:
+
+- **A bad secret warns rather than failing the build.** The release job already refuses to attach an
+  unsigned APK, so a malformed secret costs the release asset and nothing else. Failing every CI run
+  on the repository because a signing secret is malformed punishes the wrong changes.
+- **It logs the decoded byte count.** Enough to tell "decoded to something keystore-shaped" from
+  "decoded to nothing", with no part of a signing key in a public log.
+
+### Verify the artefact you published, not the one you built
+
+The habit that keeps paying: after CI attached the assets, the release APK was **downloaded back from
+GitHub** and checked — `Verifies`, v3 scheme, `CN=Podsilo, O=drehtuer, C=DE`, `versionCode=108`,
+`icon='res/BW.xml'`. Building a signed APK locally proves the config; downloading the published one
+proves the pipeline.
+
+This week has produced three separate cases where the *obvious* check on a release artefact was
+wrong: `META-INF/*.RSA` for the signature (v1 is off, so a correctly signed APK has none),
+`grep ic_launcher` for the icon (resource shrinking renamed it to `res/BW.xml`), and `base64 -d` for
+the keystore (valid content, hostile whitespace). **A minified, signed, shrunk artefact does not
+answer questions phrased in terms of its sources.** Ask the tool that owns the format — `apksigner`,
+`aapt2` — rather than `grep`.
+
+### Release notes carried an upgrade warning, deliberately
+
+v0.1.0's asset was debug-signed and v0.2.0's is release-signed, so Android cannot upgrade one to the
+other in place: the install has to uninstall first, taking the ledger, the login and the folder grant
+with it. That is exactly the loss CLAUDE.md §11 calls the most important thing to protect, so it is
+in the notes as a warning with the backup step, not a footnote. Release-to-release upgrades from here
+are in place.
