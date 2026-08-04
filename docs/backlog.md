@@ -74,9 +74,11 @@ Against [developer.android.com/studio/publish](https://developer.android.com/stu
 [F-Droid quick start](https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/). What
 already holds is in `docs/dev-environment.md` §10; these are the gaps, in the order they bite.
 
-- **The app has no icon.** `android:icon="@android:mipmap/sym_def_app_icon"` — the *system default*.
-  There is no `mipmap-*` resource at all. It is a launcher-visible defect today, and F-Droid will not
-  list an app without one. Cheapest real fix first.
+- ~~**The app has no icon.**~~ **Done 2026-08-04.** An adaptive icon (silo, episode dropping in,
+  pool collecting), vector-only, with a `<monochrome>` layer for Android 13 themed icons. What is
+  still missing is a **512×512 PNG for store listings** — Play and F-Droid both want a raster, and
+  neither reads it from the APK. It belongs with the Fastlane metadata below; the dev container has
+  no image tooling, so it needs generating elsewhere.
 - **jaudiotagger comes from JitPack.** F-Droid builds everything from source in its own buildserver
   and treats a JitPack coordinate as a third-party prebuilt binary. Expect to either add a `srclibs`
   entry that builds `Adonai/jaudiotagger` from source, or vendor it. This is the substantive F-Droid

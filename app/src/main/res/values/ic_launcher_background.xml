@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<resources>
+    <!--
+      The app's own accent (`AccentLight` in ui/theme/Theme.kt), so the launcher icon and the
+      screens behind it are recognisably the same app. Fixed rather than theme-derived: an adaptive
+      icon background is baked at build time and cannot follow the device's dynamic colour.
+    -->
+    <color name="ic_launcher_background">#EC3013</color>
+</resources>
