@@ -103,6 +103,10 @@ jobs:
           PODSILO_KEY_PASSWORD: ${{ secrets.PODSILO_KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease
 
+      # The R8 mapping goes with them. A stack trace from a minified build is
+      # unreadable without the mapping that produced it, and it is regenerated
+      # by every build — so if it is not kept alongside the APK it is shipped
+      # with, it is gone.
       - name: Upload APK build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -110,6 +114,7 @@ jobs:
           path: |
             app/build/outputs/apk/debug/podsilo-*.apk
             app/build/outputs/apk/release/podsilo-*.apk
+            app/build/outputs/mapping/release/mapping.txt
           retention-days: 7
 
       # An unsigned release APK is not attached: it downloads like a real build
@@ -130,6 +135,11 @@ jobs:
           apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
           if [ -n "$release_apk" ] && "$apksigner" verify "$release_apk" >/dev/null 2>&1; then
               gh release upload "$TAG" "$release_apk" --clobber
+              # Gzipped: it is ~50 MB of text, and it has to outlive the 7-day
+              # artifact window to be any use when a crash report turns up later.
+              gzip -kf app/build/outputs/mapping/release/mapping.txt
+              mv app/build/outputs/mapping/release/mapping.txt.gz "mapping-$TAG.txt.gz"
+              gh release upload "$TAG" "mapping-$TAG.txt.gz" --clobber
           else
               echo "::warning::Release APK is missing or unsigned — not attached. See docs/dev-environment.md §10."
           fi
