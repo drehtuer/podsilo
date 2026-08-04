@@ -74,6 +74,7 @@ class SettingsViewModelTest {
             archive = archive,
             clock = clock,
             version = "0.1.0",
+            build = "42 · 2026-08-04 00:00 UTC · abc1234",
             zone = ZoneOffset.UTC,
         )
 

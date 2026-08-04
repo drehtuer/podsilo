@@ -60,6 +60,7 @@ class SettingsViewModel(
     private val archive: DatabaseArchive,
     private val clock: Clock,
     private val version: String,
+    private val build: String,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : ViewModel() {
     private val pendingBulk = MutableStateFlow<BulkConfirmation?>(null)
@@ -108,6 +109,7 @@ class SettingsViewModel(
                 theme = preferences.theme,
                 errorLogCount = logCount,
                 version = version,
+                build = build,
                 pendingBulk = transient.first,
                 restoreConfirmationVisible = transient.second.confirmingRestore,
                 archiveBusy = transient.second.busy,
@@ -115,7 +117,7 @@ class SettingsViewModel(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
-            initialValue = SettingsUiState(version = version),
+            initialValue = SettingsUiState(version = version, build = build),
         )
 
     @Suppress("CyclomaticComplexMethod") // An exhaustive `when` over a sealed event hierarchy.

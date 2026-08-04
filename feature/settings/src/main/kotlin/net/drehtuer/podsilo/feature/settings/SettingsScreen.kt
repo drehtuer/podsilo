@@ -81,7 +81,7 @@ fun SettingsScreen(
                 AppearanceGroup(state.theme, onEvent)
                 BackupGroup(state, onEvent)
                 TroubleshootingGroup(state.errorLogCount, onEvent)
-                AboutGroup(state.version, onEvent)
+                AboutGroup(state.version, state.build, onEvent)
             }
         }
     }
@@ -339,10 +339,15 @@ private fun TroubleshootingGroup(
 @Composable
 private fun AboutGroup(
     version: String,
+    build: String,
     onEvent: (SettingsEvent) -> Unit,
 ) {
     GroupHeader("ABOUT")
     SettingsRow(title = "Version $version", subtitle = "GPL-3.0-or-later", onClick = null)
+    // Build number, timestamp and commit. `versionName` alone cannot answer "is this the build I
+    // just installed?", which is the question actually being asked of this screen during testing —
+    // 0.1.0 stays 0.1.0 across every sideload of the day.
+    SettingsRow(title = "Build", subtitle = build, onClick = null)
     SettingsRow(
         title = "Source code",
         subtitle = PODSILO_REPOSITORY_URL,

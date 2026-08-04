@@ -92,6 +92,13 @@ object AppModule {
     @Named("appVersion")
     fun provideAppVersion(): String = BuildConfig.VERSION_NAME
 
+    /**
+     * Build number, build time and commit, for S4's About group. One preformatted string because
+     * it has exactly one consumer and splitting it would put formatting in three places.
+     */
+    @Provides
+    @Named("appBuild")
+    fun provideAppBuild(): String = "${BuildConfig.VERSION_CODE} · ${BuildConfig.BUILD_TIME} · ${BuildConfig.GIT_SHA}"
 }
 
 /** `@Binds` needs an abstract class, so it can't live in the `object` module above. */

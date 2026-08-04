@@ -2792,3 +2792,73 @@ Two smaller things the device run turned up:
   receives the `ACTION_VIEW` before diagnosing a stuck poll.
 - The rejected app password stays live on the server. Filed in `docs/backlog.md` rather than fixed,
   with the reasoning: it is a new endpoint added to the one code path whose job is to store nothing.
+
+---
+
+## 2026-08-04 — a timeout wearing an unreachable's clothes, and a real release build
+
+### "It says it cannot reach the URL"
+
+It could reach it. `POST /index.php/login/v2` answered 200 in about a second from the container, and
+the flow ran end to end on the phone minutes later. What the report caught is a *reporting* bug:
+
+```kotlin
+} catch (io: IOException) {
+    // DNS failure, connection refused, timeout — all "can't reach that address" to the user.
+```
+
+A `SocketTimeoutException` is an `IOException`, so a slow server produced *"Can't reach that address.
+Check the spelling and your network"* — advice to fix a host name that was never wrong. And slowness
+here is not exotic: **Nextcloud's bruteforce protection deliberately delays repeated authorization
+attempts from one address**, which is exactly the state the previous session's testing left the
+server in. Against OkHttp's default 10 s read timeout, "I tried to log in a few times" becomes "your
+address is wrong".
+
+Two changes: `LoginFlowFailure.TIMED_OUT` as its own case with its own sentence, and deliberate
+timeouts on the shared `OkHttpClient` (20 s connect, 30 s read/write) instead of the library
+defaults, which were never chosen — they were simply never set. No `callTimeout`, because that would
+bound whole calls including bodies, and this client is shared with the enclosure downloader.
+
+The lesson is not about timeouts. It is that **a catch block that merges two causes has decided the
+user will see one message**, and the comment above it said so in plain words the whole time.
+
+### The grant wall is Nextcloud's, and stays there
+
+Completing a grant on the phone hits *"This action needs authentication, please confirm it by
+entering your password"* — Nextcloud requiring password confirmation before issuing an app password.
+That is the account password, so the device leg of ADR 0019's confirmation dialog is still unverified;
+it needs the author at the keyboard. Reproduced twice, so it is the flow's design and not a glitch.
+
+### A release build that is actually a release build
+
+`assembleRelease` produced an unminified, unsigned APK that differed from the debug one only in name.
+Now: R8 with `isMinifyEnabled` and `isShrinkResources`, which takes **58 MB to 4.8 MB**.
+
+The keep rules are the interesting part, because R8 breaks things the JVM tests can never catch —
+they run before minification. `kotlinx.serialization` finds generated serializers reflectively via
+`Companion.serializer()`, and jaudiotagger picks tag writers by name out of a registry. Both would
+fail at runtime, one when the app tries to log in and the other when a download finishes. Checked
+`usage.txt` rather than assuming: for `LoginPollDto`, R8 removed only `component1..3`, `copy` and the
+synthetic annotation getters, keeping the class, its `Companion` and its `$$serializer`.
+
+**Still unverified: that the minified APK runs.** Installing it means uninstalling the debug build —
+different signing key — which erases the ledger, the login and the folder grant. Not a call to make
+unprompted.
+
+Also: APKs are now `podsilo-<version>.apk` and `podsilo-<version>-debug.apk` via
+`androidComponents.onVariants`. This needs `VariantOutputImpl`, an AGP internal, because the public
+`Variant.outputs` exposes version fields but not the file name and the old `applicationVariants` DSL
+is gone. Noted at the call site so a future AGP that promotes it can drop the cast.
+
+### Build identity
+
+`versionCode` is now `git rev-list --count HEAD` — monotonic, needs no state outside the repo, and
+identical on CI and laptop for the same commit, which a run number would not be. Shallow clones fall
+back to 1, hence `fetch-depth: 0` in CI.
+
+About now shows **Build 93 · 2026-08-04 00:17 UTC · 6b988a0**. Verified on the device. `versionName`
+could never answer "is this the build I just installed?" — `0.1.0` stays `0.1.0` all day.
+
+Small thing that cost two screenshots: the phone was left in landscape from the previous session, so
+scripted taps by coordinate all landed in the wrong places. `settings put system user_rotation 0`
+before driving the UI.

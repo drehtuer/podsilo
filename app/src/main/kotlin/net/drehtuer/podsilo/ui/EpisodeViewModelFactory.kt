@@ -61,6 +61,7 @@ class EpisodeViewModelFactory
         private val syncTrigger: ConnectSyncTrigger,
         private val logRepository: net.drehtuer.podsilo.core.model.port.LogRepository,
         @Named("appVersion") private val appVersion: String,
+        @Named("appBuild") private val appBuild: String,
     ) {
         fun podcastList(): ViewModelProvider.Factory =
             factory {
@@ -119,6 +120,7 @@ class EpisodeViewModelFactory
                     archive = databaseArchive,
                     clock = clock,
                     version = appVersion,
+                    build = appBuild,
                 )
             }
 
