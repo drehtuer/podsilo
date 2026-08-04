@@ -68,6 +68,29 @@ noted here before that date was instead either built, declined in conversation, 
   endpoint with its own failure modes, added to the one code path whose job is to store nothing, and
   the leftover is harmless and user-revocable. Worth doing if rejection turns out to be common.
 
+## Distribution readiness (audited 2026-08-04)
+
+Against [developer.android.com/studio/publish](https://developer.android.com/studio/publish) and the
+[F-Droid quick start](https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/). What
+already holds is in `docs/dev-environment.md` §10; these are the gaps, in the order they bite.
+
+- **The app has no icon.** `android:icon="@android:mipmap/sym_def_app_icon"` — the *system default*.
+  There is no `mipmap-*` resource at all. It is a launcher-visible defect today, and F-Droid will not
+  list an app without one. Cheapest real fix first.
+- **jaudiotagger comes from JitPack.** F-Droid builds everything from source in its own buildserver
+  and treats a JitPack coordinate as a third-party prebuilt binary. Expect to either add a `srclibs`
+  entry that builds `Adonai/jaudiotagger` from source, or vendor it. This is the substantive F-Droid
+  blocker, and it is a consequence of ADR 0006 — worth reopening only if F-Droid is actually wanted.
+- **No Fastlane metadata.** F-Droid reads `fastlane/metadata/android/en-US/` (title,
+  short_description, full_description, changelogs, screenshots) straight from the repository. None
+  exists.
+- **No App Bundle.** Google Play has required `.aab` since 2021; we publish APKs. Correct for
+  sideloading and F-Droid, and `bundleRelease` already exists if Play ever matters — but as it
+  stands, Podsilo cannot be submitted to Play.
+- **Reproducible builds are unverified.** `BuildConfig.BUILD_TIME` alone makes two builds of one
+  commit differ. F-Droid does not require reproducibility, but it forecloses the verified-build
+  badge, and the timestamp is the only obstacle.
+
 ## Declined, with reasons
 
 - **An "alternative log in using app password" form.** Nextcloud offers one on its own flow page, and

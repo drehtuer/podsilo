@@ -2862,3 +2862,62 @@ could never answer "is this the build I just installed?" — `0.1.0` stays `0.1.
 Small thing that cost two screenshots: the phone was left in landscape from the previous session, so
 scripted taps by coordinate all landed in the wrong places. `settings put system user_rotation 0`
 before driving the UI.
+
+---
+
+## 2026-08-04 (later) — signing reality, a saveable that saved too much, and a distribution audit
+
+### Three signing bugs, each only findable by signing something
+
+CI #79 failed with `Cannot convert '' to File`. An **unset GitHub secret arrives as an empty string**,
+not an absent variable, so `System.getenv` returned `""` and `file("")` aborted the build — meaning
+every *unsigned* run failed, which is the exact case the fallback existed to handle. `isNotBlank`,
+not `!= null`.
+
+Then the author's real keystore: **EdDSA**. Android's APK signing supports RSA, DSA and EC and
+nothing else, so `packageRelease` died with `InvalidKeyException: Unsupported key algorithm`. Proved
+it was only the algorithm by building against a throwaway RSA key, which signed fine.
+
+Then the one that would have been silent: the release job gated on `META-INF/*.RSA`, and **a
+correctly signed APK does not contain that file**. It is produced by v1 JAR signing, which is off at
+`minSdk 33`. The check would have rejected exactly the artefacts it existed to pass. Now it asks
+`apksigner verify`, and the signing schemes are declared rather than inherited.
+
+The pattern across all three: *none* of them is visible until an artefact is actually produced and
+inspected. Reading the config would not have found any of them.
+
+### `rememberSaveable` remembered a half-finished gesture
+
+The reported swipe bug — a row coming back from a filter switch still pushed aside, with the panel
+flashing — is `rememberSwipeToDismissBoxState` being `rememberSaveable`. The drag offset was written
+to saved state, and a filter switch detaches and reattaches these rows.
+
+The half that was not reported is worse: `LaunchedEffect(state.currentValue)` keys on the restored
+value, so a row restored mid-swipe **fires `SwipeCommitted` again** — a second `PLAY` or `DOWNLOAD`
+for one gesture, silently, in an app whose triage has no undo. The visible symptom was the harmless
+one.
+
+**The test does not reproduce it, and that is written into the test.** Robolectric's Compose runtime
+does not restore saveable state through a `LazyColumn` detach — the new test passes against the
+broken code with the clock auto-advancing *and* driven frame by frame. Rather than dress it up as a
+regression test, its KDoc says what it does and does not prove, and the fix was verified on the phone:
+a partial swipe plus two tab switches leaves every row centred, and a committed swipe reports
+"Marked 1 episode as played" — one, not two.
+
+Worth remembering: **a test that passes before and after a fix is evidence of nothing**, and checking
+which way round it fails costs one revert.
+
+### Distribution audit
+
+Asked whether the release follows Android's publish guidance and F-Droid's. Mostly yes, and the
+findings are in `docs/backlog.md`. The one that surprised: the app has **no icon** —
+`android:icon="@android:mipmap/sym_def_app_icon"`, the system default, with no `mipmap-*` resource in
+the tree at all. Eight screens designed in detail and nothing to tap on the launcher.
+
+The substantive F-Droid blocker is that jaudiotagger comes from **JitPack**, which their buildserver
+treats as a third-party prebuilt. That traces straight back to ADR 0006 and is only worth reopening
+if F-Droid is actually a goal.
+
+Also added: the R8 mapping file is now kept with the APK it belongs to. It is regenerated every
+build, so a mapping not stored alongside its APK is gone, and a minified stack trace without it is
+unreadable.
