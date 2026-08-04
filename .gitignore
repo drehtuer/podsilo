@@ -21,6 +21,8 @@ captures/
 # Keystores — never commit signing material
 *.jks
 *.keystore
+# ...nor the passwords that open them (app/build.gradle.kts reads this file)
+keystore.properties
 
 # Secrets
 .env

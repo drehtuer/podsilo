@@ -1,11 +1,62 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Imported rather than fully qualified: inside a build script `java` resolves to Gradle's own
+// `java { }` extension, so `Instant` does not mean what it says.
+import com.android.build.api.variant.impl.VariantOutputImpl
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+/**
+ * The build number, derived from the commit count rather than kept by hand.
+ *
+ * `git rev-list --count HEAD` only ever grows, needs no state outside the repository, and gives the
+ * same answer on CI and on a laptop for the same commit — which a CI-run-number would not. A shallow
+ * clone or a tarball has no history, hence the fallback; CI checks out with `fetch-depth: 0` so the
+ * real number is used there.
+ */
+fun gitCommitCount(): Int =
+    runCatching {
+        providers
+            .exec {
+                commandLine("git", "rev-list", "--count", "HEAD")
+            }.standardOutput.asText
+            .get()
+            .trim()
+            .toInt()
+    }.getOrDefault(1)
+
+fun gitShortSha(): String =
+    runCatching {
+        providers
+            .exec {
+                commandLine("git", "rev-parse", "--short", "HEAD")
+            }.standardOutput.asText
+            .get()
+            .trim()
+    }.getOrDefault("unknown")
+
+/**
+ * The build's own timestamp, so *"is this the build I just made?"* is answerable from the About
+ * screen. UTC and minute-resolution: the point is identifying a build, not timing it.
+ *
+ * This does change on every configuration, which would defeat the build cache if it were used
+ * widely. It is used in exactly one generated constant, so what it costs is regenerating
+ * `BuildConfig` — and being unable to tell two builds apart was costing more.
+ */
+val buildTimestamp: String =
+    DateTimeFormatter
+        .ofPattern("yyyy-MM-dd HH:mm 'UTC'")
+        .withZone(ZoneOffset.UTC)
+        .format(Instant.now())
 
 android {
     namespace = "net.drehtuer.podsilo"
@@ -16,8 +67,61 @@ android {
         minSdk = 33
         targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 1
+        versionCode = gitCommitCount()
         versionName = "0.1.0"
+
+        buildConfigField("String", "BUILD_TIME", "\"$buildTimestamp\"")
+        buildConfigField("String", "GIT_SHA", "\"${gitShortSha()}\"")
+    }
+
+    /**
+     * Release signing, when the key is available.
+     *
+     * The keystore is **never** in the repository (CLAUDE.md §9). It comes from `keystore.properties`
+     * locally or the matching environment variables on CI, and when neither is present the release
+     * variant simply builds unsigned rather than failing — an unsigned release APK is still a useful
+     * artifact to inspect, it just cannot be installed. `docs/dev-environment.md` §9 has the
+     * `keytool` invocation and the CI secret names.
+     */
+    signingConfigs {
+        val keystoreProperties =
+            file("../keystore.properties").takeIf { it.exists() }?.let { propertiesFile ->
+                Properties().apply { propertiesFile.inputStream().use { load(it) } }
+            }
+
+        fun setting(
+            key: String,
+            env: String,
+        ): String? = keystoreProperties?.getProperty(key) ?: System.getenv(env)
+
+        val storePath = setting("storeFile", "PODSILO_KEYSTORE_FILE")
+        if (storePath != null && file(storePath).exists()) {
+            create("release") {
+                storeFile = file(storePath)
+                storePassword = setting("storePassword", "PODSILO_KEYSTORE_PASSWORD")
+                keyAlias = setting("keyAlias", "PODSILO_KEY_ALIAS")
+                keyPassword = setting("keyPassword", "PODSILO_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // A real release build: R8 strips unused code, renames what is left, and drops the
+            // debug metadata. Previously `assembleRelease` produced something that differed from
+            // the debug APK only by name, which is what "there is no release build" meant.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
+        debug {
+            // Left installable alongside nothing else: no applicationIdSuffix, deliberately. A
+            // suffix would make the debug build a *different app*, and the SAF folder grant and the
+            // episode ledger both belong to an application id — changing it would silently orphan
+            // the author's downloads and login on the next install.
+            isMinifyEnabled = false
+        }
     }
 
     compileOptions {
@@ -33,6 +137,30 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+        }
+    }
+}
+
+/**
+ * Names the APKs `podsilo-<version>.apk` and `podsilo-<version>-debug.apk`.
+ *
+ * AGP's default is `app-debug.apk` — the module name, which says nothing about which build it is.
+ * A release asset called `app-debug.apk` is actively misleading, and two downloaded builds of
+ * different versions are indistinguishable in a downloads folder.
+ *
+ * `VariantOutputImpl` is an AGP internal, which is unfortunate and deliberate: the public
+ * `Variant.outputs` exposes the version fields but not the file name, and the old
+ * `applicationVariants` DSL that used to own this is gone. The alternative is a copy task that
+ * duplicates every APK under a second name. If a future AGP promotes `outputFileName`, this drops
+ * to the public API unchanged.
+ */
+androidComponents {
+    onVariants { variant ->
+        val suffix = if (variant.buildType == "debug") "-debug" else ""
+        variant.outputs.forEach { output ->
+            (output as? VariantOutputImpl)?.outputFileName?.set(
+                "podsilo-${android.defaultConfig.versionName}$suffix.apk",
+            )
         }
     }
 }

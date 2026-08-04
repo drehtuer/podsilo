@@ -13,12 +13,20 @@
 # emulator agreeing with Robolectric is what let three of this project's worst
 # bugs through. The split by source set is the isolation; keep it.
 #
-# The debug APK (installable as-is: AGP auto-signs it with the debug keystore —
-# there is no release signing config, so `assembleRelease` would produce an
-# unsigned, uninstallable APK) is uploaded every run as a short-lived workflow
-# artifact for manual sideloading. When a GitHub Release is published, the same
-# APK is instead attached to that release, where it persists indefinitely —
-# release assets aren't subject to the workflow artifact retention window.
+# ARTIFACTS
+#
+# Both variants are built. `podsilo-<version>-debug.apk` is installable as-is
+# (AGP signs it with the debug keystore) and is the sideload build.
+# `podsilo-<version>.apk` is the real release: R8-minified and resource-shrunk,
+# roughly a twelfth the size, and **signed only when the keystore secrets are
+# configured** — see docs/dev-environment.md §9. Without them it still builds,
+# but unsigned, and an unsigned APK cannot be installed. That is why the release
+# job below refuses to attach one rather than shipping a file that looks like a
+# download and isn't.
+#
+# Every run uploads them as short-lived workflow artifacts. When a GitHub Release
+# is published they are attached to it instead, where they persist indefinitely —
+# release assets aren't subject to the artifact retention window.
 name: CI
 
 on:
@@ -45,6 +53,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # versionCode is `git rev-list --count HEAD` (app/build.gradle.kts). The
+          # default shallow clone would make every build number 1.
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -64,18 +76,55 @@ jobs:
       - name: Unit tests (Tier 1)
         run: ./gradlew test
 
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug
+      # The keystore never exists in the repository. It is written from a secret
+      # into the runner's workspace for the length of the job, and the workspace
+      # is discarded with the runner. `PODSILO_KEYSTORE_BASE64` is the .jks
+      # base64-encoded; the other three are its passwords and alias.
+      # Emptiness is handled inside the script rather than by a step-level `if`:
+      # a step's own `env:` block is not in scope for its `if`, which is a quiet
+      # way to end up with a condition that is always false.
+      - name: Decode release keystore
+        id: keystore
+        env:
+          KEYSTORE: ${{ secrets.PODSILO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+              echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/podsilo-release.jks"
+              echo "path=$RUNNER_TEMP/podsilo-release.jks" >> "$GITHUB_OUTPUT"
+          else
+              echo "No keystore secret configured — the release APK will be unsigned."
+          fi
 
-      - name: Upload APK build artifact
+      - name: Assemble debug and release APKs
+        env:
+          PODSILO_KEYSTORE_FILE: ${{ steps.keystore.outputs.path }}
+          PODSILO_KEYSTORE_PASSWORD: ${{ secrets.PODSILO_KEYSTORE_PASSWORD }}
+          PODSILO_KEY_ALIAS: ${{ secrets.PODSILO_KEY_ALIAS }}
+          PODSILO_KEY_PASSWORD: ${{ secrets.PODSILO_KEY_PASSWORD }}
+        run: ./gradlew assembleDebug assembleRelease
+
+      - name: Upload APK build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: podsilo-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: podsilo-apks
+          path: |
+            app/build/outputs/apk/debug/podsilo-*.apk
+            app/build/outputs/apk/release/podsilo-*.apk
           retention-days: 7
 
-      - name: Attach APK to release
+      # An unsigned release APK is not attached: it downloads like a real build
+      # and then refuses to install, which is worse than its absence. The debug
+      # APK always goes up, so a release is never left with nothing installable.
+      - name: Attach APKs to release
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" app/build/outputs/apk/debug/app-debug.apk --clobber
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$TAG" app/build/outputs/apk/debug/podsilo-*-debug.apk --clobber
+          release_apk="$(ls app/build/outputs/apk/release/podsilo-*.apk 2>/dev/null | head -1)"
+          if [ -n "$release_apk" ] && unzip -l "$release_apk" | grep -qE 'META-INF/.*\.(RSA|DSA|EC)'; then
+              gh release upload "$TAG" "$release_apk" --clobber
+          else
+              echo "::warning::Release APK is unsigned — not attached. Configure the keystore secrets (docs/dev-environment.md §9)."
+          fi
