@@ -736,12 +736,23 @@ The workflow reads the same values from environment variables, populated from re
 
 | Secret | Value |
 |---|---|
-| `PODSILO_KEYSTORE_BASE64` | `base64 -w0 podsilo-release.jks` |
+| `PODSILO_KEYSTORE_BASE64` | `base64 -w0 podsilo-release.jks` — see the warning below |
 | `PODSILO_KEYSTORE_PASSWORD` | `storePassword` |
 | `PODSILO_KEY_ALIAS` | `podsilo` |
 | `PODSILO_KEY_PASSWORD` | `keyPassword` |
 
 The keystore is decoded into `$RUNNER_TEMP` for the length of the job and dies with the runner.
+
+> **Generate the base64 in WSL, not in PowerShell, and check for stray line endings.** The workflow
+> strips whitespace before decoding, so wrapped output and CRLF both work now — but they did not
+> before, and `base64: invalid input` is what a CRLF-containing secret looks like from the runner. It
+> reads as "your signing key is broken" when the truth is "your paste had Windows newlines in it".
+> `certutil -encode` is worse: it wraps the output in `-----BEGIN CERTIFICATE-----` lines that are
+> themselves valid base64 characters, so it decodes to garbage rather than failing.
+
+If the secret cannot be decoded the build does **not** fail — it warns and produces an unsigned
+release APK, which the release job then refuses to attach. A broken secret costs you the release
+asset, never the build.
 
 **Until those secrets exist, a published release gets the debug APK only.** The release job checks
 the APK for a signature block and refuses to attach an unsigned one — a file that downloads like a
