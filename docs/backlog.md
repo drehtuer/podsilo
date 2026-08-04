@@ -67,13 +67,15 @@ noted here before that date was instead either built, declined in conversation, 
   authenticated with that password would clean it up. Left out of the fix deliberately: it is a new
   endpoint with its own failure modes, added to the one code path whose job is to store nothing, and
   the leftover is harmless and user-revocable. Worth doing if rejection turns out to be common.
-- **An "alternative log in using app password" path.** Nextcloud offers it on its own flow page, and
-  it is the only way to name the account directly rather than inheriting the browser's session
-  (ADR 0019). It needs the author's decision first: it reverses ADR 0010 and CLAUDE.md's rule that
-  this module never shows a username/password form.
 
 ## Declined, with reasons
 
+- **An "alternative log in using app password" form.** Nextcloud offers one on its own flow page, and
+  it is the only way to name an account directly instead of inheriting the browser's session
+  (ADR 0019). **Declined by the author on 2026-08-04: grant-by-browser stays, and no login or
+  password field goes in the app.** That keeps ADR 0010 and CLAUDE.md §5 intact — the app never
+  handles the account password — at the known cost that a wrong browser session can only be fixed in
+  the browser.
 - **"Download all visible" as a prominent button.** CLAUDE.md §1 names this specifically as the kind
   of thing that looks helpful and isn't. The UI design's per-podcast *Download all (n)* overflow item
   is a narrower version, and was accepted as a *command* rather than a rule — ADR 0014.
