@@ -2921,3 +2921,45 @@ if F-Droid is actually a goal.
 Also added: the R8 mapping file is now kept with the APK it belongs to. It is regenerated every
 build, so a mapping not stored alongside its APK is gone, and a minified stack trace without it is
 unreadable.
+
+---
+
+## 2026-08-04 (later still) — the app gets a face
+
+Signing works end to end now: the author regenerated the keystore with RSA, and `assembleRelease`
+produces an APK that `apksigner verify` accepts under **v3**. The key has no password of its own, so
+the `PODSILO_KEY_PASSWORD` secret could not be created — GitHub rejects empty secrets — and the
+fallback added yesterday covers exactly that: blank means absent, absent means "the key shares the
+store password". Local and CI behave identically for the same reason.
+
+### The icon
+
+The audit's most embarrassing finding, fixed: `android:icon` pointed at
+`@android:mipmap/sym_def_app_icon`, the stock Android silhouette, with no `mipmap-*` resource in the
+tree at all. Eight screens designed in detail and nothing to tap on the launcher.
+
+Vector-only adaptive icon — no PNGs, no density buckets, nothing to keep in step by hand. `minSdk 33`
+makes that safe: adaptive icons landed in API 26, so every device that can install this app renders
+them. Three layers: the accent `#EC3013` as background so the launcher and the screens are visibly
+the same app, the mark as foreground, and the same mark again as `<monochrome>` for Android 13 themed
+icons.
+
+The mark is the app's own sentence rather than a genre cliché: a **silo**, an **episode dropping into
+it**, and the **pool collecting at the bottom**. No microphone — this app deliberately does not play
+audio — and no RSS wave, which every feed reader already wears.
+
+The constraint that shaped it: an adaptive icon is a 108×108 canvas of which launchers may mask
+anything outside the **central 66dp circle**, and they crop to circles, squircles and rounded squares
+depending on the device. Every point is inside it; the widest is the silo's bottom corner at (72,80),
+31.6 from centre. Drawn to the edges the outline itself would be the first thing lost.
+
+Verified on the launcher, and in the release build — where the check that mattered was not the one I
+first ran. `unzip | grep ic_launcher` returns **zero**, because resource shrinking renames resources:
+the icon is `res/BW.xml`, and `aapt2 dump badging` reporting `icon='res/BW.xml'` is what actually
+proves it resolves. Second time this week a plausible-looking grep would have reported a false
+failure about a release APK, after the `META-INF/*.RSA` signature check. **Minified artefacts do not
+answer questions phrased in terms of source names.**
+
+Still missing for store listings: a 512×512 raster. Play and F-Droid both want one and neither reads
+it from the APK, and this container has no image tooling at all — no ImageMagick, no rsvg, not even
+python3. Filed with the Fastlane metadata it belongs beside.
