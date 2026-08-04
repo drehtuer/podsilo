@@ -10,11 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,8 +46,8 @@ private const val COMMIT_THRESHOLD = 0.4f
  *    view model will act on.
  * 2. **The row springs back rather than dismissing.** Nothing is removed from the list by a triage
  *    decision — the episode gains a ledger state and is re-rendered greyed out, or leaves the
- *    current filter. The commit therefore reacts to the settled state and calls `reset()`; doing it
- *    in `confirmValueChange` fires it fourteen times per gesture (see the comment on the effect).
+ *    current filter. The commit therefore reacts to the settled state and snaps the row back; doing
+ *    it in `confirmValueChange` fires it fourteen times per gesture (see the comment on the effect).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,10 +65,25 @@ internal fun SwipeableEpisodeRow(
     val rightAction = mapping.actionFor(SwipeDirection.RIGHT)
     val leftAction = mapping.actionFor(SwipeDirection.LEFT)
 
+    // `remember`, NOT `rememberSwipeToDismissBoxState` — and the difference is a bug, not a style
+    // preference. That helper is `rememberSaveable`, so the drag offset is written to saved state and
+    // restored when the row comes back. Switching the filter chips detaches these rows and reattaches
+    // them, and a row whose swipe had not fully settled came back **still pushed aside, with the
+    // coloured panel showing**, exactly as reported.
+    //
+    // The worse half is invisible: `LaunchedEffect(state.currentValue)` below keys on that restored
+    // value, so a row restored in a non-settled position fires `SwipeCommitted` **again** — a second
+    // `PLAY` or `DOWNLOAD` for an episode the user swiped once, in an app whose triage has no undo.
+    //
+    // Keyed on `episodeKey` as well, so a LazyColumn slot reused for a different episode cannot
+    // inherit the previous one's offset either.
     val state =
-        rememberSwipeToDismissBoxState(
-            positionalThreshold = { distance -> distance * COMMIT_THRESHOLD },
-        )
+        remember(episode.episodeKey) {
+            SwipeToDismissBoxState(
+                initialValue = SwipeToDismissBoxValue.Settled,
+                positionalThreshold = { distance -> distance * COMMIT_THRESHOLD },
+            )
+        }
 
     // THE COMMIT LIVES HERE, NOT IN `confirmValueChange`.
     //
@@ -89,7 +105,12 @@ internal fun SwipeableEpisodeRow(
             } ?: return@LaunchedEffect
 
         onEvent(EpisodeListEvent.SwipeCommitted(episode.episodeKey, direction))
-        state.reset()
+        // `snapTo`, not `reset()`. `reset()` *animates* back over a few hundred milliseconds, and the
+        // coloured panel with its "Download" / "Mark as played" label is visible for all of it —
+        // while the list is simultaneously re-rendering the row greyed out or dropping it from the
+        // current filter. That overlap is the reported flashing. Snapping makes the return
+        // instantaneous, so the panel is only ever on screen while a finger is actually dragging.
+        state.snapTo(SwipeToDismissBoxValue.Settled)
     }
 
     SwipeToDismissBox(

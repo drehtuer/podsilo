@@ -2,6 +2,8 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
@@ -162,5 +164,76 @@ class EpisodeSwipeTest {
 
         // Nothing is removed by a triage decision — the episode gains a ledger state and re-renders.
         compose.onNodeWithText("Warum Hamburg immer regnet").assertExists()
+    }
+
+    /**
+     * A swipe followed by the row leaving and re-entering the list, as the filter chips make it do.
+     *
+     * **This is not a regression test, and saying so is the point.** The bug it is written around —
+     * a swiped row coming back still pushed aside after a filter switch — does **not** reproduce
+     * here: this passes against the broken implementation too, with the clock auto-advancing and
+     * with it driven frame by frame. Robolectric's Compose runtime does not restore
+     * `rememberSaveable` state through a `LazyColumn` detach the way the device does, so the
+     * mechanism the fix targets is simply not reachable from this source set. It was verified on the
+     * phone instead.
+     *
+     * What it does hold down is the invariant either way: one gesture commits exactly once, and the
+     * row ends up back where it started. That is worth keeping — it would catch a future change that
+     * broke those on *any* runtime.
+     */
+    @Test
+    fun `a filter switch after a swipe neither re-commits nor leaves the row pushed aside`() {
+        val showRow = mutableStateOf(true)
+        compose.setContent {
+            EpisodeListScreen(
+                state =
+                    EpisodeListUiState(
+                        feedUrl = FEED_URL,
+                        feedTitle = "Der Podcast",
+                        content =
+                            if (showRow.value) {
+                                EpisodeListUiState.Content.Episodes(listOf(row()))
+                            } else {
+                                EpisodeListUiState.Content.Empty(EpisodeFilter.DOWNLOADED)
+                            },
+                        swipeMapping = SwipeMapping(),
+                    ),
+                onEvent = { events += it },
+                zone = ZoneOffset.UTC,
+            )
+        }
+
+        val restingLeft = compose.onNodeWithText("Warum Hamburg immer regnet").getUnclippedBoundsInRoot().left
+
+        // The clock is driven by hand for this one. With the default auto-advancing clock the row
+        // finishes settling inside `performTouchInput`, so the filter switch lands on an already
+        // centred row and the bug cannot occur — a version of this test written that way passed
+        // against the broken code. The whole failure is a switch that arrives *mid-return*.
+        compose.mainClock.autoAdvance = false
+        compose
+            .onNodeWithText("Warum Hamburg immer regnet")
+            .performTouchInput { swipeRight(startX = left, endX = right, durationMillis = SWIPE_MS) }
+        compose.mainClock.advanceTimeByFrame()
+
+        showRow.value = false
+        compose.mainClock.advanceTimeByFrame()
+        showRow.value = true
+        compose.mainClock.autoAdvance = true
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+
+        assertEquals(
+            "one gesture, one commit: " + events.filterIsInstance<EpisodeListEvent.SwipeCommitted>(),
+            1,
+            events.filterIsInstance<EpisodeListEvent.SwipeCommitted>().size,
+        )
+        // The reported symptom, asserted directly: the row is back where it started rather than
+        // parked at the offset the swipe left it at. (Not "is the panel gone?" — the row's own
+        // action button is also labelled *Download*, so text alone cannot tell them apart.)
+        assertEquals(
+            "the row must be centred again after a filter switch",
+            restingLeft,
+            compose.onNodeWithText("Warum Hamburg immer regnet").getUnclippedBoundsInRoot().left,
+        )
     }
 }
