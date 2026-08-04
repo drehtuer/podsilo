@@ -89,19 +89,39 @@ android {
                 Properties().apply { propertiesFile.inputStream().use { load(it) } }
             }
 
+        // `isNotBlank`, not `!= null`: an unset GitHub secret arrives as an empty string rather than
+        // an absent variable, so `System.getenv` returns "" and `file("")` fails the whole build with
+        // "Cannot convert '' to File". Every unsigned CI run would break instead of building unsigned.
         fun setting(
             key: String,
             env: String,
-        ): String? = keystoreProperties?.getProperty(key) ?: System.getenv(env)
+        ): String? = (keystoreProperties?.getProperty(key) ?: System.getenv(env))?.takeIf { it.isNotBlank() }
 
-        val storePath = setting("storeFile", "PODSILO_KEYSTORE_FILE")
-        if (storePath != null && file(storePath).exists()) {
-            create("release") {
-                storeFile = file(storePath)
-                storePassword = setting("storePassword", "PODSILO_KEYSTORE_PASSWORD")
-                keyAlias = setting("keyAlias", "PODSILO_KEY_ALIAS")
-                keyPassword = setting("keyPassword", "PODSILO_KEY_PASSWORD")
-            }
+        // Relative paths resolve against the repository root, so one `keystore.properties` works from
+        // the dev container and the host alike — they do not agree on absolute paths.
+        val storeFile = setting("storeFile", "PODSILO_KEYSTORE_FILE")?.let { rootProject.file(it) }
+        when {
+            storeFile == null -> logger.info("No release keystore configured; the release build will be unsigned.")
+            !storeFile.exists() ->
+                logger.warn("Release keystore ${storeFile.path} does not exist — the release build will be UNSIGNED.")
+            else ->
+                create("release") {
+                    this.storeFile = storeFile
+                    storePassword = setting("storePassword", "PODSILO_KEYSTORE_PASSWORD")
+                    keyAlias = setting("keyAlias", "PODSILO_KEY_ALIAS")
+                    // keytool lets a key share the store's password, and leaving `keyPassword` empty
+                    // is how that is expressed. Passing "" instead would be rejected as a wrong one.
+                    keyPassword = setting("keyPassword", "PODSILO_KEY_PASSWORD") ?: storePassword
+
+                    // Stated rather than inherited. v1 (JAR signing) is dead weight at minSdk 33 —
+                    // it only matters below Android 7 — and it is the scheme that puts a
+                    // META-INF/*.RSA in the zip, so leaving it off is also why "is this APK signed?"
+                    // cannot be answered by looking for that file. v3 carries the key-rotation
+                    // lineage, which is worth having before a key is ever rotated, not after.
+                    enableV1Signing = false
+                    enableV2Signing = true
+                    enableV3Signing = true
+                }
         }
     }
 

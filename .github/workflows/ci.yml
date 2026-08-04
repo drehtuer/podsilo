@@ -122,9 +122,14 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           gh release upload "$TAG" app/build/outputs/apk/debug/podsilo-*-debug.apk --clobber
+
+          # `apksigner verify`, NOT a grep for META-INF/*.RSA. That file is produced by v1 (JAR)
+          # signing, which is off here — a correctly v2/v3-signed APK contains no such entry, so the
+          # obvious check rejects exactly the APKs it is meant to pass. Caught by building one.
           release_apk="$(ls app/build/outputs/apk/release/podsilo-*.apk 2>/dev/null | head -1)"
-          if [ -n "$release_apk" ] && unzip -l "$release_apk" | grep -qE 'META-INF/.*\.(RSA|DSA|EC)'; then
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          if [ -n "$release_apk" ] && "$apksigner" verify "$release_apk" >/dev/null 2>&1; then
               gh release upload "$TAG" "$release_apk" --clobber
           else
-              echo "::warning::Release APK is unsigned — not attached. Configure the keystore secrets (docs/dev-environment.md §9)."
+              echo "::warning::Release APK is missing or unsigned — not attached. See docs/dev-environment.md §10."
           fi
