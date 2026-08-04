@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.LoginFlowException
 import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
+import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
@@ -40,6 +43,7 @@ class ConnectViewModel(
     private val loginFlowClient: NextcloudLoginFlowClient,
     private val settingsRepository: SettingsRepository,
     private val syncTrigger: ConnectSyncTrigger,
+    private val logRepository: LogRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ConnectUiState())
     val state: StateFlow<ConnectUiState> = _state.asStateFlow()
@@ -117,8 +121,7 @@ class ConnectViewModel(
         val host = _state.value.host.trim()
         val invalid = hostProblem(host)
         if (invalid != null) {
-            _state.value = _state.value.copy(inlineError = invalid)
-            return
+            return fail(invalid, "host '$host' rejected before contacting anything")
         }
         flowJob?.cancel()
         pendingCredentials = null
@@ -158,19 +161,23 @@ class ConnectViewModel(
             loginFlowClient
                 .start(
                     baseUrl,
-                ).getOrElse { return fail(it.asConnectError(ConnectError.NOT_NEXTCLOUD)) }
+                ).getOrElse { return fail(it.asConnectError(ConnectError.NOT_NEXTCLOUD), it.message) }
         emit(ConnectEffect.OpenBrowser(flow.loginUrl))
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.AwaitingAuthorization)
 
         // Cancellation propagates on its own: the client's contract is that a cancelled poll simply
         // stops asking, so Cancel needs no unwinding here.
-        val result = loginFlowClient.poll(flow).getOrElse { return fail(it.asConnectError(ConnectError.ABANDONED)) }
+        val result =
+            loginFlowClient
+                .poll(
+                    flow,
+                ).getOrElse { return fail(it.asConnectError(ConnectError.ABANDONED), it.message) }
 
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.VerifyingGpodderSync)
         loginFlowClient.verifyGpodderSync(result.credentials).getOrElse {
             // The password is *not* stored: connecting to a Nextcloud without gpoddersync would
             // leave the user with an app that silently syncs nothing (docs/UI.md §8).
-            return fail(it.asConnectError(ConnectError.NO_GPODDERSYNC))
+            return fail(it.asConnectError(ConnectError.NO_GPODDERSYNC), it.message)
         }
 
         // STILL NOT STORED. The flow proved the server is a Nextcloud with gpoddersync and handed
@@ -185,8 +192,33 @@ class ConnectViewModel(
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.ConfirmingAccount(result.loginName))
     }
 
-    private fun fail(error: ConnectError) {
+    /**
+     * Shows the sentence, and **records the reason**.
+     *
+     * The dialog has room for one plain sentence, which is correct for it and useless for
+     * diagnosis: "Can't reach that address" is the same six words whether DNS failed, the server
+     * answered on a host the phone cannot route to, or Android refused a cleartext URL the server
+     * asked for. `docs/UI.md` §8 has said all along that these are "each also written to S8"; they
+     * were not. Now the underlying message — which names the host and the actual failure — lands in
+     * the error log, where it can be read, copied and shared.
+     *
+     * [detail] comes from an exception message, never from the credentials: the app password travels
+     * in an `Authorization` header, not in any URL that could end up here (`LogRepository.record`).
+     */
+    private fun fail(
+        error: ConnectError,
+        detail: String?,
+    ) {
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.Editing, inlineError = error)
+        viewModelScope.launch {
+            logRepository.record(
+                NewLogEntry(
+                    category = LogCategory.AUTH,
+                    message = "Connecting to Nextcloud failed: ${error.name}",
+                    detail = detail,
+                ),
+            )
+        }
     }
 
     private fun emit(effect: ConnectEffect) {
@@ -244,6 +276,7 @@ internal fun Throwable.asConnectError(fallback: ConnectError): ConnectError =
     when ((this as? LoginFlowException)?.failure) {
         LoginFlowFailure.UNREACHABLE -> ConnectError.UNREACHABLE
         LoginFlowFailure.TIMED_OUT -> ConnectError.TIMED_OUT
+        LoginFlowFailure.CLEARTEXT_BLOCKED -> ConnectError.CLEARTEXT_BLOCKED
         LoginFlowFailure.TLS -> ConnectError.TLS
         LoginFlowFailure.NOT_NEXTCLOUD -> ConnectError.NOT_NEXTCLOUD
         LoginFlowFailure.NO_GPODDERSYNC -> ConnectError.NO_GPODDERSYNC

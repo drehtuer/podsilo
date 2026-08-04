@@ -3017,3 +3017,44 @@ other in place: the install has to uninstall first, taking the ledger, the login
 with it. That is exactly the loss CLAUDE.md §11 calls the most important thing to protect, so it is
 in the notes as a warning with the backup step, not a footnote. Release-to-release upgrades from here
 are in place.
+
+---
+
+## 2026-08-04 — "can't reach that address" against a server that was perfectly reachable
+
+Reported against a *different* Nextcloud: the browser completes the grant and says so, and the app
+then reports the address as unreachable. Not a timeout — the login was quick.
+
+`start()` had clearly worked, because the browser opened. Everything after it uses URLs **the server
+supplies**: the poll endpoint and the `server` field. Nextcloud derives both from `overwriteprotocol`
+/ `overwrite.cli.url`, and behind a TLS-terminating reverse proxy those are very commonly left as
+`http`. The app has no cleartext permission and none should be added, so Android refuses the
+connection with `UnknownServiceException` — an `IOException`, which the client mapped to
+`UNREACHABLE`, which reads "check the spelling and your network". The address was never the problem
+and was never even the URL that failed.
+
+Three changes, in increasing order of how much they matter:
+
+1. **`CLEARTEXT_BLOCKED` is its own failure**, with a message naming `overwriteprotocol` — the fix is
+   on the server, and no amount of retyping the address reaches it.
+2. **Server-supplied URLs are upgraded to `https`**, never downgraded, when the flow started over
+   `https`. The author's rule for this app is that the conversation is encrypted by default, and
+   *following* the server's scheme verbatim is the one option that violates it permanently rather
+   than once: `server` is persisted, so a single misconfigured field would mean the app password in
+   cleartext on every later sync. Upgrading is safe in both directions — if the host truly has no TLS
+   listener the request fails loudly, which is the correct outcome.
+3. **The connect flow finally writes to the error log.** `docs/UI.md` §8 has claimed since the design
+   pass that these errors are "each also written to S8". They never were. The dialog has room for one
+   sentence, which is right for a dialog and useless for diagnosis — "can't reach that address" is
+   the same six words for a DNS failure, an unroutable host, and a refused cleartext URL. The
+   underlying message, which names the host and the actual refusal, now lands in S8 where it can be
+   read and shared.
+
+That third one is the real lesson. The bug was findable in minutes *because* the exception message
+existed; it just had nowhere to go. A design document asserting that errors are logged is not the
+same as errors being logged, and nothing failed when they were not.
+
+One test removed rather than kept: an attempt to assert the upgrade *through* `poll` passed whichever
+way the code behaved, because MockWebServer serves plain http and the branch is unreachable from this
+source set. The rule is tested directly instead, and the file says why. Second time this week a test
+that could not fail nearly got committed.

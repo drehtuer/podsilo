@@ -123,6 +123,12 @@ internal val ConnectError.message: String
             // Names the likeliest cause, because it is one the user can act on by waiting. Nextcloud
             // slows repeated authorization attempts down deliberately, and the old wording sent
             // people to re-check an address that was never wrong.
+            // Names the *server's* configuration, because that is where the fix is. The address the
+            // user typed is https and works; it is the URL Nextcloud reports for itself that is
+            // http, and no amount of retyping here changes it.
+            ConnectError.CLEARTEXT_BLOCKED ->
+                "This Nextcloud reports its own address as unencrypted http://, which Android " +
+                    "blocks. Set 'overwriteprotocol' => 'https' in the server's config.php."
             ConnectError.TIMED_OUT ->
                 "The server didn't answer in time. Nextcloud slows down repeated login attempts — " +
                     "wait a minute and try again."
