@@ -77,8 +77,15 @@ data class LoginResult(
  * single "login failed" hides both. It lives on the port rather than beside the Retrofit
  * implementation because the *kind* of failure is part of the contract the UI binds to — a caller
  * that cannot tell them apart can only ever show one message, which is the bug this prevents.
+ *
+ * [TIMED_OUT] is the same rule applied once more, and the case that proved it: it is deliberately
+ * **not** folded into [UNREACHABLE]. They arrive as the same exception type and were once the same
+ * message, which sent the user to check their spelling when the address was perfectly correct — the
+ * server was simply slow. Nextcloud's bruteforce protection makes that routine rather than exotic:
+ * repeated authorization attempts from one address get delayed further and further, until the answer
+ * arrives after the read timeout.
  */
-enum class LoginFlowFailure { UNREACHABLE, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
+enum class LoginFlowFailure { UNREACHABLE, TIMED_OUT, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
 
 /** Carries a [LoginFlowFailure] out through `Result.failure`. **Never contains a credential.** */
 class LoginFlowException(

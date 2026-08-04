@@ -243,6 +243,7 @@ fun interface ConnectSyncTrigger {
 internal fun Throwable.asConnectError(fallback: ConnectError): ConnectError =
     when ((this as? LoginFlowException)?.failure) {
         LoginFlowFailure.UNREACHABLE -> ConnectError.UNREACHABLE
+        LoginFlowFailure.TIMED_OUT -> ConnectError.TIMED_OUT
         LoginFlowFailure.TLS -> ConnectError.TLS
         LoginFlowFailure.NOT_NEXTCLOUD -> ConnectError.NOT_NEXTCLOUD
         LoginFlowFailure.NO_GPODDERSYNC -> ConnectError.NO_GPODDERSYNC

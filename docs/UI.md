@@ -620,11 +620,18 @@ S8):
 | Cause | Message |
 |---|---|
 | DNS / unreachable | "Can't reach that address. Check the spelling and your network." |
+| Timed out | "The server didn't answer in time. Nextcloud slows down repeated login attempts — wait a minute and try again." |
 | TLS error | "The server's certificate isn't trusted." |
 | No Login Flow v2 endpoint | "This doesn't look like a Nextcloud server." |
 | 404 on the gpoddersync path | "This Nextcloud doesn't have the GPodder Sync app installed." |
 | 401 after authorization | "Authorization was refused. Try again." |
 | Flow abandoned / timed out | "Authorization wasn't completed." |
+
+**A timeout is not an unreachable address.** They are the same exception and were once the same
+sentence, which sent the author to re-check a host name that was correct. Nextcloud's bruteforce
+protection **deliberately** delays repeated authorization attempts from one address, so "the server
+is slow because I just tried three times" is a routine state here, not an exotic one. The message
+therefore names waiting as the fix.
 
 **Changing an existing instance** — pre-filled with the current host, title reads *Change Nextcloud
 instance*, with a caution line: "Your download history is kept, so episodes you already handled stay

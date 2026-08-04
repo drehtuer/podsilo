@@ -7,8 +7,10 @@ import net.drehtuer.podsilo.core.model.port.LoginFlow
 import net.drehtuer.podsilo.core.model.port.LoginFlowException
 import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
+import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.toJavaDuration
 
 /**
  * Login Flow v2 against MockWebServer. The distinctions under test are the ones S5 renders as
@@ -86,6 +89,33 @@ class RetrofitNextcloudLoginFlowClientTest {
             val failure = client().start(baseUrl()).exceptionOrNull() as LoginFlowException
 
             assertEquals(LoginFlowFailure.UNREACHABLE, failure.failure)
+        }
+
+    /**
+     * The bug this separates out: a *correct* address on a *slow* server was reported as
+     * "can't reach that address, check the spelling", which sends the user to fix something that was
+     * never wrong. Nextcloud's bruteforce protection delays repeated authorization attempts, so this
+     * is the normal shape of "I tried to log in a few times in a row".
+     */
+    @Test
+    fun `a server that answers too slowly is a timeout, not an unreachable address`() =
+        runTest {
+            // NO_RESPONSE holds the connection open and never answers, which is what a throttled
+            // Nextcloud looks like to the client. The socket connects fine — only the read expires.
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+
+            val slowClient =
+                RetrofitNextcloudLoginFlowClient(
+                    httpClient =
+                        OkHttpClient
+                            .Builder()
+                            .readTimeout(250.milliseconds.toJavaDuration())
+                            .build(),
+                )
+
+            val failure = slowClient.start(baseUrl()).exceptionOrNull() as LoginFlowException
+
+            assertEquals(LoginFlowFailure.TIMED_OUT, failure.failure)
         }
 
     @Test
