@@ -55,7 +55,7 @@ data class ConnectUiState(
 }
 
 /** Each maps to one plain-language sentence — never a stack trace (`docs/UI.md` §8). */
-enum class ConnectError { UNREACHABLE, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
+enum class ConnectError { UNREACHABLE, TIMED_OUT, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
 
 sealed interface ConnectEvent {
     data class HostChanged(

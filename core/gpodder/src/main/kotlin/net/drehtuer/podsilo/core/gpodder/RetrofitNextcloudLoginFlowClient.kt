@@ -24,6 +24,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.SocketTimeoutException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -202,8 +203,16 @@ private suspend fun <T> runCatchingRequest(
             Result.failure(typed)
         } catch (tls: javax.net.ssl.SSLException) {
             Result.failure(LoginFlowException(LoginFlowFailure.TLS, tls.message ?: "the certificate isn't trusted"))
+        } catch (timeout: SocketTimeoutException) {
+            // BEFORE the IOException branch, which it is a subclass of, and separate from it because
+            // the two need different words. A timeout was once reported as "can't reach that address,
+            // check the spelling" — advice that sends the user to fix a host name that was right all
+            // along. Nextcloud's bruteforce protection delays repeated authorization attempts from
+            // the same address, so a *correct* server answering slowly is a normal case here.
+            val why = timeout.message ?: "the server did not answer"
+            Result.failure(LoginFlowException(LoginFlowFailure.TIMED_OUT, why))
         } catch (io: IOException) {
-            // DNS failure, connection refused, timeout — all "can't reach that address" to the user.
+            // DNS failure, connection refused, no route — genuinely "can't reach that address".
             Result.failure(LoginFlowException(LoginFlowFailure.UNREACHABLE, io.message ?: "could not reach the server"))
         }
     }

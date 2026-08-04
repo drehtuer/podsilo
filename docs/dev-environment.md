@@ -678,7 +678,85 @@ Recovery is always: `adb kill-server` in the container, then `adb devices` in WS
 
 ---
 
-## 10. Version reference
+## 10. Builds, versioning and release signing
+
+### What each build is
+
+| Build | File | What it is |
+|---|---|---|
+| `./gradlew assembleDebug` | `app/build/outputs/apk/debug/podsilo-<version>-debug.apk` | Debuggable, unminified, ~58 MB. Signed with AGP's debug keystore, so it installs as-is. **This is the sideload build.** |
+| `./gradlew assembleRelease` | `app/build/outputs/apk/release/podsilo-<version>.apk` | R8-minified and resource-shrunk, ~4.8 MB. Signed **only** if a keystore is configured (below); unsigned APKs cannot be installed. |
+
+Both names come from `androidComponents.onVariants` in `app/build.gradle.kts`. AGP's default is
+`app-debug.apk`, which names the *module* — useless as a release asset and indistinguishable between
+versions in a downloads folder.
+
+### Version numbers
+
+- **`versionName`** (`0.1.0`) is set by hand in `app/build.gradle.kts`. It is the only number a human
+  chooses.
+- **`versionCode`** is `git rev-list --count HEAD`, evaluated at configuration time. It only ever
+  grows, needs no state outside the repository, and is the same on CI and on a laptop for the same
+  commit — which a CI run number would not be. A shallow clone has no history and falls back to `1`,
+  which is why the CI checkout uses `fetch-depth: 0`.
+- **`BuildConfig.BUILD_TIME`** and **`GIT_SHA`** are generated per build and shown in Settings →
+  About → *Build*, so "is this the build I just installed?" is answerable on the phone. `versionName`
+  alone cannot answer it: `0.1.0` stays `0.1.0` across every sideload of the day.
+
+### Creating a release keystore
+
+**The keystore is yours and is never committed** — `.gitignore` covers `*.jks` and
+`keystore.properties`. Generate one once and keep it safe: losing it means no future build can
+upgrade an installed app in place, because Android identifies an app by its signature.
+
+```bash
+keytool -genkeypair -v \
+  -keystore podsilo-release.jks \
+  -alias podsilo \
+  -keyalg RSA -keysize 4096 -validity 10000 \
+  -dname "CN=Podsilo, O=drehtuer, C=DE"
+```
+
+Then, in the repository root, create `keystore.properties`:
+
+```properties
+storeFile=/absolute/path/to/podsilo-release.jks
+storePassword=…
+keyAlias=podsilo
+keyPassword=…
+```
+
+`./gradlew assembleRelease` now produces a signed APK. Without the file (or the environment variables
+below) the release build still succeeds, unsigned — deliberately, so a release build can be inspected
+without holding the key.
+
+### Signing on CI
+
+The workflow reads the same values from environment variables, populated from repository secrets:
+
+| Secret | Value |
+|---|---|
+| `PODSILO_KEYSTORE_BASE64` | `base64 -w0 podsilo-release.jks` |
+| `PODSILO_KEYSTORE_PASSWORD` | `storePassword` |
+| `PODSILO_KEY_ALIAS` | `podsilo` |
+| `PODSILO_KEY_PASSWORD` | `keyPassword` |
+
+The keystore is decoded into `$RUNNER_TEMP` for the length of the job and dies with the runner.
+
+**Until those secrets exist, a published release gets the debug APK only.** The release job checks
+the APK for a signature block and refuses to attach an unsigned one — a file that downloads like a
+real build and then refuses to install is worse than a missing file.
+
+### Installing a release build over a debug one
+
+You can't, directly. They are signed with different keys, so Android refuses the upgrade and the
+install must uninstall first — **which erases the episode ledger, the Nextcloud login and the SAF
+folder grant**. Export a backup from Settings first (`docs/decisions/0018`), and expect to reconnect
+and re-grant afterwards.
+
+---
+
+## 11. Version reference
 
 Verified inside the container on 2026-07-31.
 

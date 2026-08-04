@@ -29,6 +29,7 @@ data class SettingsUiState(
     val theme: ThemePreference = ThemePreference.SYSTEM,
     val errorLogCount: Int = 0,
     val version: String = "",
+    val build: String = "",
     val pendingBulk: BulkConfirmation? = null,
     /** Shown before the file picker opens, because a restore cannot be undone. */
     val restoreConfirmationVisible: Boolean = false,

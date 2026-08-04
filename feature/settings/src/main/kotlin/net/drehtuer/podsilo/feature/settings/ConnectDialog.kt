@@ -120,6 +120,12 @@ internal val ConnectError.message: String
     get() =
         when (this) {
             ConnectError.UNREACHABLE -> "Can't reach that address. Check the spelling and your network."
+            // Names the likeliest cause, because it is one the user can act on by waiting. Nextcloud
+            // slows repeated authorization attempts down deliberately, and the old wording sent
+            // people to re-check an address that was never wrong.
+            ConnectError.TIMED_OUT ->
+                "The server didn't answer in time. Nextcloud slows down repeated login attempts — " +
+                    "wait a minute and try again."
             ConnectError.TLS -> "The server's certificate isn't trusted."
             ConnectError.NOT_NEXTCLOUD -> "This doesn't look like a Nextcloud server."
             ConnectError.NO_GPODDERSYNC -> "This Nextcloud doesn't have the GPodder Sync app installed."
