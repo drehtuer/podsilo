@@ -25,6 +25,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.net.UnknownServiceException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -76,11 +77,13 @@ class RetrofitNextcloudLoginFlowClient(
                 }
                 val body: String = response.body.string()
                 val dto = loginJson.decodeFromString(LoginFlowStartDto.serializer(), body)
+                // Host and path come from the server rather than being rebuilt locally — a Nextcloud
+                // behind a reverse proxy can legitimately answer on a different host. The *scheme*
+                // does not: see [keepingSchemeAtLeastAsSecureAs].
+                val secure = root.isHttps
                 LoginFlow(
-                    loginUrl = dto.login,
-                    // Both URLs come from the server rather than being rebuilt locally: a Nextcloud
-                    // behind a reverse proxy can legitimately answer on a different host.
-                    pollEndpoint = dto.poll.endpoint,
+                    loginUrl = dto.login.keepingSchemeAtLeastAsSecureAs(secure),
+                    pollEndpoint = dto.poll.endpoint.keepingSchemeAtLeastAsSecureAs(secure),
                     token = dto.poll.token,
                 )
             }
@@ -106,7 +109,14 @@ class RetrofitNextcloudLoginFlowClient(
                             val body: String = response.body.string()
                             val dto = loginJson.decodeFromString(LoginPollDto.serializer(), body)
                             return@runCatchingRequest LoginResult(
-                                serverUrl = dto.server,
+                                // The scheme this poll was made over is the floor. `dto.server` is
+                                // the URL every later request uses, and it is stored — a downgrade
+                                // here would put the app password on the wire in plaintext forever
+                                // after, not just once.
+                                serverUrl =
+                                    dto.server.keepingSchemeAtLeastAsSecureAs(
+                                        flow.pollEndpoint.startsWith("https://"),
+                                    ),
                                 loginName = dto.loginName,
                                 appPassword = dto.appPassword,
                             )
@@ -156,6 +166,29 @@ class RetrofitNextcloudLoginFlowClient(
 }
 
 /**
+ * Upgrades a **server-supplied** URL to `https` when the conversation so far has been over `https`.
+ * Never downgrades, and never touches a URL that is already `https`.
+ *
+ * Login Flow v2 hands back three URLs the client is obliged to use — the browser page, the poll
+ * endpoint, and the `server` that every later request is built on — and Nextcloud derives them from
+ * its own `overwriteprotocol` / `overwrite.cli.url` settings. Behind a reverse proxy that terminates
+ * TLS, those are very often left as `http`, so a server reached perfectly well over `https` reports
+ * itself as plaintext. Android then refuses the connection and the app fails **after** a successful
+ * grant, on a URL the user never typed and cannot see.
+ *
+ * Following that scheme verbatim would be worse than failing: `serverUrl` is persisted, so one
+ * misconfigured field would put the app password on the wire in cleartext on every sync from then
+ * on. Upgrading is the only direction that is safe in both cases — if the host genuinely has no TLS
+ * listener the request fails loudly, which is the correct outcome when the requirement is that this
+ * conversation is encrypted.
+ *
+ * A user who *explicitly typed* `http://` gets [secure] = false and their choice is left alone; that
+ * request is then Android's to refuse, and it reports [LoginFlowFailure.CLEARTEXT_BLOCKED].
+ */
+internal fun String.keepingSchemeAtLeastAsSecureAs(secure: Boolean): String =
+    if (secure && startsWith("http://")) "https://" + removePrefix("http://") else this
+
+/**
  * Accepts what a person actually types: a bare host, an explicit scheme, or a subdirectory install
  * — Nextcloud in a subdirectory is common enough that rejecting a path would be wrong. Returns
  * `null` for anything OkHttp cannot make a URL of.
@@ -166,6 +199,9 @@ class RetrofitNextcloudLoginFlowClient(
  * on the wire in plaintext. Neither is ours to decide here: S5's field renders a fixed `https://`
  * prefix (`docs/UI.md` §8), so the UI is where the default is made visible, and this stays
  * consistent with `RetrofitGpodderClient`, which honours the stored URL's scheme too.
+ *
+ * This applies to what the **user** typed. URLs the *server* hands back are a different question,
+ * answered by [keepingSchemeAtLeastAsSecureAs].
  */
 internal fun String.normalisedRoot(): HttpUrl? {
     val trimmed = trim()
@@ -211,8 +247,16 @@ private suspend fun <T> runCatchingRequest(
             // the same address, so a *correct* server answering slowly is a normal case here.
             val why = timeout.message ?: "the server did not answer"
             Result.failure(LoginFlowException(LoginFlowFailure.TIMED_OUT, why))
+        } catch (cleartext: UnknownServiceException) {
+            // Android's own refusal to open a plain http:// connection, which arrives as a plain
+            // IOException and used to be indistinguishable from a wrong host name. It is nearly
+            // always a *server* URL rather than the typed one — see LoginFlowFailure.CLEARTEXT_BLOCKED.
+            val why = cleartext.message ?: "an unencrypted http:// connection was refused"
+            Result.failure(LoginFlowException(LoginFlowFailure.CLEARTEXT_BLOCKED, why))
         } catch (io: IOException) {
             // DNS failure, connection refused, no route — genuinely "can't reach that address".
+            // The message is kept: it names the host that actually failed, which is the one piece of
+            // information the user needs when it is not the host they typed.
             Result.failure(LoginFlowException(LoginFlowFailure.UNREACHABLE, io.message ?: "could not reach the server"))
         }
     }

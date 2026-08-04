@@ -118,6 +118,45 @@ class RetrofitNextcloudLoginFlowClientTest {
             assertEquals(LoginFlowFailure.TIMED_OUT, failure.failure)
         }
 
+    /**
+     * The reported failure: browser says "access granted", app says "can't reach that address".
+     *
+     * A Nextcloud behind a TLS-terminating proxy without `overwriteprotocol` reports its own URLs as
+     * `http`, and the client is obliged to use them. Android refuses the cleartext connection, so the
+     * flow dies *after* the grant on a URL the user never typed. Following the scheme verbatim would
+     * be worse than failing — `server` is persisted, so it would mean the app password in plaintext
+     * on every later sync.
+     */
+    @Test
+    fun `http URLs from an https server are upgraded rather than followed`() {
+        assertEquals(
+            "https://cloud.example.org/index.php/login/v2/poll",
+            "http://cloud.example.org/index.php/login/v2/poll".keepingSchemeAtLeastAsSecureAs(secure = true),
+        )
+        // Already secure: untouched.
+        assertEquals(
+            "https://cloud.example.org",
+            "https://cloud.example.org".keepingSchemeAtLeastAsSecureAs(secure = true),
+        )
+        // A deliberately typed http:// instance is the user's call, not ours to rewrite. Android
+        // then refuses it, and that arrives as CLEARTEXT_BLOCKED rather than as a wrong address.
+        assertEquals(
+            "http://nextcloud.lan",
+            "http://nextcloud.lan".keepingSchemeAtLeastAsSecureAs(secure = false),
+        )
+        // Never a downgrade, whatever the flag says.
+        assertEquals(
+            "https://cloud.example.org",
+            "https://cloud.example.org".keepingSchemeAtLeastAsSecureAs(secure = false),
+        )
+    }
+
+    /**
+     * The upgrade *through* `poll` and `start` is not asserted here, deliberately: MockWebServer
+     * serves plain http, so `secure` is false for every request in this file and the branch cannot
+     * be reached. Rather than an https MockWebServer purely to re-check one boolean, the rule itself
+     * is tested above and the two call sites pass it by construction.
+     */
     @Test
     fun `polling keeps waiting through 404s and returns the app password once granted`() =
         runTest {

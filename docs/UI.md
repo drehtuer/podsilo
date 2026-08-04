@@ -621,11 +621,25 @@ S8):
 |---|---|
 | DNS / unreachable | "Can't reach that address. Check the spelling and your network." |
 | Timed out | "The server didn't answer in time. Nextcloud slows down repeated login attempts — wait a minute and try again." |
+| Cleartext refused | "This Nextcloud reports its own address as unencrypted http://, which Android blocks. Set 'overwriteprotocol' => 'https' in the server's config.php." |
 | TLS error | "The server's certificate isn't trusted." |
 | No Login Flow v2 endpoint | "This doesn't look like a Nextcloud server." |
 | 404 on the gpoddersync path | "This Nextcloud doesn't have the GPodder Sync app installed." |
 | 401 after authorization | "Authorization was refused. Try again." |
 | Flow abandoned / timed out | "Authorization wasn't completed." |
+
+**The connection is HTTPS by default, and stays HTTPS.** The three URLs Login Flow v2 hands back —
+the browser page, the poll endpoint, and the `server` every later request is built on — come from
+Nextcloud's own `overwriteprotocol` / `overwrite.cli.url`, and behind a TLS-terminating proxy they
+are very often left as `http`. Podsilo **upgrades** those to `https` when the flow was started over
+`https`, and never downgrades. Following them verbatim would be worse than failing: `server` is
+persisted, so one misconfigured field would put the app password on the wire in cleartext on every
+sync from then on. A user who explicitly typed `http://` keeps their choice, and Android's refusal is
+then reported as *Cleartext refused* rather than as a wrong address.
+
+**Every inline error is also written to S8** with the underlying message — the host that actually
+failed and what it did. The dialog has room for one sentence, which is right for it and useless for
+diagnosis; the log is where "can't reach that address" becomes answerable.
 
 **A timeout is not an unreachable address.** They are the same exception and were once the same
 sentence, which sent the author to re-check a host name that was correct. Nextcloud's bruteforce

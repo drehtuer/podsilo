@@ -19,9 +19,13 @@ import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.LogEntry
+import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.LoginFlow
 import net.drehtuer.podsilo.core.model.port.LoginResult
 import net.drehtuer.podsilo.core.model.port.NamingSettings
+import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.NextcloudAccount
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
@@ -269,4 +273,23 @@ class FakeDatabaseArchive(
         imported += sourceUri
         return outcome
     }
+}
+
+/**
+ * Records what S5 writes to the error log. Its whole reason for existing is that "Can't reach that
+ * address" is the same six words for a DNS failure, an unroutable host and a refused cleartext URL —
+ * the *detail* is what makes those three tellable apart, and it belongs somewhere assertable.
+ */
+class FakeLogRepository : LogRepository {
+    val recorded = mutableListOf<NewLogEntry>()
+
+    override fun observe(category: LogCategory?): Flow<List<LogEntry>> = MutableStateFlow(emptyList())
+
+    override suspend fun record(entry: NewLogEntry) {
+        recorded += entry
+    }
+
+    override suspend fun clear() = Unit
+
+    override suspend fun exportPlainText(): String = ""
 }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import net.drehtuer.podsilo.core.model.port.LogCategory
 import net.drehtuer.podsilo.core.model.port.LoginFlowException
 import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
@@ -40,7 +41,9 @@ class ConnectViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = ConnectViewModel(client, settings, syncTrigger)
+    private val log = FakeLogRepository()
+
+    private fun viewModel() = ConnectViewModel(client, settings, syncTrigger, log)
 
     @Test
     fun `a successful flow stores the credentials and kicks off the first sync`() =
@@ -217,6 +220,38 @@ class ConnectViewModelTest {
 
             assertEquals("cloud.example.org", viewModel.state.value.host)
             assertTrue(viewModel.state.value.isChangingExisting)
+        }
+
+    /**
+     * `docs/UI.md` §8 has always said the inline errors are "each also written to S8". They were
+     * not, and the cost showed up the first time a connection failed against an unfamiliar server:
+     * the dialog says "Can't reach that address", which is the same six words whether DNS failed,
+     * the host is unroutable, or Android refused a cleartext URL the *server* asked for. Only the
+     * underlying message tells those apart, and it was being dropped.
+     */
+    @Test
+    fun `a failed connection records the underlying reason in the error log`() =
+        runTest {
+            client.startResult =
+                Result.failure(
+                    LoginFlowException(
+                        LoginFlowFailure.CLEARTEXT_BLOCKED,
+                        "CLEARTEXT communication to cloud.example.org not permitted",
+                    ),
+                )
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.AUTH, entry.category)
+            assertTrue("names the failure kind, got '${entry.message}'", entry.message.contains("CLEARTEXT_BLOCKED"))
+            // The part that makes it diagnosable: the host and the actual refusal, not a category.
+            assertEquals("CLEARTEXT communication to cloud.example.org not permitted", entry.detail)
         }
 
     @Test

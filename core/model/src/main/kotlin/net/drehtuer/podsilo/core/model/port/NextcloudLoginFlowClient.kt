@@ -85,7 +85,28 @@ data class LoginResult(
  * repeated authorization attempts from one address get delayed further and further, until the answer
  * arrives after the read timeout.
  */
-enum class LoginFlowFailure { UNREACHABLE, TIMED_OUT, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
+enum class LoginFlowFailure {
+    UNREACHABLE,
+    TIMED_OUT,
+
+    /**
+     * Android refused the connection because it would have been plain `http://`.
+     *
+     * Its own case because it is the one failure here the *server operator* has to fix, and because
+     * it strikes where nobody looks for it: **after** a successful grant. Login Flow v2 hands back a
+     * `server` URL and a poll endpoint that the client is required to use verbatim, and a Nextcloud
+     * behind a reverse proxy without `overwriteprotocol=https` reports them as `http://`. So the
+     * typed address is https, the browser says "access granted", and the app then fails on a URL the
+     * user never saw. Reported as "can't reach that address", it sends them to check a host name
+     * that was right all along.
+     */
+    CLEARTEXT_BLOCKED,
+    TLS,
+    NOT_NEXTCLOUD,
+    NO_GPODDERSYNC,
+    UNAUTHORIZED,
+    ABANDONED,
+}
 
 /** Carries a [LoginFlowFailure] out through `Result.failure`. **Never contains a credential.** */
 class LoginFlowException(

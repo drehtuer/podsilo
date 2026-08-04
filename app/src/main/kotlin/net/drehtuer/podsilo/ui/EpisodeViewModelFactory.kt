@@ -125,7 +125,7 @@ class EpisodeViewModelFactory
             }
 
         fun connect(): ViewModelProvider.Factory =
-            factory { ConnectViewModel(loginFlowClient, settingsRepository, syncTrigger) }
+            factory { ConnectViewModel(loginFlowClient, settingsRepository, syncTrigger, logRepository) }
 
         fun naming(): ViewModelProvider.Factory = factory { NamingViewModel(settingsRepository, namingSample) }
 
