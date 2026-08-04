@@ -3058,3 +3058,54 @@ One test removed rather than kept: an attempt to assert the upgrade *through* `p
 way the code behaved, because MockWebServer serves plain http and the branch is unreachable from this
 source set. The rule is tested directly instead, and the file says why. Second time this week a test
 that could not fail nearly got committed.
+
+---
+
+## 2026-08-04 — the release-vs-debug bug that was neither
+
+Closing out the "release APK can't connect" report. It does not reproduce. Five runs on the Pixel 5,
+each with the minified release installed under a throwaway `applicationIdSuffix` so the author's own
+install was never touched:
+
+| build | account | result |
+|---|---|---|
+| v0.2.0 release | podsilo | reached the confirmation dialog |
+| #40 release | podsilo | reached the confirmation dialog |
+| **main release** | **drehtuer** | **connected, subscriptions pulled, error log empty** |
+| main debug | podsilo | connected, syncing |
+
+Reaching `ConfirmingAccount` is the proof that matters: it is only entered after `poll()` returns
+credentials *and* `verifyGpodderSync()` gets a 200. So under R8 the TLS stack, kotlinx.serialization,
+the poll loop and the authenticated request all work — including on plain v0.2.0, the exact build
+that was reported broken.
+
+What was actually wrong: the app had **no Nextcloud credentials at all**, while the SAF folder grant
+and the naming settings were intact. Only one code path clears them (`SettingsViewModel.disconnect`,
+reached solely by tapping *Disconnect*), so the connection had been dropped by hand at some point.
+An app in that state shows the empty "Connect Nextcloud" state, and every reconnect is a fresh flow
+against a server that by then had been hammered — which v0.2.0 reports as "Can't reach that address"
+whether the cause is DNS, an unroutable host, or Nextcloud's rate limiting. #40 is what splits those
+apart.
+
+### Three ways I made this harder than it was
+
+1. **I confounded the experiment myself.** I installed the #40 *debug* build on the phone while the
+   author was testing a v0.2.0 *release* APK, then spent a round reasoning about "debug vs release"
+   — a comparison I had personally invalidated.
+2. **I read `usage.txt` as evidence of breakage.** `PlatformRegistry` and `AndroidPlatform.trustManager`
+   appear there as "removed", which looks alarming and means nothing on its own: R8 lists *inlined*
+   classes the same way. A static listing should never have outranked a running build.
+3. **I did not check the obvious state first.** "Is it still connected?" would have found this in one
+   screenshot, before any APK was built.
+
+The rule worth keeping: **when a bug is reported as A-vs-B, verify that A and B are the only
+difference before reasoning about A and B.**
+
+### Handling the personal account
+
+The last run required the `drehtuer` account, which carries a standing rule that it must never have
+episodes marked played. Two safeguards, both deliberate: a throwaway `applicationId` so the install
+had an empty ledger, and the knowledge that the outbox only pushes rows with `syncedToServer = false`
+— of which a fresh install has none. The sync therefore read the subscription list and the action log
+and wrote nothing. The app password it minted is the one residue, and revoking it is a manual step
+flagged to the author rather than something to leave implied.
