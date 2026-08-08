@@ -2,6 +2,8 @@
 
 package net.drehtuer.podsilo.feature.settings
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -229,7 +231,39 @@ class FakeLoginFlowClient(
         return startResult
     }
 
-    override suspend fun poll(flow: LoginFlow): Result<LoginResult> = pollResult
+    var pollCount: Int = 0
+    var pollsCancelled: Int = 0
+
+    /**
+     * When true, `poll` **waits** instead of returning at once, and [grantAccess] releases it.
+     *
+     * A real poll is a loop that sits there until the user grants access in a browser, and every
+     * interesting property of `docs/decisions/0020` — that backgrounding cancels the wait, that
+     * returning resumes it — is invisible against a fake that has already returned by the time the
+     * test can background anything.
+     */
+    var suspendPoll: Boolean = false
+    private var gate: CompletableDeferred<Unit>? = null
+
+    override suspend fun poll(flow: LoginFlow): Result<LoginResult> {
+        pollCount++
+        if (suspendPoll) {
+            val waiting = CompletableDeferred<Unit>()
+            gate = waiting
+            try {
+                waiting.await()
+            } catch (cancellation: CancellationException) {
+                pollsCancelled++
+                throw cancellation
+            }
+        }
+        return pollResult
+    }
+
+    /** The user granting access in the browser. */
+    fun grantAccess() {
+        gate?.complete(Unit)
+    }
 
     override suspend fun verifyGpodderSync(credentials: NextcloudCredentials): Result<Unit> = verifyResult
 

@@ -43,7 +43,18 @@ class ConnectViewModelTest {
 
     private val log = FakeLogRepository()
 
-    private fun viewModel() = ConnectViewModel(client, settings, syncTrigger, log)
+    /**
+     * A view model whose dialog is **on screen**, which is the state every test here but the
+     * lifecycle ones assumes: you cannot tap *Request authorization* on a dialog you cannot see.
+     *
+     * The foreground event is not a default on the view model, deliberately — it starts `false`, so
+     * a host that forgets to wire the lifecycle polls never rather than polling in the background,
+     * which is the failure `docs/decisions/0020` exists to prevent.
+     */
+    private fun viewModel() =
+        ConnectViewModel(client, settings, syncTrigger, log).also {
+            it.onEvent(ConnectEvent.ForegroundChanged(inForeground = true))
+        }
 
     @Test
     fun `a successful flow stores the credentials and kicks off the first sync`() =
@@ -252,6 +263,86 @@ class ConnectViewModelTest {
             assertTrue("names the failure kind, got '${entry.message}'", entry.message.contains("CLEARTEXT_BLOCKED"))
             // The part that makes it diagnosable: the host and the actual refusal, not a category.
             assertEquals("CLEARTEXT communication to cloud.example.org not permitted", entry.detail)
+        }
+
+    /**
+     * The Pixel 10a bug (`docs/decisions/0020`).
+     *
+     * `start()` succeeds and the browser opens — which *backgrounds this app*. On Android 17 the
+     * backgrounded process could not resolve the host, and one `UnknownHostException` killed the
+     * whole poll while the browser still said "access granted". Nothing may poll while the user is
+     * away, so the failure has no opportunity to happen.
+     */
+    @Test
+    fun `backgrounding stops the poll instead of failing the flow`() =
+        runTest {
+            client.suspendPoll = true
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                assertEquals(ConnectEffect.OpenBrowser("https://cloud.example.org/login/flow"), awaitItem())
+
+                // Opening the browser backgrounds us — this is not an edge case, it is every login.
+                viewModel.onEvent(ConnectEvent.ForegroundChanged(inForeground = false))
+                expectNoEvents()
+            }
+
+            assertEquals("the wait must be cancelled, not left running", 1, client.pollsCancelled)
+            // Still waiting, NOT failed: the old code turned this into "Can't reach that address".
+            assertEquals(ConnectUiState.Phase.AwaitingAuthorization, viewModel.state.value.phase)
+            assertNull(viewModel.state.value.inlineError)
+            assertNull(settings.storedCredentials)
+        }
+
+    @Test
+    fun `returning to the foreground resumes the poll and completes the login`() =
+        runTest {
+            client.suspendPoll = true
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.ForegroundChanged(inForeground = false))
+
+                // The user grants in the browser and comes back — what the design relies on.
+                viewModel.onEvent(ConnectEvent.ForegroundChanged(inForeground = true))
+                client.grantAccess()
+
+                assertEquals(
+                    ConnectUiState.Phase.ConfirmingAccount("author"),
+                    viewModel.state.value.phase,
+                )
+                viewModel.onEvent(ConnectEvent.ConfirmAccount)
+                assertEquals(ConnectEffect.Connected, awaitItem())
+            }
+
+            assertEquals(
+                NextcloudCredentials("https://cloud.example.org", "author", "app-password"),
+                settings.storedCredentials,
+            )
+        }
+
+    /** Two `ON_START`s in a row (a config change, a shade pull) must not start a second poll. */
+    @Test
+    fun `a repeated foreground event does not start a second poll`() =
+        runTest {
+            client.suspendPoll = true
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.ForegroundChanged(inForeground = true))
+                viewModel.onEvent(ConnectEvent.ForegroundChanged(inForeground = true))
+                expectNoEvents()
+            }
+
+            assertEquals("one flow, one poll", 1, client.pollCount)
         }
 
     @Test

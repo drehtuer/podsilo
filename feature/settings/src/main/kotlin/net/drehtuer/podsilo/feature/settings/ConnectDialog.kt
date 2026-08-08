@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
@@ -38,6 +39,17 @@ fun ConnectDialog(
     onEvent: (ConnectEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The poll's on/off switch (`docs/decisions/0020`). `ON_START`/`ON_STOP` rather than
+    // resume/pause: the browser covering us is a stop, and a system dialog or the notification
+    // shade is only a pause — pausing on those would drop the poll for a shade pull-down.
+    //
+    // The dialog is the right place for this. The view model must not observe a lifecycle, and the
+    // activity does not know whether this dialog is on screen.
+    LifecycleStartEffect(onEvent) {
+        onEvent(ConnectEvent.ForegroundChanged(inForeground = true))
+        onStopOrDispose { onEvent(ConnectEvent.ForegroundChanged(inForeground = false)) }
+    }
+
     val confirming = state.confirming
     AlertDialog(
         modifier = modifier,

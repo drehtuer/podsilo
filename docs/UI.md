@@ -546,6 +546,13 @@ host, no spaces, optional `:port` and path allowed (Nextcloud in a subdirectory 
 button replaced by a spinner labelled **Waiting for authorization in your browser…**, Cancel stays
 enabled and aborts the poll.
 
+**The poll runs only while this dialog is on screen** (`docs/decisions/0020`). Opening the browser
+backgrounds the app, and the poll stops until the user comes back — which they must do anyway, since
+the whole point is to return with access granted. On Android 17 a backgrounded process could not
+resolve the host at all, and a single failure abandoned the entire flow while the browser was still
+reporting success; not making the call is what fixed it. The user sees nothing different: the spinner
+is up while they are away, and the login completes moments after they return.
+
 ```mermaid
 sequenceDiagram
     participant U as User
