@@ -91,6 +91,10 @@ class RetrofitNextcloudLoginFlowClient(
 
     override suspend fun poll(flow: LoginFlow): Result<LoginResult> =
         runCatchingRequest(ioDispatcher) {
+            // The last network error seen, so an exhausted poll can say *why* rather than blaming
+            // the user for not completing an authorization they may well have completed.
+            var lastNetworkFailure: IOException? = null
+
             repeat(maxPollAttempts) {
                 val request =
                     Request
@@ -100,7 +104,26 @@ class RetrofitNextcloudLoginFlowClient(
                         .header("User-Agent", USER_AGENT)
                         .build()
 
-                httpClient.newCall(request).execute().use { response ->
+                // A NETWORK FAILURE ON ONE ATTEMPT IS NOT THE END OF THE FLOW.
+                //
+                // This whole loop used to sit inside `runCatchingRequest` with nothing catching per
+                // attempt, so one `IOException` — a DNS blip, a Wi-Fi/mobile handover — abandoned all
+                // 200 attempts and reported "can't reach that address" while the user was still
+                // completing the grant in their browser. Since `docs/decisions/0020` the poll only
+                // runs in the foreground, which removes the cause that was actually biting; this
+                // keeps a *foreground* blip from costing the flow too. `execute()` is the only thing
+                // guarded — a malformed body or an unexpected status still fails immediately, because
+                // those will not fix themselves by asking again.
+                val response =
+                    try {
+                        httpClient.newCall(request).execute()
+                    } catch (io: IOException) {
+                        lastNetworkFailure = io
+                        delay(pollInterval)
+                        return@repeat
+                    }
+
+                response.use { response ->
                     when (response.code) {
                         // 404 is Nextcloud's "not granted yet" — the documented pending state, not
                         // an error. Treating it as one would abandon every flow on the first poll.
@@ -126,6 +149,9 @@ class RetrofitNextcloudLoginFlowClient(
                 }
                 delay(pollInterval)
             }
+            // Exhausted. If the last thing that happened was a network failure, say that rather than
+            // "authorization wasn't completed" — the user may well have completed it.
+            lastNetworkFailure?.let { throw it }
             throw LoginFlowException(LoginFlowFailure.ABANDONED, "authorization was not completed in time")
         }
 

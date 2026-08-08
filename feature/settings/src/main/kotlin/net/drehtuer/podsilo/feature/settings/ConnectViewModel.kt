@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import net.drehtuer.podsilo.core.model.port.LogCategory
 import net.drehtuer.podsilo.core.model.port.LogRepository
+import net.drehtuer.podsilo.core.model.port.LoginFlow
 import net.drehtuer.podsilo.core.model.port.LoginFlowException
 import net.drehtuer.podsilo.core.model.port.LoginFlowFailure
 import net.drehtuer.podsilo.core.model.port.NewLogEntry
@@ -53,6 +54,24 @@ class ConnectViewModel(
 
     private var flowJob: Job? = null
 
+    /** The poll, kept separate from [flowJob] so foreground changes can stop it without losing the flow. */
+    private var pollJob: Job? = null
+
+    /**
+     * The started-but-not-yet-granted flow, held across a trip to the browser.
+     *
+     * Non-null exactly while we are waiting for the user to grant access. It survives backgrounding
+     * — that is the whole point — and is cleared once the grant lands, or when the attempt is
+     * cancelled or restarted.
+     */
+    private var pendingFlow: LoginFlow? = null
+
+    /**
+     * Whether the connection UI is on screen. **Starts `false`**: nothing may poll until the host
+     * has said we are visible, which it does on `ON_START`.
+     */
+    private var isForeground: Boolean = false
+
     /**
      * The granted credentials, held **only** between the grant and the user confirming the account.
      *
@@ -85,7 +104,27 @@ class ConnectViewModel(
             ConnectEvent.Cancel -> cancel()
             ConnectEvent.ConfirmAccount -> confirmAccount()
             ConnectEvent.RejectAccount -> rejectAccount()
+            // Suspends the poll while the user is away and resumes it when they return. The resume
+            // is what completes a normal login: they grant access in the browser, come back, and the
+            // first attempt after that finds the flow granted. Nothing is lost by not having asked
+            // in the meantime.
+            is ConnectEvent.ForegroundChanged -> {
+                isForeground = event.inForeground
+                if (event.inForeground) {
+                    startPollingIfForeground()
+                } else {
+                    pollJob?.cancel()
+                    pollJob = null
+                }
+            }
         }
+    }
+
+    /** Idempotent: a second call while a poll is already running is a no-op, not a second poll. */
+    private fun startPollingIfForeground() {
+        val flow = pendingFlow ?: return
+        if (!isForeground || pollJob?.isActive == true) return
+        pollJob = viewModelScope.launch { awaitGrant(flow) }
     }
 
     /** The only path that stores credentials. */
@@ -95,7 +134,7 @@ class ConnectViewModel(
         viewModelScope.launch {
             settingsRepository.setNextcloudCredentials(credentials)
             syncTrigger.requestSyncNow()
-            emit(ConnectEffect.Connected)
+            effects.trySend(ConnectEffect.Connected)
         }
     }
 
@@ -114,7 +153,7 @@ class ConnectViewModel(
         pendingCredentials = null
         _state.value =
             _state.value.copy(phase = ConnectUiState.Phase.Editing, showSwitchAccountHint = true)
-        server?.let { emit(ConnectEffect.OpenBrowser(it)) }
+        server?.let { effects.trySend(ConnectEffect.OpenBrowser(it)) }
     }
 
     private fun submit() {
@@ -124,6 +163,8 @@ class ConnectViewModel(
             return fail(invalid, "host '$host' rejected before contacting anything")
         }
         flowJob?.cancel()
+        pollJob?.cancel()
+        pendingFlow = null
         pendingCredentials = null
         flowJob = viewModelScope.launch { connect(normaliseHost(host)) }
     }
@@ -135,20 +176,22 @@ class ConnectViewModel(
     private fun cancel() {
         flowJob?.cancel()
         flowJob = null
+        pollJob?.cancel()
+        pollJob = null
+        pendingFlow = null
         // Backing out of the confirmation must not leave a granted password sitting in memory for a
         // later Submit to pick up and store against a host the user has since retyped.
         pendingCredentials = null
         if (_state.value.phase == ConnectUiState.Phase.Editing) {
-            emit(ConnectEffect.Dismiss)
+            effects.trySend(ConnectEffect.Dismiss)
         } else {
             _state.value = _state.value.copy(phase = ConnectUiState.Phase.Editing)
         }
     }
 
-    // `@Suppress("ReturnCount")`: the three returns are the three ways this sequence must stop
-    // *without storing anything*. Flattening them into nested `if`s would bury the one rule that
-    // matters — that nothing is persisted until the last step succeeds.
-    @Suppress("ReturnCount")
+    /**
+     * Starts the flow and hands the user to their browser. **It does not poll** — see [awaitGrant].
+     */
     private suspend fun connect(baseUrl: String) {
         _state.value =
             _state.value.copy(
@@ -162,17 +205,42 @@ class ConnectViewModel(
                 .start(
                     baseUrl,
                 ).getOrElse { return fail(it.asConnectError(ConnectError.NOT_NEXTCLOUD), it.message) }
-        emit(ConnectEffect.OpenBrowser(flow.loginUrl))
+
+        pendingFlow = flow
+        effects.trySend(ConnectEffect.OpenBrowser(flow.loginUrl))
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.AwaitingAuthorization)
 
+        // Polling starts only if we are still on screen. The usual case is that we are not for long:
+        // `OpenBrowser` is about to put the browser in front of us, `ForegroundChanged(false)`
+        // arrives, and the poll waits for the user to come back (docs/decisions/0020).
+        startPollingIfForeground()
+    }
+
+    /**
+     * Polls until the user grants access, then verifies and asks them to confirm the account.
+     *
+     * **Runs only while the app is in the foreground** (`docs/decisions/0020`). Login Flow v2 is a
+     * loop that watches for something the *user* does in a browser, and its result is only useful
+     * once they come back here — so polling behind their back buys nothing and costs the one thing
+     * that broke it: a backgrounded process on Android 17 could not resolve the host, and a single
+     * `UnknownHostException` killed the whole flow while the browser was still saying "access
+     * granted".
+     *
+     * `@Suppress("ReturnCount")`: the returns are the ways this sequence must stop *without storing
+     * anything*. Flattening them into nested `if`s would bury the one rule that matters — that
+     * nothing is persisted until the last step succeeds.
+     */
+    @Suppress("ReturnCount")
+    private suspend fun awaitGrant(flow: LoginFlow) {
         // Cancellation propagates on its own: the client's contract is that a cancelled poll simply
-        // stops asking, so Cancel needs no unwinding here.
+        // stops asking, so backgrounding and Cancel both need no unwinding here.
         val result =
             loginFlowClient
                 .poll(
                     flow,
                 ).getOrElse { return fail(it.asConnectError(ConnectError.ABANDONED), it.message) }
 
+        pendingFlow = null
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.VerifyingGpodderSync)
         loginFlowClient.verifyGpodderSync(result.credentials).getOrElse {
             // The password is *not* stored: connecting to a Nextcloud without gpoddersync would
@@ -219,10 +287,6 @@ class ConnectViewModel(
                 ),
             )
         }
-    }
-
-    private fun emit(effect: ConnectEffect) {
-        effects.trySend(effect)
     }
 }
 

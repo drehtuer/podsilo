@@ -389,8 +389,19 @@ sealed interface ConnectEvent {
     data object Cancel : ConnectEvent
     data object ConfirmAccount : ConnectEvent   // the only path that stores credentials
     data object RejectAccount : ConnectEvent    // discards it, opens the server root to log out
+    data class ForegroundChanged(val inForeground: Boolean) : ConnectEvent   // gates the poll — ADR 0020
 }
 ```
+
+**The poll runs only while the dialog is on screen** (`docs/decisions/0020`). `ConnectDialog` emits
+`ForegroundChanged` from `LifecycleStartEffect` — `ON_START`/`ON_STOP`, because the browser covering
+the app is a *stop* while a notification shade is only a pause. The view model holds the started
+`LoginFlow` across the trip to the browser and resumes on return; its `isForeground` starts **false**,
+so a host that forgets to wire the lifecycle polls never rather than polling in the background.
+
+This is the one place a screen's lifecycle reaches the seam, and it is the **dialog** that reports it,
+not the view model observing one: §0's rule is that Composables emit events upward, and only the
+dialog knows whether it is on screen.
 
 **Success is claimed only after `VerifyingGpodderSync` returns 200.** On failure the app password is
 discarded, never stored. The dialog is not dismissable by tapping outside while a request is in

@@ -83,6 +83,17 @@ sealed interface ConnectEvent {
      * of the browser session — the only way to be offered a different account next time.
      */
     data object RejectAccount : ConnectEvent
+
+    /**
+     * The connection UI became visible, or stopped being visible.
+     *
+     * **The poll runs only while this is `true`** (`docs/decisions/0020`). Emitted by the host from
+     * the lifecycle, not guessed by the view model: a view model has no business observing a
+     * lifecycle, and the dialog is the thing that knows whether it is on screen.
+     */
+    data class ForegroundChanged(
+        val inForeground: Boolean,
+    ) : ConnectEvent
 }
 
 sealed interface ConnectEffect {

@@ -3109,3 +3109,71 @@ had an empty ledger, and the knowledge that the outbox only pushes rows with `sy
 — of which a fresh install has none. The sync therefore read the subscription list and the action log
 and wrote nothing. The app password it minted is the one residue, and revoking it is a manual step
 flagged to the author rather than something to leave implied.
+
+---
+
+## 2026-08-09 — "impossible to connect on the Pixel 10a"
+
+A second phone — Pixel 10a, Android 17 (SDK 37) — could not connect to Nextcloud at all. Every
+attempt ended with *"Can't reach that address"* while the browser said access had been granted.
+
+**`docs/decisions/0019` paid for itself.** The error log, added because "can't reach that address" is
+six words that fit a dozen causes, held the answer:
+
+```
+AUTH ×3 · Connecting to Nextcloud failed: UNREACHABLE
+Unable to resolve host "cloud.drehtuer.net": No address associated with hostname
+```
+
+Without it this would have been another round of guessing. With it, the question narrowed to "why can
+this process not resolve a name the phone resolves fine?"
+
+### What it was
+
+`start()` succeeds — the browser opens on the grant page, every time. Opening the browser
+**backgrounds the app**, and `poll()` then runs from a backgrounded process, which on this device
+cannot resolve the host. One `UnknownHostException` ended everything, because the whole
+`repeat(maxPollAttempts)` loop sat inside a single `runCatchingRequest`: a failure on attempt 1
+abandoned all 200. The user granted access and came back to an app that had already given up.
+
+### The author asked the right question
+
+> *"What if the app only polls when it comes back into the foreground? Is there really a need to poll
+> in background?"*
+
+No. Login Flow v2 watches for something the **user** does in a browser, and the result is only usable
+once they return. Polling behind their back bought nothing and cost the bug. The fix removes the
+failing condition instead of working around it — no retry policy, no foreground service, no
+permission: the call that cannot succeed is simply not made. ADR 0020.
+
+Verified on the phone that could not connect at all: with the fix installed, returning to the app
+after granting reached *"Connect as drehtuer?"* on the first try — the dialog that only appears after
+`poll()` returns credentials **and** `verifyGpodderSync()` returns 200.
+
+### Two wrong turns, both mine
+
+1. **I reproduced my own interference and called it the bug.** Toggling Wi-Fi mid-poll produced the
+   reported error, and I concluded it was a network-transition transient. The author's "reproducible
+   with Wi-Fi on *and* mobile-only" is what killed that. **Reproducing a symptom is not reproducing
+   the bug** — I had introduced the very condition I then blamed.
+2. **I flagged `ACCESS_LOCAL_NETWORK: ignore` as anomalous.** It sits in the standard uid-mode block
+   beside `CAMERA` and `READ_SMS`, all `ignore` for permissions the app never requests, and the server
+   is public anyway. Reading one line out of a dump without reading the block around it.
+
+A lot of correct-but-irrelevant ruling-out happened before the real question got asked: permissions,
+netpolicy, Data Saver, standby bucket, private DNS, IPv6-only mobile with 464XLAT, the poll
+hostname. All genuinely eliminated, none of them it. The thing that cracked it was noticing that
+`start()` and `poll()` differ in exactly one respect — *which app is in front* — rather than in
+anything about the network.
+
+### Two device-testing traps, now documented
+
+- **A CI-built debug APK cannot be upgraded by anything built elsewhere.** AGP's debug keystore is
+  per-machine, so the release asset's debug APK carries the *runner's* key
+  (`CN=Android Debug`, digest `afa0ec16…`). Both a local debug build and a correctly release-signed
+  build were refused with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, whose message names the symptom and
+  not the cause. Only `adb uninstall` clears it — with the ledger, login and grant.
+- **`adb install` hangs over usbip where `adb push` runs at 100+ MB/s.** Same failure family as the
+  UTP installer problem from August 3rd; `push` + `pm install` is the way through.
+
+Both are in `docs/dev-environment.md` §10 now, because both cost more time than the bug did.
