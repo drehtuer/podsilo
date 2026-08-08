@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The brand mark as a single-colour silhouette, for surfaces that tint it: the Android 13+ themed
+  icon, and anywhere a caller needs the mark in one colour. Converted from
+  `assets/logos/podsilo-mark-mono.svg`, whose `currentColor` is not a thing either VectorDrawable or
+  ImageVector understands — the converter emits a literal colour and the call site overrides it with
+  a tint (docs/UI_interface.md §17).
+
+  Black rather than white so it is visible in a preview pane; every real call site tints it.
+
+  The bars and the vessel both become the tint colour, so the figure survives on its gaps alone —
+  which is why the 10-unit stroke and the 8-unit gaps between bars are load-bearing and the mark has
+  a 16 dp floor (docs/logo.md §1). Below that the bars stop separating and this collapses into a
+  blob.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M30,6 h40 v10 h-40 z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M36,24 h28 v10 h-28 z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M18,42 V94 H82 V42"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="10" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M32,70 h36 v10 h-36 z" />
+</vector>
