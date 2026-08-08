@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The notification small icon: the Podsilo mark, white on transparency, on a 24-unit canvas.
+  Converted from `assets/logos/podsilo-notification.svg`.
+
+  This is the one place the brand mark carries a functional load (docs/logo.md §3). That is
+  acceptable only because Android gives no alternative — every notification the download service
+  posts is stamped with the small icon, and the platform will not take a per-notification glyph
+  instead.
+
+  TWO THINGS ABOUT THE GEOMETRY, both learned from the platform rather than chosen:
+
+  - Android masks a small icon by **alpha**, discarding colour entirely and painting the silhouette
+    in the system's own accent. So the mark is drawn in white here and the colour means nothing;
+    what matters is that the bars and the vessel stay separated by their gaps.
+  - The system adds its own padding and will clip anything drawn to the canvas edge. The group
+    therefore holds the mark at 18 of the 24 units, centred — logo.md §3's "~18 dp inside a 24 dp
+    canvas". Drawn full-bleed, the top bar is the first thing to go.
+
+  It lives in :core:download rather than :core:ui because that module owns the notification and does
+  not depend on the UI module; :core:ui's copies of the mark are for screens.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <group
+        android:scaleX="0.18"
+        android:scaleY="0.18"
+        android:translateX="3"
+        android:translateY="3">
+
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M30,6 h40 v10 h-40 z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M36,24 h28 v10 h-28 z" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M18,42 V94 H82 V42"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="10" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M32,70 h36 v10 h-36 z" />
+    </group>
+</vector>
