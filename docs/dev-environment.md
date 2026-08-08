@@ -758,6 +758,45 @@ asset, never the build.
 the APK for a signature block and refuses to attach an unsigned one — a file that downloads like a
 real build and then refuses to install is worse than a missing file.
 
+### A CI-built debug APK is a one-way door
+
+Worth knowing before you sideload one. AGP signs debug builds with `~/.android/debug.keystore`, which
+is **generated per machine** — so the `podsilo-<version>-debug.apk` attached to a GitHub Release
+carries the *runner's* keystore, not yours and not this container's:
+
+```
+$ apksigner verify --print-certs installed.apk
+V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
+V2 Signer: certificate SHA-256 digest: afa0ec16…
+```
+
+Nothing built anywhere else can upgrade it in place — not a local debug build, not the release build —
+and the failure names the symptom rather than the cause:
+
+```
+INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package net.drehtuer.podsilo
+signatures do not match newer version; ignoring!
+```
+
+The only way out is `adb uninstall`, which takes the ledger, the login and the folder grant with it.
+**So sideload the release APK, not the debug one**, unless you specifically need a debuggable build
+and accept that the next update wipes the app. Diagnosed on the Pixel 10a on 2026-08-09, after both a
+local debug *and* a correctly release-signed build were refused.
+
+### `adb install` hangs over usbip, but `adb push` doesn't
+
+A 39 MB APK can stall `adb install` past any sane timeout on a usbip-attached phone, while a plain
+`adb push` of the same file runs at 100+ MB/s. The install session protocol is what struggles, not the
+link. When it hangs:
+
+```bash
+adb push app/build/outputs/apk/release/podsilo-<version>.apk /data/local/tmp/podsilo.apk
+adb shell pm install -r -g /data/local/tmp/podsilo.apk
+adb shell rm /data/local/tmp/podsilo.apk
+```
+
+Same failure family as the UTP installer problem in [§6](#the-device-test-set), and the same fix.
+
 ### Installing a release build over a debug one
 
 You can't, directly. They are signed with different keys, so Android refuses the upgrade and the
