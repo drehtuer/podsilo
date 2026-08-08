@@ -193,6 +193,41 @@ class RetrofitNextcloudLoginFlowClientTest {
             assertEquals("token=tok-123", server.takeRequest().body.readUtf8())
         }
 
+    /**
+     * One dropped connection mid-poll used to abandon the whole flow — 200 attempts binned because
+     * of one, while the user was still granting access in their browser and about to succeed.
+     */
+    @Test
+    fun `a network blip during the poll does not abandon the flow`() =
+        runTest {
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+            server.enqueue(MockResponse().setResponseCode(404))
+            server.enqueue(
+                MockResponse().setResponseCode(200).setBody(
+                    """{"server":"https://cloud.example.org","loginName":"u","appPassword":"p"}""",
+                ),
+            )
+
+            val result = client().poll(flowAt("/poll")).getOrThrow()
+
+            assertEquals("u", result.loginName)
+            assertEquals(3, server.requestCount)
+        }
+
+    /**
+     * But a poll that only ever fails to connect must not report "authorization wasn't completed" —
+     * that blames the user for something the network did.
+     */
+    @Test
+    fun `a poll that never reaches the server reports the network failure, not abandonment`() =
+        runTest {
+            repeat(5) { server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START)) }
+
+            val failure = client().poll(flowAt("/poll")).exceptionOrNull() as LoginFlowException
+
+            assertEquals(LoginFlowFailure.UNREACHABLE, failure.failure)
+        }
+
     @Test
     fun `a flow never granted is abandoned rather than polled forever`() =
         runTest {
