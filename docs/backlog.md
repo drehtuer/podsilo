@@ -74,11 +74,16 @@ Against [developer.android.com/studio/publish](https://developer.android.com/stu
 [F-Droid quick start](https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/). What
 already holds is in `docs/dev-environment.md` §10; these are the gaps, in the order they bite.
 
-- ~~**The app has no icon.**~~ **Done 2026-08-04.** An adaptive icon (silo, episode dropping in,
-  pool collecting), vector-only, with a `<monochrome>` layer for Android 13 themed icons. What is
-  still missing is a **512×512 PNG for store listings** — Play and F-Droid both want a raster, and
-  neither reads it from the APK. It belongs with the Fastlane metadata below; the dev container has
-  no image tooling, so it needs generating elsewhere.
+- ~~**The app has no icon.**~~ **Done 2026-08-04, replaced 2026-08-08.** The placeholder adaptive
+  icon has given way to the real brand mark (`docs/logo.md`): the silo build, vector-only, with a
+  `<monochrome>` layer for Android 13 themed icons. What is still missing is a **512×512 PNG for
+  store listings** — Play and F-Droid both want a raster, and neither reads it from the APK. It
+  belongs with the Fastlane metadata below; the dev container has no image tooling, so it needs
+  generating elsewhere. Source is `assets/logos/podsilo-icon.svg`, whose geometry does not change
+  with scale.
+- **Outline the wordmark in the lockup SVGs.** `docs/logo.md` §2: anything leaving the app — store
+  listing, README, press — must not depend on Archivo being installed. Nothing in-app is blocked,
+  since the in-app lockups are composed from live type.
 - **jaudiotagger comes from JitPack.** F-Droid builds everything from source in its own buildserver
   and treats a JitPack coordinate as a third-party prebuilt binary. Expect to either add a `srclibs`
   entry that builds `Adonai/jaudiotagger` from source, or vendor it. This is the substantive F-Droid
@@ -106,4 +111,8 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   is a narrower version, and was accepted as a *command* rather than a rule — ADR 0014.
 - **A two-pane tablet layout.** Not an omission: `docs/UI.md` §19 explains why the triage model makes
   it the wrong shape. The content-width cap is the part of it worth keeping.
+- **A splash screen.** `docs/logo.md` §3 originally specified one — the mono mark on `#EC3013`, via
+  `androidx.core:core-splashscreen`. **Declined by the author on 2026-08-08.** The app reaches S1
+  well inside the splash's own minimum duration, so it would be a delay dressed as a brand moment,
+  and it costs a dependency. `logo.md` §3 no longer describes one; do not reintroduce it as polish.
 - **Anything that writes to the subscription list.** Permanently out of scope (CLAUDE.md §1).
