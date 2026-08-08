@@ -40,7 +40,6 @@ class PodsiloIconsTest {
             "Syncing" to PodsiloIcons.Syncing,
             "Waiting" to PodsiloIcons.Waiting,
             "Offline" to PodsiloIcons.Offline,
-            "NotConfigured" to PodsiloIcons.NotConfigured,
             "Empty" to PodsiloIcons.Empty,
             "ErrorLog" to PodsiloIcons.ErrorLog,
             "Copy" to PodsiloIcons.Copy,
@@ -57,8 +56,9 @@ class PodsiloIconsTest {
 
     @Test
     fun `the allow-list has exactly the icons §18 names`() {
-        // 27 rows in the table. A new affordance means adding a row there before adding a glyph.
-        assertEquals(27, all.size)
+        // 26 rows in the table. A new affordance means adding a row there before adding a glyph.
+        // Was 27 until `server` lost its only call site to the brand lockup (`docs/logo.md` §4.2).
+        assertEquals(26, all.size)
     }
 
     @Test

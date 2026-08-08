@@ -22,9 +22,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.ui.ArtworkSize
+import net.drehtuer.podsilo.core.ui.LockupOrientation
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.PodsiloLockup
 import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
@@ -108,13 +110,23 @@ internal fun PodcastLoadingState() {
 
 private const val SHIMMER_ROWS = 3
 
+/**
+ * The one place the app introduces itself (`docs/logo.md` §4.2).
+ *
+ * This state led with the `server` glyph, which said "a server is missing" — true, and not what a
+ * user seeing the app for the first time needs. The stacked lockup goes here instead: it is the
+ * first screen, the only moment with room, and once a single feed is subscribed the state never
+ * returns, so it costs nothing in the steady state. The other empty states keep their glyphs — they
+ * are momentary and local, not introductions.
+ */
 @Composable
 internal fun NotConfiguredState(onEvent: (PodcastListEvent) -> Unit) {
     CentredEmptyState(
         message = "Podsilo follows the podcast subscriptions in your Nextcloud.",
         actionLabel = "Connect Nextcloud",
         onAction = { onEvent(PodcastListEvent.ConnectNextcloudClicked) },
-        icon = PodsiloIcons.NotConfigured,
+        // The only text-free instance of the lockup, so this is the one that announces itself.
+        leading = { PodsiloLockup(orientation = LockupOrientation.STACKED) },
     )
 }
 
@@ -126,23 +138,29 @@ internal fun NoSubscriptionsState(onEvent: (PodcastListEvent) -> Unit) {
         message = "No subscriptions found — add feeds in Nextcloud.",
         actionLabel = "Refresh",
         onAction = { onEvent(PodcastListEvent.PullToRefresh) },
-        icon = PodsiloIcons.Empty,
+        leading = { PodsiloIcon(PodsiloIcons.Empty, contentDescription = null) },
     )
 }
 
+/**
+ * @param leading a glyph for a momentary, local state — or, in exactly one case, the brand lockup.
+ *   A slot rather than an icon id because the not-configured state is the app introducing itself and
+ *   the others are not (`docs/logo.md` §4.2); two parameters for the two cases would be one more way
+ *   to say the same thing.
+ */
 @Composable
 internal fun CentredEmptyState(
     message: String,
     actionLabel: String,
     onAction: () -> Unit,
-    icon: Int? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(RowPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        icon?.let { PodsiloIcon(it, contentDescription = null) }
+        leading?.invoke()
         Text(message, style = MaterialTheme.typography.bodyLarge)
         TextButton(onClick = onAction, modifier = Modifier.sizeIn(minHeight = MinTouchTarget)) {
             Text(actionLabel)

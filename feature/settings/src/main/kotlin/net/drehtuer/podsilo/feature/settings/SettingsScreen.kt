@@ -32,10 +32,12 @@ import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SwipeAction
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.ThemePreference
+import net.drehtuer.podsilo.core.ui.LogoGap
 import net.drehtuer.podsilo.core.ui.MaxContentWidth
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.PodsiloLockup
 import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.Instant
 
@@ -343,6 +345,10 @@ private fun AboutGroup(
     onEvent: (SettingsEvent) -> Unit,
 ) {
     GroupHeader("ABOUT")
+    // `docs/logo.md` §4.3: the horizontal lockup, flush left on the surface ground, no card and no
+    // frame. One of only three in-app placements of the mark, and the only one that is purely the
+    // app saying what it is.
+    PodsiloLockup(modifier = Modifier.padding(horizontal = RowPadding, vertical = LogoGap))
     SettingsRow(title = "Version $version", subtitle = "GPL-3.0-or-later", onClick = null)
     // Build number, timestamp and commit. `versionName` alone cannot answer "is this the build I
     // just installed?", which is the question actually being asked of this screen during testing —

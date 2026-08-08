@@ -31,11 +31,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.ui.ArtworkSize
+import net.drehtuer.podsilo.core.ui.LogoGap
 import net.drehtuer.podsilo.core.ui.MaxContentWidth
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloArtwork
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
+import net.drehtuer.podsilo.core.ui.PodsiloMark
 import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.Duration
 import java.time.Instant
@@ -59,7 +61,7 @@ fun PodcastListScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Podsilo") },
+                title = { PodcastListTitle() },
                 actions = {
                     // The app bar is the one place an icon-only control exists — the target is
                     // conventional there and nowhere else (docs/UI.md §18).
@@ -121,6 +123,25 @@ fun PodcastListScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * S1 is the launcher screen and the only one whose app-bar title is the product name, so it is the
+ * only app bar the mark appears in (`docs/logo.md` §4.1, §5).
+ *
+ * The wordmark stays live type beside the mark rather than becoming part of an image: a title has to
+ * scale with the user's font setting, and a drawable will not.
+ */
+@Composable
+private fun PodcastListTitle() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(LogoGap),
+    ) {
+        // null: the word "Podsilo" is right there. Describing the mark too reads the name twice.
+        PodsiloMark(contentDescription = null)
+        Text("Podsilo")
     }
 }
 
