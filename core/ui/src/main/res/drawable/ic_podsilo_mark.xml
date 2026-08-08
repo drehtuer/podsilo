@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The Podsilo brand mark, two-colour, for a light ground. Converted from
+  `assets/logos/podsilo-mark.svg` — Android renders no SVG at runtime, so the SVG is source
+  material and this is the shipped asset (docs/UI_interface.md §17).
+
+  Do NOT tint this drawable. Flattening the bars into the vessel destroys the figure; a surface that
+  needs one colour takes `ic_podsilo_mark_mono` instead (docs/logo.md §6). On ink and on the accent
+  field the mark is all-white — that is `ic_podsilo_mark_inverse`, which `PodsiloMark` selects.
+
+  Geometry is docs/logo.md §1: a 100-unit square, 10-unit stroke, no curve and no radius anywhere,
+  so the mark's stroke and a 2 dp app-bar rule read as the same weight.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Two bars still falling. -->
+    <path
+        android:fillColor="#FFEC3013"
+        android:pathData="M30,6 h40 v10 h-40 z" />
+    <path
+        android:fillColor="#FFEC3013"
+        android:pathData="M36,24 h28 v10 h-28 z" />
+
+    <!-- The silo: open at the top, stroked rather than filled, so it reads as a container. -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M18,42 V94 H82 V42"
+        android:strokeColor="#FF201E1D"
+        android:strokeWidth="10" />
+
+    <!-- One band already stored. This is what makes the name pay off in the mark. -->
+    <path
+        android:fillColor="#FF201E1D"
+        android:pathData="M32,70 h36 v10 h-36 z" />
+</vector>

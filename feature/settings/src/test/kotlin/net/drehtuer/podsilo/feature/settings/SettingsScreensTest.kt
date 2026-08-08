@@ -44,6 +44,16 @@ class SettingsScreensTest {
     }
 
     @Test
+    fun `the About group carries the lockup beside the version and licence`() {
+        // `docs/logo.md` §4.3: horizontal lockup, flush left, no card and no frame. GPL-3.0 and a
+        // version string mean little without saying whose they are.
+        renderSettings(SettingsUiState(version = "0.1.0"))
+
+        compose.onNodeWithText("podsilo").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Version 0.1.0").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun `an unconnected instance row is empty rather than showing a placeholder`() {
         renderSettings(SettingsUiState(version = "0.1.0"))
 

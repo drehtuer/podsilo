@@ -53,7 +53,10 @@ class DownloadNotifications(
             .Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.download_notification_title))
             .setContentText(episodeTitle)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            // The brand mark, not the platform's download arrow: in a shade full of other apps'
+            // progress notifications, a stock glyph makes ours the one the user cannot pick out
+            // (docs/logo.md §3).
+            .setSmallIcon(R.drawable.ic_podsilo_notification)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setProgress(PERCENT, progress, indeterminate)

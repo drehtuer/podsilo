@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -112,6 +113,33 @@ class PodcastListScreenTest {
         compose.onNodeWithText("Connect Nextcloud").performClick()
 
         assertTrue(events.contains(PodcastListEvent.ConnectNextcloudClicked))
+    }
+
+    @Test
+    fun `the first screen introduces the app by name, not with a server glyph`() {
+        // `docs/logo.md` §4.2: the one large, unhurried appearance of the lockup. It replaced the
+        // `server` glyph, which described the missing configuration rather than the app.
+        render(PodcastListUiState(content = PodcastListUiState.Content.NotConfigured))
+
+        compose.onNodeWithText("podsilo").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the lockup is only on the not-configured state, never on a populated home`() {
+        // §4: four placements, and this is not one of them twice. A logo above every list is how a
+        // brand becomes noise — and the app bar's own mark carries no text to find here.
+        render(PodcastListUiState(content = PodcastListUiState.Content.Feeds(emptyList())))
+
+        compose.onAllNodes(hasText("podsilo")).assertCountEquals(0)
+    }
+
+    @Test
+    fun `the app bar carries the mark without announcing the name twice`() {
+        // §4.1: the mark is `null`-described because "Podsilo" is live type beside it.
+        render(PodcastListUiState(content = PodcastListUiState.Content.Feeds(emptyList())))
+
+        compose.onNodeWithText("Podsilo").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Podsilo").assertCountEquals(0)
     }
 
     @Test

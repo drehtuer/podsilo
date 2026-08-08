@@ -3177,3 +3177,104 @@ anything about the network.
   UTP installer problem from August 3rd; `push` + `pm install` is the way through.
 
 Both are in `docs/dev-environment.md` §10 now, because both cost more time than the bug did.
+
+---
+
+## 2026-08-08 — the logo lands, and two of its own specs turn out to be unbuildable
+
+New brand assets arrived in `assets/logos/` with `docs/logo.md` describing where they go, plus
+`docs/UI_logos.md` — a copy of `docs/UI.md` with §18 adapted. Task: check for missing icons, convert
+to a format Android can actually render, fold §18 back into `UI.md`, delete the copy, and wire the
+mark into the screens.
+
+### The copy was stale, and diffing it first is the only reason that was caught
+
+`UI_logos.md` was 1200 lines against `UI.md`'s 1304. Folding it in wholesale — the obvious reading of
+"adapt UI.md and delete UI_logos.md" — would have silently reverted a week of amendments: ADRs 0012–
+0015 back from *accepted* to *needs an ADR*, S3 back from a full screen to a bottom sheet, the backup
+group and the foreground-only login poll gone entirely, `{ext}` back in the naming chips. The actual
+§18 change was **three lines**: a paragraph saying the brand mark is not in the icon allow-list.
+
+Lesson worth keeping: when handed "file B is file A with a change", diff them and port the change.
+Do not copy B over A, however plausibly B is described as the newer one.
+
+### What was missing
+
+Not much, and not what I expected. All seven exported files existed for both builds, and the icon
+allow-list matched `PodsiloIcons` exactly (27 for 27). Two real gaps:
+
+- **The notification small icon.** `logo.md` §3 specifies one, and nothing exported it —
+  `DownloadNotifications` was still posting `android.R.drawable.stat_sys_download`, the platform's
+  generic arrow. Every download notification the app has ever posted was unbranded.
+- **The splash screen** needs `androidx.core:core-splashscreen`, which is not a dependency. Asked;
+  the author declined it outright — the app reaches S1 inside the splash's own minimum, so it would
+  be a delay dressed as a brand moment. `logo.md` §3 no longer describes one, and it is recorded
+  under *Declined, with reasons* in `docs/backlog.md` rather than left as a to-do nobody will do.
+
+### Two of logo.md's own instructions could not be followed as written
+
+Both found by trying to do them, which is the useful kind of finding.
+
+1. **`ic_podsilo_lockup.xml` cannot exist.** A `VectorDrawable` has no text primitive, and the lockup
+   SVGs carry the wordmark as live `<text>` in Archivo, which is not in the repo — so there is nothing
+   to outline it with. Asked; the author chose composing the lockups from the mark drawable plus a
+   `Text`. That turns out better than the drawable would have been: it scales with the user's font
+   setting and follows `onSurface`, and it is the same reasoning §4.1 already gave for the app bar.
+   The honest cost is recorded — in-app the wordmark is the platform font, not Archivo.
+
+2. **`contentDescription = "Podsilo"` on the empty-state lockup is now wrong.** §6 asks for it
+   because the lockup was to be "the only text-free instance". Composed from type it is not
+   text-free, and I only noticed because the first test run failed: `clearAndSetSemantics` had eaten
+   the wordmark's own text node. The failing assertion was right and my implementation was wrong —
+   the description would have produced exactly the doubled "Podsilo Podsilo" the rule exists to
+   prevent. Dropped it; `logo.md` §6 amended with the reason.
+
+A third, smaller one: §4.2 and §4.3 size the lockups by total width (96 dp, 120 dp). A live-type
+lockup has no fixed total width — it depends on the font and the user's font scale. Sized by the mark
+instead (56 dp, 36 dp) with the wordmark derived from it at the ratio the SVGs use, so the proportion
+survives any scale.
+
+### A retired glyph
+
+S1's not-configured empty state led with `server`. §4.2 replaces it with the lockup, which left
+`server` with no call site — so it came out of `PodsiloIcons` and out of §18's table, and the count
+test went 27 → 26. The table is an allow-list, and an unused entry in an allow-list is an invitation.
+The brand mark pointedly did **not** take its place in that object: it lives in `PodsiloLogo.kt`
+beside it, so no call site can reach for the logo as a glyph.
+
+### Light and dark, without a resource qualifier
+
+The two-colour mark's vessel is ink `#201E1D` — invisible on the dark scheme's `#14110F` surface. The
+reflex is `drawable-night/`, and it is wrong here: the theme is a DataStore preference (UI.md §12.7),
+so a user on Light with the system in dark mode would get the white mark on a light surface.
+`PodsiloMark` reads `MaterialTheme.colorScheme.surface.luminance()` instead. Not asserted in a test —
+Robolectric cannot tell the two drawables apart without pixel-reading, and an assertion that restates
+the `if` proves nothing.
+
+**Unverified:** all of it is Tier 1 renders. Whether the 24 dp mark reads in a real app bar, and
+whether the notification silhouette survives the system's alpha mask on a real shade, are Tier 3
+questions and are listed as open in `logo.md` §7.
+
+### Same day, after review: verifying the placements rather than asserting them
+
+The author asked for the splash to come out of the document (declined outright, not deferred — it is
+under *Declined, with reasons* in the backlog now) and for a check that every screen renders the
+logos it should.
+
+That check could not be written, which was the finding. The mark is `contentDescription = null`
+everywhere by design, so **no semantics query can find it** — there was no way to ask "is the logo on
+this screen?", let alone "is it absent from S2–S8". A test tag was the way through
+(`PODSILO_MARK_TEST_TAG`), and it is the rare tag in production code that earns itself: `logo.md` §4
+calls its four placements "the complete list" and §5 names where the mark must never appear, and
+neither claim was checkable.
+
+Three `LogoPlacementTest`s now count marks per screen — S1–S3 in `:feature:episodes`, S4–S6 in
+`:feature:settings`, S7–S8 in `:app` — because the screens live in three modules and a test belongs
+beside what it tests. All twelve screens/states came out as specified on the first run; the counting
+found no misplaced logo. What it did find is a doc bug: §4.1 says the mark is dropped in selection
+mode, and S1 has no selection mode — that is S2, which never carries the mark. Corrected in place
+rather than deleted, since the rule would be right if selection mode ever reached S1.
+
+One assertion deliberately avoided: "S5 has no wordmark" cannot be checked by searching for the text
+`podsilo`, because the Nextcloud account name it displays can be anything — and the existing
+confirmation test uses `podsilo` as exactly that. Counting tags is the only question that stays true.

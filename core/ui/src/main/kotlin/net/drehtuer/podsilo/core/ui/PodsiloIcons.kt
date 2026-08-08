@@ -95,8 +95,10 @@ object PodsiloIcons {
     /** Offline banner and status line. */
     @DrawableRes val Offline: Int = LucideR.drawable.lucide_ic_wifi_off
 
-    /** The not-configured empty state on S1. */
-    @DrawableRes val NotConfigured: Int = LucideR.drawable.lucide_ic_server
+    // `server` was here, for S1's not-configured empty state. That state now leads with the brand
+    // lockup instead (`docs/logo.md` §4.2), leaving the glyph with no call site — and this object is
+    // an allow-list, not an inventory, so an entry nobody renders is an invitation to find it a job.
+    // The brand mark is deliberately *not* added in its place: it is not a glyph. See PodsiloLogo.kt.
 
     /** Filter-empty states. */
     @DrawableRes val Empty: Int = LucideR.drawable.lucide_ic_inbox

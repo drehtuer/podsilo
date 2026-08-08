@@ -873,7 +873,29 @@ Three real caveats, none about screen density:
 - **The glyph is not the target.** 24 dp drawn inside a ≥ 48 dp touch target (§12) — the padding is
   part of the control, not decoration.
 
+### The brand mark is the one hand-converted asset, and that is on purpose
+
+Everything above argues against hand-converting SVGs. The mark is the exception, because the argument
+does not apply to it: there are three drawables, not 27, they are ours and change only when the brand
+does, and no library ships them. They live in `core/ui/src/main/res/drawable/` (plus the notification
+icon in `:core:download` and the launcher foreground in `:app`), converted from `assets/logos/`.
+
+Two mechanics that differ from the icon pipeline:
+
+- **The mark is never tinted.** Icons are single-colour and take `Icon(painter, tint = …)`; the mark
+  is two-colour and tinting it flattens the bars into the vessel. Ground colour is handled by
+  *choosing a drawable* — `PodsiloMark` reads the theme's surface luminance and picks the inverse
+  build. Not a `-night` qualifier: the theme is a DataStore preference and can disagree with the
+  system's night mode.
+- **The lockups have no drawable at all.** A `VectorDrawable` cannot hold text, so a lockup is
+  composed — mark drawable plus a `Text` — and its wordmark therefore *does* scale with font scale,
+  unlike every icon in the app. See `docs/logo.md` §2 and §6.
+
+Which surface gets the mark is a brand decision and lives in `docs/logo.md` §4, the same way §18 owns
+which icon means what. Do not restate either here.
+
 The **monogram tile** is not an icon and needs no drawable: when `Feed.imageUrl` is null or not yet
 fetched, the artwork slot renders as a filled surface square with the feed's first letter at the
 heading weight in the muted role. Same content description as real artwork ("cover art for
-<podcast>"), never "no image".
+<podcast>"), never "no image". It is never the brand mark — that would make every podcast look like
+ours (`docs/logo.md` §5).

@@ -1019,6 +1019,7 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 | Motion / transitions | §16 | **added** |
 | Spacing consistency across screens | §17 | **added** |
 | Icon set and per-affordance mapping | §18 | **added — nothing recorded it before** |
+| Brand mark, lockups, launcher and notification icon | `docs/logo.md`; §18 says why it is not in the icon table | **added** |
 | Landscape / orientation | §19 | **added** |
 | UI ↔ app-logic contract | `docs/UI_interface.md` | **added — the handover surface for Tier 4c** |
 | Not a player / not a file manager | no playback controls; S7 shows filenames only, never deletes | ✔ |
@@ -1186,9 +1187,11 @@ Spacing and sizing that holds across all eight screens. Collected because drift 
 review and obvious in use — every value below was found drifting at least once while the screens were
 being drawn.
 
-- **App bar** — 2 px bottom rule, title flush left. Leading-icon screens (S2–S8) inset at **14 dp** so
-  the icon's optical edge lands on the 16 dp content grid; S1, whose leading element is the title
-  itself, insets at **16 dp**. This is the one intentional asymmetry.
+- **App bar** — 2 px bottom rule, title flush left, leading element inset at **14 dp** so its optical
+  edge lands on the 16 dp content grid. **Amended 2026-08-08:** this used to record one intentional
+  asymmetry — S1 inset at 16 dp because its leading element was the title itself. S1 now leads with
+  the 24 dp brand mark (`docs/logo.md` §4.1), so its leading element is an icon like every other
+  screen's and the exception is gone. A simplification, not a new special case.
 - **Rows** — 16 dp horizontal padding, ≥ 72 dp tall, 1 dp hairline between rows, 2 px rule between
   *groups*. Artwork is 56 dp on S1, 52 dp on S2, 76 dp on S3.
 - **Group labels** — `15dp / 16dp / 7dp` padding, 11 sp at the heading weight, `.12em` tracking, accent
@@ -1238,7 +1241,6 @@ fallback and the reason there is no per-density work to do are in `docs/UI_inter
 | `refresh-cw` | sync in progress on S1 |
 | `loader` | S5's awaiting-authorization spinner |
 | `wifi-off` | offline banner and status bar |
-| `server` | the not-configured empty state on S1 |
 | `inbox` | filter-empty states |
 | `file-text` | S7 app bar → S8 |
 | `copy` / `share-2` / `trash-2` | S8's copy all / share / clear |
@@ -1256,9 +1258,21 @@ Three distinctions that make the UI lie if they are used interchangeably:
 - **`play` never means playback.** Podsilo does not play audio (README). It is the *played* state
   marker only, and it appears beside the word, never alone.
 
+**`server` was the 25th row here**, for S1's not-configured empty state. That state now leads with the
+brand lockup instead (`docs/logo.md` §4.2) — it is the app's first screen and the one moment with room
+to say its own name, where a server glyph said only that a server was missing. The row is struck
+rather than left in place: this table is an allow-list, and an entry with no call site is an
+invitation to find it one.
+
+The **brand mark** is not an icon either, and is deliberately absent from the table above. It carries
+no action, is never tappable, has exactly four placements, and is governed by
+[`docs/logo.md`](logo.md). Adding it to this allow-list would invite call sites to use the logo as a
+glyph — do not. In code it lives in `PodsiloLogo.kt`, next to `PodsiloIcons` and outside it.
+
 The **monogram tile** is not an icon: a feed with no `imageUrl` gets a filled surface square with its
 first letter, not a generic placeholder glyph. A stock "no image" icon repeated down the list is
-noise; a letter is at least identifying.
+noise; a letter is at least identifying. A feed with no artwork never gets the brand mark — repeating
+the logo down a list makes every podcast look like it is ours (`docs/logo.md` §5).
 
 ---
 
