@@ -5,8 +5,10 @@ package net.drehtuer.podsilo.ui
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,8 +29,10 @@ import net.drehtuer.podsilo.feature.episodes.EpisodeDetailEffect
 import net.drehtuer.podsilo.feature.episodes.EpisodeDetailSheet
 import net.drehtuer.podsilo.feature.episodes.EpisodeDetailViewModel
 import net.drehtuer.podsilo.feature.episodes.EpisodeListEffect
+import net.drehtuer.podsilo.feature.episodes.EpisodeListEvent
 import net.drehtuer.podsilo.feature.episodes.EpisodeListScreen
 import net.drehtuer.podsilo.feature.episodes.EpisodeListViewModel
+import net.drehtuer.podsilo.feature.episodes.EpisodeUiAction
 import net.drehtuer.podsilo.feature.episodes.PodcastListEffect
 import net.drehtuer.podsilo.feature.episodes.PodcastListScreen
 import net.drehtuer.podsilo.feature.episodes.PodcastListViewModel
@@ -152,6 +156,17 @@ private fun EpisodesDestination(
             is EpisodeListEffect.OpenUrl -> host.onOpenUrl(effect.url)
             EpisodeListEffect.ResolvePausedQueue -> host.onChooseFolder()
             is EpisodeListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
+            // The one snackbar with a reply. The view model still owns the window (ADR 0021); this
+            // only reports a tap, and a tap that arrives after the write finds nothing to undo.
+            is EpisodeListEffect.ShowUndo -> {
+                val result =
+                    host.snackbar.showSnackbar(
+                        message = effect.action.undoMessage(),
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Short,
+                    )
+                if (result == SnackbarResult.ActionPerformed) viewModel.onEvent(EpisodeListEvent.UndoRequested)
+            }
         }
     }
     EpisodeListScreen(state = state, onEvent = viewModel::onEvent)
@@ -197,6 +212,18 @@ internal fun <T> OnEffect(
 private suspend fun SnackbarHostState.showMessage(text: SnackbarText) {
     showSnackbar(text.render())
 }
+
+/**
+ * What the undo snackbar says a swipe did.
+ *
+ * Past tense, because as far as the user is concerned it *has* happened — the row already shows it.
+ * That the write is still five seconds away is the app's business, not theirs (ADR 0021).
+ */
+private fun EpisodeUiAction.undoMessage(): String =
+    when (this) {
+        EpisodeUiAction.MARK_AS_PLAYED -> "Marked as played"
+        else -> "Queued for download"
+    }
 
 /**
  * The one place a [SnackbarText] becomes words. Kept out of `:feature:episodes` because the module

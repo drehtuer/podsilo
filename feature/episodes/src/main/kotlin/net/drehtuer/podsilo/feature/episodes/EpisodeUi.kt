@@ -162,6 +162,26 @@ fun EpisodeListItem.toUi(
     )
 
 /**
+ * How a row looks while its swipe decision is still inside the undo window
+ * (`docs/decisions/0021`).
+ *
+ * **Presentation only.** No ledger row exists yet, nothing has been posted, and nothing is queued;
+ * this is the app showing the user that their gesture registered. If the window is undone the row
+ * simply reverts, because there was never anything to revert *in storage*.
+ *
+ * The state shown is the one the decision will produce, so the row does not change appearance a
+ * second time when the write finally lands.
+ */
+internal fun EpisodeUi.asPending(pending: PendingUndo): EpisodeUi =
+    copy(
+        ledgerState =
+            when (pending.action) {
+                EpisodeUiAction.MARK_AS_PLAYED -> LedgerState.SKIPPED
+                else -> LedgerState.QUEUED
+            },
+    )
+
+/**
  * A `DOWNLOADING` ledger row with **no work behind it at all** — killed before WorkManager could
  * resume it (`docs/UI_interface.md` §7's third case).
  *
