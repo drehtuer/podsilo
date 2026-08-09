@@ -3539,3 +3539,53 @@ on purpose: if one flow backed all three, "the delivered list changed" could be 
 in-flight query and the test would prove nothing.
 
 653 tests, 0 failures, 3 skipped.
+
+---
+
+## 2026-08-09 (I3) — the feature that was three-quarters written
+
+Issue #46 asks for multi-select. The view model already had it: five events, the "an empty selection
+leaves the mode" rule, the "a filter change drops the selection" rule, and unit tests for all of it.
+`EpisodeRow` used `clickable` rather than `combinedClickable`, so **nothing could emit
+`SelectionStarted`** and the mode was unreachable — and with no app bar (until I1) there was nowhere
+to render `n selected` anyway.
+
+So the work was one new event pair and a bar. Which is the interesting part: this is the *sixth*
+instance of the shape this project keeps producing — specified, wired at both ends, no connection in
+the middle. The others were pull-to-refresh, the artwork slot, the swipe gesture, *Download all*, and
+S2's feed-error banner. Something about building state-first, with the screen last, reliably leaves
+exactly this gap, and unit tests never catch it because the view model genuinely works.
+
+### The one thing I added to the model rather than the UI
+
+The bar could have emitted `BulkConfirmed` straight from its buttons and let the screen own a
+dialog. `SelectionActionRequested` exists instead, so that "name the count before anything is
+written" is *structural* — the bar cannot reach the write path without passing through a
+confirmation, exactly as *Download all* and *Mark all as played* already work. For an action that
+emits `PLAY` to a shared log no undo reaches, a convention is not good enough.
+
+`pendingSelectionAction` is its own state field rather than sharing `pendingBulk`, for the reason
+already written into that field's KDoc: three dialogs say different things, and one shared field is
+one bug away from rendering the download wording over a mark-as-played confirmation.
+
+### Accessibility was the part with a real decision in it
+
+`docs/UI.md` §12.12 says selection must be reachable without a long-press, and suggests "a checkbox
+appears when the accessibility service is active". I did not implement service detection: branching
+the UI on whether TalkBack is running means the layout a sighted user sees is not the one being
+tested, and a11y-only code paths rot quietly. A **custom accessibility action** on every row is
+better — always present, no detection, and it emits the *same* event the long-press does rather than
+a parallel path that could drift.
+
+That also gave `square`/`square-check` their first call site. They had been on §18's allow-list, for
+exactly this, since the list was written.
+
+### Scope the issue asked for and did not get
+
+*Add to queue*, *add to playlist* and *remove/delete* are §1 non-goals; *mark unplayed* was declined
+by the author as decision D4. All four were already recorded in `docs/backlog.md` during planning, so
+this needed no new judgement — which is the value of having written it down a week earlier.
+
+666 tests, 0 failures, 3 skipped, plus 2 instrumented (long-press is a *timed* gesture and depends on
+the platform's real long-press timeout and touch slop — the kind of thing that passes headless and
+fails in the hand). Not run: no device attached.

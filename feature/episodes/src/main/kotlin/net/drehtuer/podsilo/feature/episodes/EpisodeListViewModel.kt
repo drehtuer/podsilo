@@ -62,6 +62,7 @@ class EpisodeListViewModel(
     private val refreshing = MutableStateFlow(false)
     private val pendingBulk = MutableStateFlow<BulkPreview?>(null)
     private val pendingMarkAll = MutableStateFlow<List<String>?>(null)
+    private val pendingSelectionAction = MutableStateFlow<EpisodeUiAction?>(null)
 
     private val effects = Channel<EpisodeListEffect>(Channel.BUFFERED)
     val effect: Flow<EpisodeListEffect> = effects.receiveAsFlow()
@@ -83,7 +84,7 @@ class EpisodeListViewModel(
             selection,
             // Nested because `combine` tops out at five sources; these three are the screen's
             // chrome — the indicator, the dialog and the paused banner — rather than its content.
-            combine(refreshing, pendingBulk, folderStatus.observe(), pendingMarkAll, ::Chrome),
+            combine(refreshing, pendingBulk, folderStatus.observe(), pendingMarkAll, pendingSelectionAction, ::Chrome),
             settingsRepository.observeSwipeMapping(),
             connectivityMonitor.observe(),
         ) { current, currentSelection, chrome, mapping, connectivity ->
@@ -94,6 +95,7 @@ class EpisodeListViewModel(
                 pendingBulk = chrome.pendingBulk,
                 folder = chrome.folder,
                 pendingMarkAll = chrome.pendingMarkAll,
+                pendingSelectionAction = chrome.pendingSelectionAction,
                 mapping = mapping,
                 online = connectivity.online,
             )
@@ -165,6 +167,7 @@ class EpisodeListViewModel(
             isRefreshing = refreshing,
             pendingBulk = pendingBulk,
             pendingMarkAll = pendingMarkAll,
+            pendingSelectionAction = pendingSelectionAction,
             isOffline = !online,
             swipeMapping = mapping,
             // The overflow reads "Download all (n)"; n is the *undecided* count, so the item is
@@ -187,16 +190,25 @@ class EpisodeListViewModel(
                 // A filter change invalidates a selection made under the old one: acting on rows the
                 // user can no longer see is exactly the accidental bulk action §14.2 warns about.
                 selection.value = null
+                // And a confirmation whose set just changed under it must not survive to be tapped.
+                pendingSelectionAction.value = null
             }
             is EpisodeListEvent.SelectionStarted ->
                 selection.value = Selection(setOf(event.episodeKey), currentRowCount())
             is EpisodeListEvent.SelectionToggled -> toggleSelection(event.episodeKey)
-            EpisodeListEvent.SelectionCleared -> selection.value = null
+            EpisodeListEvent.SelectionCleared -> {
+                selection.value = null
+                pendingSelectionAction.value = null
+            }
             EpisodeListEvent.SelectAllInFilter -> selectAll()
+            // Opens the confirmation and writes nothing; only BulkConfirmed writes.
+            is EpisodeListEvent.SelectionActionRequested -> pendingSelectionAction.value = event.action
+            EpisodeListEvent.SelectionActionDismissed -> pendingSelectionAction.value = null
             is EpisodeListEvent.Triage -> viewModelScope.launch { triage(listOf(event.episodeKey), event.action) }
             is EpisodeListEvent.SwipeCommitted -> onSwipe(event.episodeKey, event.direction)
             is EpisodeListEvent.BulkConfirmed ->
                 viewModelScope.launch {
+                    pendingSelectionAction.value = null
                     triage(event.keys.toList(), event.action)
                     selection.value = null
                 }
@@ -330,6 +342,7 @@ class EpisodeListViewModel(
         val mapping: SwipeMapping,
         val online: Boolean,
         val pendingMarkAll: List<String>?,
+        val pendingSelectionAction: EpisodeUiAction?,
     )
 
     /** `combine` tops out at five sources; these four are all "transient chrome". */
@@ -338,6 +351,7 @@ class EpisodeListViewModel(
         val pendingBulk: BulkPreview?,
         val folder: FolderState,
         val pendingMarkAll: List<String>?,
+        val pendingSelectionAction: EpisodeUiAction?,
     )
 }
 

@@ -45,6 +45,15 @@ data class EpisodeListUiState(
      * confirmation.
      */
     val pendingMarkAll: List<String>? = null,
+    /**
+     * Non-null while a **selection-mode** action is being confirmed (`docs/UI.md` §5).
+     *
+     * Its own field, like [pendingBulk] and [pendingMarkAll], and for the same reason: the three
+     * dialogs say different things, and one of them writes `PLAY` actions to a shared log no undo
+     * reaches. Sharing a field would make it possible to render one confirmation's wording over
+     * another's action.
+     */
+    val pendingSelectionAction: EpisodeUiAction? = null,
 ) {
     sealed interface Content {
         data object Loading : Content
@@ -120,6 +129,17 @@ sealed interface EpisodeListEvent {
     data object SelectionCleared : EpisodeListEvent
 
     data object SelectAllInFilter : EpisodeListEvent
+
+    /**
+     * Opens the confirmation for a selection-mode action. **Writes nothing** — only
+     * [BulkConfirmed] does, which is the same "name the count before you write" rule
+     * *Download all* and *Mark all as played* already follow (`docs/UI.md` §5).
+     */
+    data class SelectionActionRequested(
+        val action: EpisodeUiAction,
+    ) : EpisodeListEvent
+
+    data object SelectionActionDismissed : EpisodeListEvent
 
     data class BulkConfirmed(
         val action: EpisodeUiAction,

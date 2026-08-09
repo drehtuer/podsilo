@@ -489,7 +489,11 @@ defaults. The consequence was ADR 0011 and `docs/UI.md` §12.11 quietly not work
 cannot possibly succeed, because the screen had no way to tell one failure from another. Fixed in
 all three queries, with a regression test **verified to fail against the unprojected `SELECT`s**.
 
-### I3 — [#46] Multi-episode selection in the episode list (enhancement)
+### I3 — [#46] Multi-episode selection in the episode list (enhancement) — **done 2026-08-09**
+
+**Built.** 13 new tests (666 total, 0 failures, 3 skipped) + 2 instrumented;
+`ktlintCheck detekt test` green. The estimate below held: the view model needed **one** new event
+pair, and everything else was the UI that had never been written.
 
 **Already designed, and already three-quarters built.** `docs/UI.md` §5 *Batch triage* specifies it,
 and `EpisodeListViewModel` implements the whole selection model — `SelectionStarted`,
@@ -507,18 +511,21 @@ already routes a tap to `SelectionToggled` while in selection mode.
 
 **Work** — depends on I1.
 
-- [ ] `combinedClickable` with `onLongClick` → `SelectionStarted(episodeKey)`.
-- [ ] The selection app bar, replacing the normal one while `state.inSelectionMode`: the count,
-      Download, Mark as played, Select all (scoped to the current filter, which `Selection.allInFilter`
-      already carries), and ✕ / system back → `SelectionCleared`.
-- [ ] The confirmation naming the count that §5 requires before a bulk action commits — the same
-      safeguard *Download all* and *Mark all as played* already have.
-- [ ] Accessibility, which the issue asks for and `docs/UI.md` §12.12 already requires: TalkBack
-      content descriptions for the selected state, and selection reachable without the gesture (the
-      row's existing per-action buttons and the overflow are the non-gesture path).
-- [ ] Correct `docs/UI_interface.md` §3: it declares `SelectionStarted` as a `data object`, the code
-      has it carrying an `episodeKey`, and the code is right — a long-press has to select the row it
-      landed on.
+- [x] `combinedClickable` with `onLongClick` → `SelectionStarted(episodeKey)`.
+- [x] The selection app bar, **replacing** the normal one while a selection is live — the count as a
+      **live region** so TalkBack announces `n selected` on every change (§12.12), Download, Mark as
+      played, *Select all* (scoped to the filter, from `Selection.allInFilter`), and ✕.
+      Replacing rather than augmenting: leaving *Back* beside "3 selected" invites leaving the
+      screen when the user meant to leave the mode.
+- [x] The confirmation naming the count, via a new `SelectionActionRequested`/`SelectionActionDismissed`
+      pair and `pendingSelectionAction` — so the bar cannot reach `BulkConfirmed` directly and the
+      "name the count before you write" rule is structural, as it already is for *Download all* and
+      *Mark all as played*. A filter change drops a pending confirmation along with its selection.
+- [x] Accessibility: a **custom accessibility action** on every row, so selection is reachable
+      without the long-press §12.12 requires — the same event, not a parallel path — plus a leading
+      checkbox in selection mode. That gives `square`/`square-check` their first call site; they had
+      been on §18's allow-list for exactly this since it was written.
+- [x] `docs/UI_interface.md` §3's `SelectionStarted` correction — done in I1.
 
 **Out of scope, and worth saying explicitly in the issue:** the issue's action list asks for *add to
 queue*, *add to playlist*, *remove/delete* and *mark unplayed*. The first three are CLAUDE.md §1

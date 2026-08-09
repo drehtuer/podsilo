@@ -714,6 +714,93 @@ class EpisodeListViewModelTest {
             assertTrue(rows(vm.state.value).isNotEmpty())
         }
 
+    // ---- Selection mode's confirmation gate (issue #46) ----
+
+    /**
+     * §5's safeguard, and the reason `SelectionActionRequested` exists at all rather than the bar
+     * emitting `BulkConfirmed` directly: requesting an action opens a dialog and **writes nothing**.
+     * The same rule *Download all* and *Mark all as played* already follow.
+     */
+    @Test
+    fun `requesting a selection action opens the confirmation and writes nothing`() =
+        runTest {
+            seed(episode("e1"), episode("e2"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionToggled("e2"))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.MARK_AS_PLAYED))
+            runCurrent()
+
+            assertEquals(EpisodeUiAction.MARK_AS_PLAYED, vm.state.value.pendingSelectionAction)
+            assertTrue("the dialog must not write", ledger.writes.isEmpty())
+            assertTrue(scheduler.downloads.isEmpty())
+        }
+
+    @Test
+    fun `dismissing the confirmation keeps the selection and writes nothing`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.DOWNLOAD))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.SelectionActionDismissed)
+            runCurrent()
+
+            assertNull(vm.state.value.pendingSelectionAction)
+            // Cancelling the dialog is not cancelling the selection — the user may pick the other
+            // action, and losing twelve taps' worth of selection would be its own bug.
+            assertEquals(
+                setOf("e1"),
+                vm.state.value.selection
+                    ?.keys,
+            )
+            assertTrue(ledger.writes.isEmpty())
+        }
+
+    @Test
+    fun `confirming writes once, in one transaction, and leaves selection mode`() =
+        runTest {
+            seed(episode("e1"), episode("e2"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionToggled("e2"))
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.MARK_AS_PLAYED))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.BulkConfirmed(EpisodeUiAction.MARK_AS_PLAYED, setOf("e1", "e2")))
+            runCurrent()
+
+            assertEquals("one batched write", 1, ledger.writes.size)
+            assertEquals(2, ledger.writes.single().size)
+            assertNull(vm.state.value.pendingSelectionAction)
+            assertFalse(vm.state.value.inSelectionMode)
+        }
+
+    /** A confirmation whose set changed under it must not survive to be tapped. */
+    @Test
+    fun `changing the filter drops a pending confirmation with the selection`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.DOWNLOAD))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL))
+            runCurrent()
+
+            assertNull(vm.state.value.selection)
+            assertNull(vm.state.value.pendingSelectionAction)
+        }
+
     /**
      * The two app-bar routes (`docs/UI.md` §3), as effects rather than as navigation the screen
      * performs itself — S2 owns no `NavController` (`docs/UI_interface.md` §0.2).

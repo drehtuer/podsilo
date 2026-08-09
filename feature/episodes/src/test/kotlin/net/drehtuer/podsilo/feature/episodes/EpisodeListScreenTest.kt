@@ -6,8 +6,11 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -485,6 +488,135 @@ class EpisodeListScreenTest {
         compose.onAllNodesWithContentDescription("More actions").assertCountEquals(0)
     }
 
+    // ---- Selection mode (issue #46) ----
+
+    /**
+     * The entry point issue #46 was actually missing. The whole selection model — five events, the
+     * "empty selection leaves the mode" rule, the "a filter change drops it" rule — was implemented
+     * and unit-tested; `EpisodeRow` used `clickable`, so **nothing could emit `SelectionStarted`**
+     * and the mode was unreachable.
+     */
+    @Test
+    fun `long-pressing a row enters selection mode on that row`() {
+        render(listOf(row()))
+
+        compose.onNodeWithText("Warum Hamburg immer regnet").performTouchInput { longClick() }
+
+        assertEquals(kotlin.collections.listOf(EpisodeListEvent.SelectionStarted("e1")), events)
+    }
+
+    /**
+     * `docs/UI.md` §12.12: selection must be reachable **without** a long-press, because a
+     * gesture-only affordance is unreachable for a TalkBack user. Same event, not a parallel path.
+     */
+    @Test
+    fun `selection is reachable through an accessibility action, not only by gesture`() {
+        render(listOf(row()))
+
+        compose.onNodeWithText("Warum Hamburg immer regnet").performCustomAccessibilityActionLabelled("Select")
+
+        assertEquals(kotlin.collections.listOf(EpisodeListEvent.SelectionStarted("e1")), events)
+    }
+
+    @Test
+    fun `the selection bar replaces the normal one and announces the count`() {
+        render(selecting("e1"))
+
+        compose.onNodeWithText("1 selected").assertIsDisplayed()
+        // Replaced, not added to: leaving "Back" beside "1 selected" invites leaving the screen
+        // when the user meant to leave the mode.
+        compose.onAllNodesWithContentDescription("Back").assertCountEquals(0)
+    }
+
+    @Test
+    fun `tapping a row in selection mode toggles it rather than opening detail`() {
+        render(selecting("e1", rows = arrayOf(row(key = "e1"), row(key = "e2", title = "Die Elbe von unten"))))
+
+        compose.onNodeWithText("Die Elbe von unten").performClick()
+
+        assertEquals(kotlin.collections.listOf(EpisodeListEvent.SelectionToggled("e2")), events)
+        assertTrue("a tap in selection mode must never open detail", events.none { it is EpisodeListEvent.RowClicked })
+    }
+
+    @Test
+    fun `a selected row shows a checked box and an unselected one an empty box`() {
+        render(selecting("e1", rows = arrayOf(row(key = "e1"), row(key = "e2", title = "Die Elbe von unten"))))
+
+        compose.onNodeWithContentDescription("Selected").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Not selected").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the selection bar offers both actions and Select all`() {
+        render(selecting("e1"))
+
+        compose.onNodeWithText("Select all").performClick()
+        assertTrue(events.contains(EpisodeListEvent.SelectAllInFilter))
+
+        compose.onNodeWithContentDescription("Download selected").performClick()
+        compose.onNodeWithContentDescription("Mark selected as played").performClick()
+
+        assertEquals(
+            kotlin.collections.listOf(
+                EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.DOWNLOAD),
+                EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.MARK_AS_PLAYED),
+            ),
+            events.filterIsInstance<EpisodeListEvent.SelectionActionRequested>(),
+        )
+    }
+
+    @Test
+    fun `✕ leaves selection mode`() {
+        render(selecting("e1"))
+
+        compose.onNodeWithContentDescription("Leave selection mode").performClick()
+
+        assertTrue(events.contains(EpisodeListEvent.SelectionCleared))
+    }
+
+    /**
+     * §5's safeguard: a selection action names its count before anything is written. It matters most
+     * for *Mark as played*, which emits `PLAY` actions to a shared log that no undo reaches.
+     */
+    @Test
+    fun `acting on a selection confirms with the count first, and writes nothing by opening`() {
+        render(selecting("e1", "e2", pendingAction = EpisodeUiAction.MARK_AS_PLAYED))
+
+        compose.onNode(hasText("Mark 2 episodes as played?", substring = true)).assertIsDisplayed()
+        compose.onNode(hasText("sent to Nextcloud", substring = true)).assertIsDisplayed()
+        assertTrue("opening the dialog must confirm nothing", events.none { it is EpisodeListEvent.BulkConfirmed })
+
+        // Disambiguated from the row's own "Mark as played" button behind the dialog.
+        compose.onNode(hasText("Mark as played") and hasAnyAncestor(isDialog())).performClick()
+        assertEquals(
+            EpisodeListEvent.BulkConfirmed(EpisodeUiAction.MARK_AS_PLAYED, setOf("e1", "e2")),
+            events.filterIsInstance<EpisodeListEvent.BulkConfirmed>().single(),
+        )
+    }
+
+    @Test
+    fun `dismissing the selection confirmation writes nothing`() {
+        render(selecting("e1", pendingAction = EpisodeUiAction.DOWNLOAD))
+
+        compose.onNode(hasText("Download 1 episode?", substring = true)).assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertTrue(events.contains(EpisodeListEvent.SelectionActionDismissed))
+        assertTrue(events.none { it is EpisodeListEvent.BulkConfirmed })
+    }
+
+    private fun selecting(
+        vararg keys: String,
+        rows: Array<EpisodeUi> = arrayOf(row()),
+        pendingAction: EpisodeUiAction? = null,
+    ) = EpisodeListUiState(
+        feedUrl = FEED_URL,
+        feedTitle = "Der Podcast",
+        content = EpisodeListUiState.Content.Episodes(rows.toList()),
+        selection = Selection(keys.toSet(), allInFilter = rows.size),
+        pendingSelectionAction = pendingAction,
+    )
+
     /** §5: disabled *with the reason*. A greyed item that does not say why is a dead end. */
     @Test
     fun `Download all is disabled with its reason while the queue is paused`() {
@@ -501,3 +633,23 @@ class EpisodeListScreenTest {
         compose.onNodeWithText("folder unavailable").assertIsDisplayed()
     }
 }
+
+/**
+ * Invokes a custom accessibility action by its label.
+ *
+ * Compose's test API has no built-in matcher for this, and the affordance it reaches is a
+ * requirement rather than a nicety (`docs/UI.md` §12.12: selection reachable without a long-press),
+ * so it is worth the four lines to be able to assert it.
+ */
+private fun androidx.compose.ui.test.SemanticsNodeInteraction.performCustomAccessibilityActionLabelled(
+    label: String,
+): androidx.compose.ui.test.SemanticsNodeInteraction =
+    also {
+        val actions =
+            fetchSemanticsNode()
+                .config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
+        val action =
+            actions.firstOrNull { it.label == label }
+                ?: error("no custom accessibility action labelled '$label'; found ${actions.map { a -> a.label }}")
+        action.action()
+    }

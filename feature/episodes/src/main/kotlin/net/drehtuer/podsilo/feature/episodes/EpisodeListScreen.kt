@@ -102,6 +102,11 @@ fun EpisodeListScreen(
     state.pendingMarkAll?.let { keys ->
         MarkAllDialog(keys, onEvent)
     }
+    // Both non-null only together: the action is only ever requested from the selection bar, which
+    // exists only while there is a selection.
+    state.pendingSelectionAction?.let { action ->
+        state.selection?.let { selection -> SelectionActionDialog(action, selection, onEvent) }
+    }
 }
 
 @Composable
