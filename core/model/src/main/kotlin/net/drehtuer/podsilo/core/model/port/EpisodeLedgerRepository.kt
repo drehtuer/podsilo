@@ -40,7 +40,13 @@ interface EpisodeLedgerRepository {
 
     suspend fun upsert(row: EpisodeLedgerRow)
 
-    /** Rows where `syncedToServer = false` — the outbox drain query. */
+    /**
+     * Rows where `syncedToServer = false` — the outbox drain query.
+     *
+     * Its *depth* is a screen read and lives on [EpisodeListRepository.observeUnsyncedCount], not
+     * here: `getUnsynced().size` would load every pending row on every ledger write just to render
+     * one integer (issue #47).
+     */
     suspend fun getUnsynced(): List<EpisodeLedgerRow>
 
     suspend fun markSynced(episodeKeys: List<String>)

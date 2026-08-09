@@ -26,6 +26,37 @@ interface EpisodeListRepository {
     fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>>
 
     /**
+     * S7's list: every episode whose ledger row is `QUEUED`, `DOWNLOADING` or `ERROR`, newest
+     * decision first.
+     *
+     * A query of its own rather than a filter on [observeEpisodes], because the Activity screen's
+     * cost must scale with the **queue**, not with the ledger. Observing every row and narrowing in
+     * Kotlin is what made downloads appear minutes late on a device with a few thousand decided
+     * episodes (issue #47): the join and the predicate both belong in SQL.
+     */
+    fun observeInFlight(): Flow<List<EpisodeListItem>>
+
+    /**
+     * The last [limit] successfully delivered files, newest first, excluding anything at or before
+     * [since] — S7's *recently downloaded* group and the only place the app answers "did it land?".
+     *
+     * [since] is a **display cursor**, not a deletion: hiding a row here must never remove the
+     * ledger record that stops the episode being downloaded again (CLAUDE.md §11).
+     */
+    fun observeRecentlyDelivered(
+        since: Long,
+        limit: Int,
+    ): Flow<List<EpisodeLedgerRow>>
+
+    /**
+     * How many ledger rows are still waiting to reach the server — S7's "n actions pending".
+     *
+     * A screen read, which is why it is here and not beside the outbox drain on
+     * [EpisodeLedgerRepository]: counted in SQL, never by taking the size of the drained list.
+     */
+    fun observeUnsyncedCount(): Flow<Int>
+
+    /**
      * Per-feed undecided counts, live — S1's badges.
      *
      * Counted in SQL rather than by observing the episodes and grouping them: a home screen must not

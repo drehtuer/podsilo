@@ -542,9 +542,20 @@ merged with the ledger state:
 **A percentage is only ever drawn from an update received in this process.** Persisting a percentage
 to render after process death is the specific bug this table forbids.
 
-Updates are throttled to **1 Hz** in the ViewModel — the same throttle `DownloadNotifications`
-already uses, so the notification, the row, S1's aggregate ring and S7 can never disagree. The bar
-animates between updates rather than stepping.
+Updates are throttled to **1 Hz** — and, as built (2026-08-09, issue #47), that is *the same tick*
+that updates the notification rather than a second timer beside it, which is what makes "the
+notification, the row, S1's aggregate and S7 never disagree" structural instead of aspirational.
+
+**How it is wired.** `DownloadWorker` publishes `KEY_PROGRESS_BYTES`/`KEY_PROGRESS_TOTAL` through
+`setProgressAsync`, tagging each request with its episode key — `WorkInfo` exposes tags and *not* the
+unique work name, so without the tag a queued download cannot be mapped back to its episode.
+`WorkManagerDownloadMonitor` (`:app`) turns that into `DownloadWork(progress, live)` behind the
+`DownloadWorkMonitor` port, and **all three cases above resolve in one place**,
+`EpisodeListItem.toUi`, so S2, S3 and S7 cannot answer them differently. `live` and `progress` are
+separate because the table needs both questions: *is there work at all* versus *has it reported yet*.
+
+Before this, none of the table was implemented: the worker published nothing, nothing observed
+`WorkInfo.progress`, and every `DOWNLOADING` row drew the indeterminate bar for the whole download.
 
 ---
 

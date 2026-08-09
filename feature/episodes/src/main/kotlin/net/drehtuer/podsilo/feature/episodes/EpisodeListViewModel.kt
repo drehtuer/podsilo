@@ -54,6 +54,7 @@ class EpisodeListViewModel(
     private val scheduler: EpisodeScheduler,
     private val spaceProbe: DownloadSpaceProbe,
     private val folderStatus: DownloadFolderStatus,
+    private val workMonitor: DownloadWorkMonitor,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : ViewModel() {
     private val filter = MutableStateFlow(EpisodeFilter.TO_DECIDE)
@@ -104,8 +105,12 @@ class EpisodeListViewModel(
                     LedgerFilter(state = snapshot.filter.ledgerState, feedUrl = feedUrl),
                 ),
                 feedFlow,
-            ) { items, feed ->
-                snapshot.toUiState(items, feed?.title ?: feedUrl, feed?.imageUrl)
+                // Live byte progress, which no screen had until issue #47: the ledger says an
+                // episode is DOWNLOADING, only this process knows how far along.
+                workMonitor.observe(),
+            ) { items, feed, work ->
+                resumeStranded(work, items)
+                snapshot.toUiState(items, feed?.title ?: feedUrl, feed?.imageUrl, work)
             }
         }.stateIn(
             scope = viewModelScope,
@@ -113,12 +118,37 @@ class EpisodeListViewModel(
             initialValue = EpisodeListUiState(feedUrl = feedUrl, feedTitle = feedUrl),
         )
 
+    /**
+     * `docs/UI_interface.md` §7's third case: a `DOWNLOADING` row with no work behind it was killed
+     * mid-download, so the work is re-enqueued **on first observation**.
+     *
+     * This does not weaken the no-auto-download invariant (CLAUDE.md §1). It resumes a download the
+     * user already asked for — the ledger row is the proof they asked — and it is deliberately
+     * limited to `DOWNLOADING`: a `QUEUED` row is not resumed here, and no row without a ledger entry
+     * is ever touched. `userRequested` stays `false`, so this can never get past `DownloadWorker`'s
+     * terminal-row refusal.
+     *
+     * [alreadyResumed] makes it once-per-key-per-ViewModel: without it, every re-emission of the
+     * query while the worker is starting up would enqueue again.
+     */
+    private fun resumeStranded(
+        work: DownloadWork,
+        items: List<EpisodeListItem>,
+    ) {
+        work.strandedIn(items).forEach { key ->
+            if (alreadyResumed.add(key)) scheduler.enqueueDownload(key, userRequested = false)
+        }
+    }
+
+    private val alreadyResumed = mutableSetOf<String>()
+
     private fun Snapshot.toUiState(
         items: List<EpisodeListItem>,
         feedTitle: String,
         feedArtwork: String?,
+        work: DownloadWork,
     ): EpisodeListUiState {
-        val rows = items.map { it.toUi(feedTitle = feedTitle, feedArtworkUrl = feedArtwork) }
+        val rows = items.map { it.toUi(feedTitle = feedTitle, feedArtworkUrl = feedArtwork, work = work) }
         return EpisodeListUiState(
             feedUrl = feedUrl,
             feedTitle = feedTitle,

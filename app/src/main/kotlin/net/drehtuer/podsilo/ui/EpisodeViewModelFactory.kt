@@ -49,6 +49,7 @@ class EpisodeViewModelFactory
         private val scheduler: WorkEpisodeScheduler,
         private val spaceProbe: TargetSpaceProbe,
         private val folderStatus: AccessDownloadFolderStatus,
+        private val workMonitor: WorkManagerDownloadMonitor,
         private val folderLabel: DocumentFolderLabel,
         private val namingPreview: TemplateNamingPreview,
         private val clock: Clock,
@@ -90,6 +91,7 @@ class EpisodeViewModelFactory
                     scheduler = scheduler,
                     spaceProbe = spaceProbe,
                     folderStatus = folderStatus,
+                    workMonitor = workMonitor,
                 )
             }
 
@@ -103,6 +105,7 @@ class EpisodeViewModelFactory
                     triageWriter = triageWriter(),
                     scheduler = scheduler,
                     folderLabel = folderLabel,
+                    workMonitor = workMonitor,
                 )
             }
 
@@ -132,12 +135,13 @@ class EpisodeViewModelFactory
         fun activity(): ViewModelProvider.Factory =
             factory {
                 ActivityViewModel(
-                    ledgerRepository = ledgerRepository,
                     episodeRepository = episodeRepository,
+                    listRepository = listRepository,
                     feedRepository = feedRepository,
                     settingsRepository = settingsRepository,
                     connectivityMonitor = connectivityMonitor,
                     folderStatus = folderStatus,
+                    workMonitor = workMonitor,
                     syncStatus = syncStatus,
                     scheduler = scheduler,
                     triageWriter = triageWriter(),

@@ -105,6 +105,16 @@ class FakeListRepository(
 
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
+    // S7's queries. These modules do not render S7, so the honest stub is "nothing in flight".
+    override fun observeInFlight(): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
+
+    override fun observeRecentlyDelivered(
+        since: Long,
+        limit: Int,
+    ): Flow<List<EpisodeLedgerRow>> = MutableStateFlow(emptyList())
+
+    override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
+
     override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> = MutableStateFlow(emptyList())
 
     override suspend fun previewUndecided(scope: BulkScope): List<FeedUndecidedCount> =

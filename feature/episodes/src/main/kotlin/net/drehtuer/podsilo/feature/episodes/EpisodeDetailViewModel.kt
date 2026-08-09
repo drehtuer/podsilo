@@ -42,6 +42,7 @@ class EpisodeDetailViewModel(
     private val triageWriter: TriageWriter,
     private val scheduler: EpisodeScheduler,
     private val folderLabel: DownloadFolderLabel,
+    private val workMonitor: DownloadWorkMonitor,
 ) : ViewModel() {
     private val effects = Channel<EpisodeDetailEffect>(Channel.BUFFERED)
     val effect: Flow<EpisodeDetailEffect> = effects.receiveAsFlow()
@@ -74,9 +75,11 @@ class EpisodeDetailViewModel(
      * closes the sheet on `null` rather than the view model rendering a hollow one.
      */
     val state: StateFlow<EpisodeDetailUiState?> =
-        combine(source, ledgerRepository.observeRow(episodeKey)) { loaded, row ->
+        combine(source, ledgerRepository.observeRow(episodeKey), workMonitor.observe()) { loaded, row, work ->
             loaded?.let {
-                val ui = EpisodeListItem(it.episode, row).toUi(it.feedTitle, it.feedArtwork)
+                // Same §7 projection as S2's rows: a sheet open on a running download shows the same
+                // bar, from the same source, as the row it was opened from (docs/UI.md §12.2).
+                val ui = EpisodeListItem(it.episode, row).toUi(it.feedTitle, it.feedArtwork, work)
                 EpisodeDetailUiState(
                     episode = ui,
                     // Raw. Sanitising is the Composable's job (architecture §4).

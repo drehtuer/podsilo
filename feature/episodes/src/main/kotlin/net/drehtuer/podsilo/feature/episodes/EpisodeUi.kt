@@ -114,16 +114,27 @@ internal fun actionsFor(
 }
 
 /**
- * Projects a stored [EpisodeListItem] into its row.
+ * Projects a stored [EpisodeListItem] into its row, applying `docs/UI_interface.md` §7's table.
  *
- * [liveProgress] is supplied by the ViewModel from WorkManager, deliberately as a parameter rather
- * than read from the ledger: the ledger knows an episode is `DOWNLOADING`, but only this process
- * knows how far along it is.
+ * [work] is supplied by the ViewModel from WorkManager, deliberately as a parameter rather than read
+ * from the ledger: **the ledger knows an episode is `DOWNLOADING`, but only this process knows how
+ * far along it is.** The three cases §7 enumerates all resolve here, in one place, so S2, S3 and S7
+ * cannot each answer them slightly differently:
+ *
+ * | Ledger row | Live work | Live update | Renders as |
+ * |---|---|---|---|
+ * | `DOWNLOADING` | yes | yes | determinate bar, `%` and bytes |
+ * | `DOWNLOADING` | yes | no | indeterminate, *resuming* |
+ * | `DOWNLOADING` | no | — | ***queued*** — see [isStranded] |
+ *
+ * The last row is the one worth naming: a `DOWNLOADING` ledger row with no work behind it is a
+ * download the process died in the middle of. Rendering it as *downloading* would claim something
+ * is happening that is not, so it renders as queued and the ViewModel re-enqueues it.
  */
 fun EpisodeListItem.toUi(
     feedTitle: String,
     feedArtworkUrl: String? = null,
-    liveProgress: DownloadProgress? = null,
+    work: DownloadWork = DownloadWork(),
 ): EpisodeUi =
     EpisodeUi(
         episodeKey = episode.episodeKey,
@@ -140,10 +151,27 @@ fun EpisodeListItem.toUi(
         // Stripped here, not at write time: the raw HTML stays in the database so the detail sheet
         // can render it properly (architecture §4). This is only the two-line list preview.
         descriptionSnippet = sanitizeEpisodeHtml(episode.description).text.replace('\n', ' ').trim(),
-        ledgerState = ledger?.state,
-        progress = liveProgress,
+        // Presentation only — nothing rewrites the ledger row, which still says DOWNLOADING and is
+        // still the durable record. This is what the *user* is told is happening.
+        ledgerState = if (work.isStranded(this)) LedgerState.QUEUED else ledger?.state,
+        progress = work.progress[episode.episodeKey],
         writtenFileName = ledger?.writtenFileName,
         lastError = ledger?.toFailureUi(),
         hasEnclosure = episode.enclosureUrl.isNotBlank(),
         episodePageUrl = episode.link,
     )
+
+/**
+ * A `DOWNLOADING` ledger row with **no work behind it at all** — killed before WorkManager could
+ * resume it (`docs/UI_interface.md` §7's third case).
+ *
+ * Distinct from "downloading but has not reported yet", which is live work and reads *resuming*. The
+ * distinction matters because only this case needs re-enqueueing, and re-enqueueing a download that
+ * is already running would be a second worker for one file.
+ */
+fun DownloadWork.isStranded(item: EpisodeListItem): Boolean =
+    item.ledger?.state == LedgerState.DOWNLOADING && item.episode.episodeKey !in live
+
+/** The keys [isStranded] identifies, for the ViewModel that has to re-enqueue them. */
+fun DownloadWork.strandedIn(items: List<EpisodeListItem>): List<String> =
+    items.filter { isStranded(it) }.map { it.episode.episodeKey }

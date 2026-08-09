@@ -423,7 +423,11 @@ app bar; and the overflow as a **real popup window** rather than Robolectric's s
 A test at 320 dp shows the chip row and the first episode row do not overlap, with or without the
 fix. See the corrected root-cause note below.
 
-### I2 — [#47] Downloads appear delayed in Activity (bug)
+### I2 — [#47] Downloads appear delayed in Activity (bug) — **done 2026-08-09**
+
+**Built.** 18 new tests (653 total, 0 failures, 3 skipped); `ktlintCheck detekt test assembleDebug`
+green. Both faults below are fixed, and a **third** turned up while writing the queries — see the
+adjacent-bug note at the end.
 
 **Root cause — two independent faults, both real, neither one the event-bus problem the issue
 guesses at.** S7 already observes Room `Flow`s, so the plumbing the issue proposes exists.
@@ -447,23 +451,43 @@ guesses at.** S7 already observes Room `Flow`s, so the plumbing the issue propos
 
 **Work**
 
-- [ ] `DownloadWorker`: call `setProgress` alongside the existing notification update, inside the
-      same 1 Hz throttle, so the notification, the row, S1's ring and S7 cannot disagree
-      (`docs/UI_interface.md` §7).
-- [ ] Merge `WorkInfo.progress` into `EpisodeUi.progress` in the view models, per §7's table
-      exactly: a percentage is only ever drawn from an update **received in this process**, a
-      `DOWNLOADING` row with live work but no update reads *resuming*, and one with no live work at
-      all reads *queued* and is re-enqueued on first observation. `observeDownloadWork()` finally
-      gets its caller.
-- [ ] Narrow S7's query to the states it actually renders, resolved in SQL rather than in Kotlin, so
-      the projection is bounded by what is on screen instead of by the size of the ledger. The
-      *recently downloaded* group gets its own limited DAO query rather than sorting the whole table
-      in memory. This widens `EpisodeListRepository` with query methods; it is **not** a schema
-      change and needs no migration.
+- [x] `DownloadWorker` publishes progress through `setProgressAsync` **inside the existing 1 Hz
+      notification tick**, so one clock drives the notification, the row, S1 and S7 and they cannot
+      disagree (`docs/UI_interface.md` §7). `setProgressAsync` rather than the suspending
+      `setProgress` because the downloader's callback is an ordinary function.
+- [x] Each request carries an **episode-key tag**. `WorkInfo` exposes its tags and *not* the unique
+      work name it was enqueued under, so without one there is no way to map a queued download back
+      to its episode — which is what S1's per-feed count and S7's rows both need.
+- [x] `DownloadWorkMonitor` (port, `:feature:episodes`) + `WorkManagerDownloadMonitor` (`:app`) —
+      `observeDownloadWork()` finally has a caller. §7's three cases are resolved in **one place**,
+      `EpisodeListItem.toUi`, so S2, S3 and S7 cannot answer them differently: live update →
+      determinate; live work, no update → *resuming*; **no live work → *queued*** and the view model
+      re-enqueues it once.
+- [x] S7's queries are narrow and resolved in SQL: `observeInFlight()` (the three states it renders,
+      joined), `observeRecentlyDelivered(since, limit)` (`LIMIT` in SQL, not `take()` in Kotlin) and
+      `observeUnsyncedCount()` (`COUNT(*)`, not `getUnsynced().size`). No schema change, no migration.
+      `observeUnsyncedCount` sits on `EpisodeListRepository` rather than beside the outbox drain
+      because it is a *screen read* — detekt's function ceiling on `EpisodeLedgerDao` forced the
+      question and the seam gave the answer.
+- [x] **`FeedUi.activeDownloads` is populated at last** — it had a default of `0` and no assignment
+      anywhere, so S1's "n downloading" line and the app-bar activity badge were both permanently
+      dead. It comes from the same bounded in-flight query, counting `QUEUED`/`DOWNLOADING` only
+      (an `ERROR` row is in flight for S7 but is not a download in progress).
 
-**Tests** — the 1 Hz throttle; the cold-start rule (ledger `DOWNLOADING`, no live progress →
-*resuming*, never 0 %); an S7 projection test with a large ledger (reuse the 500-episode fixture
-shape) asserting the number of per-row lookups is bounded and does not scale with the ledger.
+**Tests** — 18 new. The worker publishes progress and its tag round-trips; §7's three cases in both
+S2 and S3; the re-enqueue happens **once** and never touches an undecided or `QUEUED` row, and never
+carries `userRequested` (the no-auto-download invariant at the one path that enqueues without a tap);
+the DAO queries select only what S7 renders, order and limit correctly, and treat the delivered
+cursor as a display filter that deletes nothing; and **S7's view model, which had no test at all**
+before this — including that a thousand decided ledger rows do not enlarge the in-flight result.
+
+**Adjacent bug, found while writing the queries and fixed here.** Not one of the three list queries
+projected `lastErrorCause` or `lastErrorRetryable`. The columns exist (schema v3), the entity has
+them, and every `SELECT` simply left them out — so Room saw `NULL` and the fields fell back to their
+defaults. The consequence was ADR 0011 and `docs/UI.md` §12.11 quietly not working: a
+`FOLDER_UNAVAILABLE` failure could never render *Choose folder* instead of a *Retry* button that
+cannot possibly succeed, because the screen had no way to tell one failure from another. Fixed in
+all three queries, with a regression test **verified to fail against the unprojected `SELECT`s**.
 
 ### I3 — [#46] Multi-episode selection in the episode list (enhancement)
 
