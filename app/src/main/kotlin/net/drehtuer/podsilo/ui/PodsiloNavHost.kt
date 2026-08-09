@@ -147,6 +147,8 @@ private fun EpisodesDestination(
     OnEffect(viewModel.effect) { effect ->
         when (effect) {
             is EpisodeListEffect.OpenDetail -> host.navController.navigate(Routes.episodeDetail(effect.episodeKey))
+            EpisodeListEffect.NavigateUp -> host.navController.popBackStack()
+            EpisodeListEffect.OpenActivity -> host.navController.navigate(Routes.ACTIVITY)
             is EpisodeListEffect.OpenUrl -> host.onOpenUrl(effect.url)
             EpisodeListEffect.ResolvePausedQueue -> host.onChooseFolder()
             is EpisodeListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
