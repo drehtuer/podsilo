@@ -61,6 +61,17 @@ noted here before that date was instead either built, declined in conversation, 
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.
+- **S2's feed-error banner is specified, has a state field, and is connected at neither end.** Found
+  on 2026-08-09 while tracing the four v0.3.0 issues. `EpisodeListUiState.feedError` exists with a
+  KDoc explaining that it "renders as an inline banner *above* the list, never in place of it" —
+  `EpisodeListViewModel` never sets it, and `EpisodeListScreen` never reads it. `docs/UI_interface.md`
+  §3 also declares a `RetryFeedClicked` event that does not exist in the code. So `docs/UI.md` §5's
+  "Feed fetch failed: inline banner with the reason in plain words + **Try again**" state cannot
+  occur: a feed that fails to fetch is silent in S2, and the only trace is the S8 entry
+  `FeedRefresher` writes. Not folded into the #48 work — that issue is about layout, and this is a
+  missing state — but it is the fourth instance of the same shape (specified, wired at one end, no
+  connection in the middle) and cheap to close alongside any other S2 change.
+
 - **Revoke the app password when the account is rejected.** S5 now confirms the account before
   storing it (ADR 0019), so *Use a different account* throws away a password that Nextcloud has
   already issued and still lists under *Security*. `DELETE /ocs/v2.php/core/apppassword`
@@ -116,6 +127,15 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   password field goes in the app.** That keeps ADR 0010 and CLAUDE.md §5 intact — the app never
   handles the account password — at the known cost that a wrong browser session can only be fixed in
   the browser.
+- **The batch actions issue #46 asked for beyond triage.** *Add to queue*, *add to playlist* and
+  *remove/delete* are CLAUDE.md §1 non-goals permanently — no player, no playlists, no file lifecycle
+  — recorded here so the answer does not have to be re-derived each time an issue asks for them.
+  **Declined by the author on 2026-08-09 along with *mark unplayed***, which is the interesting one:
+  it is not a non-goal, it simply has no representation. An undecided episode is one with **no**
+  ledger row, so "unmark" means *deleting* the record that stops an episode being downloaded twice
+  (CLAUDE.md §11). The ledger stays append-only, and undo (#49) was designed to need no delete
+  either — see `TODO.md` Tier 5, decisions D1 and D4.
+
 - **"Download all visible" as a prominent button.** CLAUDE.md §1 names this specifically as the kind
   of thing that looks helpful and isn't. The UI design's per-podcast *Download all (n)* overflow item
   is a narrower version, and was accepted as a *command* rather than a rule — ADR 0014.
