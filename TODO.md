@@ -9,6 +9,11 @@ work.
 **Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c complete — all eight screens built,
 navigable, and icon-complete.** 502 tests, 3 skipped, plus 6 instrumented.
 
+**Update (2026-08-09): v0.3.0 is released and running on the author's phone, and four issues came
+back from using it.** They are planned as **[Tier 5](#tier-5--reported-issues-from-using-v030)** at
+the end of this file, in the order to solve them. One of them (#49, undo) contradicts a shipped
+design rule and is **blocked on an author decision**; the other three are not.
+
 **The app runs.** It was installed on the Tier 2 emulator, launched, and rendered S1 — the first time
 any of this has executed as an application rather than as a test. Its first run found three bugs no
 unit test could (`docs/journal.md`), one of them serious: `:core:naming`'s token regex used a bare
@@ -343,3 +348,192 @@ A pattern worth keeping: ADRs 0001–0011 were each written when the decision wa
 all are "Accepted". 0012 was written *ahead* of its decision and spent a week as a draft blocking
 code. Write the ADR when the decision happens — not before, to reserve a number, and not after, to
 document what shipped.
+
+---
+
+## Tier 5 — Reported issues from using v0.3.0
+
+Four GitHub issues, filed after the release went on the author's phone. Ordered by *what unblocks
+what*, not by severity: **I1 builds the app bar that I3 needs**, and **I4 is last because it was the
+only one blocked on a decision** — all four are now settled, at the end of this section.
+
+Each entry below records the root cause **found by reading the code**, not the issue's own guess.
+Three of the four turned out to be something other than what the issue text assumed — worth knowing
+before starting, because two of them are "specified, wired at one end, never connected in the
+middle", which is now the **fourth and fifth** times this project has hit that shape (after
+pull-to-refresh, the artwork slot and the swipe gesture — see `EpisodeSwipe.kt`'s header comment).
+
+**Convention:** one branch and one PR per issue, Conventional Commits, `./gradlew ktlintCheck detekt
+test` green before each is called done (CLAUDE.md §12).
+
+### I1 — [#48] The filter row is clipped on a narrow screen (bug)
+
+**Root cause — two faults, and the larger one is not in the chip row.**
+
+1. **`EpisodeListScreen` has no `TopAppBar` at all.** It is the only one of the eight screens
+   without one (S1, S3, S4, S6, S7 and S8 all have one). So `docs/UI.md` §5's app bar —
+   `‹ Der Podcast [filter] [activity]` plus the `⋮` carrying *Download all (n)* — was never built,
+   the screen's content begins at y = 0 **underneath the status bar** (visible in the issue's
+   screenshot), and there is no back affordance, no feed title, and nowhere for I3's selection bar
+   to go.
+2. **`FilterChips` is a fixed-width `Row`** (`EpisodeListScreen.kt:154`) — four chips at their
+   intrinsic widths with `spacedBy(8.dp)`, no scroll, no wrap, so the fourth chip (`All`) is simply
+   clipped off the right edge. `Modifier.sizeIn(minHeight = MinTouchTarget)` grows each chip's
+   touch target to 48 dp without giving the row any vertical padding, which is the "overlapping the
+   action labels" half of the report.
+
+**Work**
+
+- [ ] Add S2's app bar per `docs/UI.md` §5: back, feed title (falling back to the URL), the `⋮`
+      overflow with *Download all (n)* — the event and its `BulkPreview` dialog already exist and are
+      tested, nothing emits `DownloadAllRequested` today — and the activity action. Apply window
+      insets so nothing sits under the status bar.
+- [ ] Make the chip row survive a narrow screen: **one horizontally scrollable line** (D3). The
+      header height must stay fixed — wrapping would push the first episode row down on exactly the
+      screens with the least room.
+- [ ] Keep the ≥ 48 dp touch target (§12.12) with explicit vertical padding rather than by growing
+      the chips into their neighbours.
+
+**Tests** — Robolectric Compose tests at a constrained width (the screenshot is ~360 dp) asserting
+every filter chip is reachable and that the fourth is not clipped; a device screenshot at that width
+to confirm, since this is precisely the class of bug that stayed green in 627 JVM tests.
+
+### I2 — [#47] Downloads appear delayed in Activity (bug)
+
+**Root cause — two independent faults, both real, neither one the event-bus problem the issue
+guesses at.** S7 already observes Room `Flow`s, so the plumbing the issue proposes exists.
+
+1. **No download progress is ever published, anywhere.** `DownloadWorker` reports bytes only to
+   `DownloadNotifications` (`DownloadWorker.kt:145`); it never calls `setProgress`, so
+   `WorkInfo.progress` is always empty. Nothing observes it either — `EpisodeUi.progress` is left at
+   its `null` default by every caller of `toUi`, and `WorkScheduler.observeDownloadWork()`
+   (`WorkScheduler.kt:70`) **has no caller in the repository**. The consequence: every `DOWNLOADING`
+   row in S2, S3 **and S7** renders the indeterminate *resuming* bar for the entire download and
+   never shows a percentage or a byte count. `docs/UI.md` §12.2 and `docs/UI_interface.md` §7 are
+   specified in full and unimplemented.
+2. **S7 re-projects the entire ledger, with an N+1 query, on every emission.**
+   `ActivityViewModel.state` observes `LedgerFilter(state = ALL)` — *every* ledger row on the device,
+   which after triage is thousands (the author's has ~9,500 episodes) — and then, in
+   `toUiState`, calls `feedRepository.getAll()` plus one suspend `episodeRepository.get(episodeKey)`
+   **per row** before filtering down to the handful that are downloading, queued or failed. Every
+   ledger write anywhere re-runs the whole thing. That is the latency in the report, and it gets
+   worse the more the app is used — which matches "empty or stale until you navigate away and come
+   back".
+
+**Work**
+
+- [ ] `DownloadWorker`: call `setProgress` alongside the existing notification update, inside the
+      same 1 Hz throttle, so the notification, the row, S1's ring and S7 cannot disagree
+      (`docs/UI_interface.md` §7).
+- [ ] Merge `WorkInfo.progress` into `EpisodeUi.progress` in the view models, per §7's table
+      exactly: a percentage is only ever drawn from an update **received in this process**, a
+      `DOWNLOADING` row with live work but no update reads *resuming*, and one with no live work at
+      all reads *queued* and is re-enqueued on first observation. `observeDownloadWork()` finally
+      gets its caller.
+- [ ] Narrow S7's query to the states it actually renders, resolved in SQL rather than in Kotlin, so
+      the projection is bounded by what is on screen instead of by the size of the ledger. The
+      *recently downloaded* group gets its own limited DAO query rather than sorting the whole table
+      in memory. This widens `EpisodeListRepository` with query methods; it is **not** a schema
+      change and needs no migration.
+
+**Tests** — the 1 Hz throttle; the cold-start rule (ledger `DOWNLOADING`, no live progress →
+*resuming*, never 0 %); an S7 projection test with a large ledger (reuse the 500-episode fixture
+shape) asserting the number of per-row lookups is bounded and does not scale with the ledger.
+
+### I3 — [#46] Multi-episode selection in the episode list (enhancement)
+
+**Already designed, and already three-quarters built.** `docs/UI.md` §5 *Batch triage* specifies it,
+and `EpisodeListViewModel` implements the whole selection model — `SelectionStarted`,
+`SelectionToggled`, `SelectionCleared`, `SelectAllInFilter`, `BulkConfirmed`, the "empty selection
+leaves selection mode" rule, and the "a filter change drops the selection" rule — with unit tests
+covering it (`EpisodeListViewModelTest`). `EpisodeRow` already renders a selected background and
+already routes a tap to `SelectionToggled` while in selection mode.
+
+**What is missing is only the way in and the way to act.**
+
+- `EpisodeRow` uses `clickable`, not `combinedClickable` (`EpisodeRow.kt:60`), so **long-press fires
+  nothing** and `SelectionStarted` has no emitter. Selection mode is currently unreachable.
+- With no app bar (I1), there is nowhere to render `n selected`, *Download*, *Mark as played*,
+  *Select all* and ✕.
+
+**Work** — depends on I1.
+
+- [ ] `combinedClickable` with `onLongClick` → `SelectionStarted(episodeKey)`.
+- [ ] The selection app bar, replacing the normal one while `state.inSelectionMode`: the count,
+      Download, Mark as played, Select all (scoped to the current filter, which `Selection.allInFilter`
+      already carries), and ✕ / system back → `SelectionCleared`.
+- [ ] The confirmation naming the count that §5 requires before a bulk action commits — the same
+      safeguard *Download all* and *Mark all as played* already have.
+- [ ] Accessibility, which the issue asks for and `docs/UI.md` §12.12 already requires: TalkBack
+      content descriptions for the selected state, and selection reachable without the gesture (the
+      row's existing per-action buttons and the overflow are the non-gesture path).
+- [ ] Correct `docs/UI_interface.md` §3: it declares `SelectionStarted` as a `data object`, the code
+      has it carrying an `episodeKey`, and the code is right — a long-press has to select the row it
+      landed on.
+
+**Out of scope, and worth saying explicitly in the issue:** the issue's action list asks for *add to
+queue*, *add to playlist*, *remove/delete* and *mark unplayed*. The first three are CLAUDE.md §1
+non-goals permanently (no player, no playlists, no file lifecycle management — Podsilo never deletes
+a file). *Mark unplayed* does not exist as a state — an undecided episode is one with **no** ledger
+row, so it would mean deleting the record that stops an episode being downloaded twice — and is
+**declined** (D4): the ledger stays append-only. The issue's
+implementation notes (RecyclerView, `ActionMode`, the AndroidX Selection library) describe a View-based
+app; this one is Compose, and the selection model they recommend building already exists.
+
+### I4 — [#49] Undo after a swipe (enhancement) — reverses a shipped design rule
+
+**This contradicts a shipped, deliberate design rule.** `docs/UI.md` §12.3 is titled *"No undo —
+re-download instead"*, and §12.1 says a swipe "commits immediately — there is no undo". The reasoning
+is not stylistic: **a skip becomes a `PLAY` action in an append-only log on the server**, other
+clients act on it, and the GPodder API has no retraction of any kind. Nothing Podsilo can do will
+un-send it. That is why §12.3 chose "correct it by acting again" and why every bulk action got a
+confirmation dialog instead.
+
+The author has now asked for undo anyway, having hit the accidental swipe in practice. That is a
+legitimate reversal of a design call — and **D1 below settles how**: the decision is *deferred*, not
+written and reverted. Nothing is written to the ledger and no download is enqueued until the
+snackbar window elapses, so an undone swipe leaves no trace anywhere and the shared log is never
+touched. It still needs **ADR 0021** written at the point the code is.
+
+**What the code allows today**
+
+- `EpisodeLedgerRepository` has **no delete** — `observe`, `get`, `observeRow`, `upsert`,
+  `upsertAll`, `getUnsynced`, `markSynced` and nothing else. That is by design: CLAUDE.md §11 calls
+  the ledger row "the only dedup authority, and it must outlive the file". Deferring the write (D1)
+  means it stays that way: **do not add one for this.**
+- A `DOWNLOAD` action is only posted **after** a download completes, so a download would have been
+  the easy half to undo either way — cancel the work, and nothing has reached the server.
+- A `PLAY` action is posted by the next sync pass, which may be immediate (`requestSyncNow` fires
+  after any download lands) or up to the sync interval away. **That is the whole argument for D1:**
+  once a row exists, the moment it is pushed is not under the UI's control, so the only reliably
+  reversible state is one where the row was never written.
+
+**Work**
+
+- [ ] ADR `0021-undo-for-swipe-triage.md` recording D1 — written **with** the change, not now to
+      reserve a number (the lesson from ADR 0012, recorded above). It has to state the cost as well
+      as the decision: a decision made and immediately killed is silently lost.
+- [ ] Amend `docs/UI.md` §12.1 and rewrite §12.3 — it is currently titled and argued as *No undo*,
+      and leaving it contradicting the app is worse than either behaviour.
+- [ ] Amend `docs/UI_interface.md` §3 (a pending-undo state and its effect) and §12.
+- [ ] Implement the deferred write in the view model, **not** in the composable: the pending
+      decision must survive a recomposition and a rotation, and the row has to render optimistically
+      (greyed, or gone from *To decide*) while it is pending, or the swipe will look ignored.
+- [ ] Bulk actions are untouched (D2): selection mode, *Download all* and *Mark all as played* keep
+      their confirmation dialogs, and get no undo.
+- [ ] Tests: the window expiring writes exactly one row; undo inside the window writes **none** and
+      enqueues no work; a second swipe on another row while one is pending commits the first rather
+      than dropping it; leaving the screen commits rather than silently discarding; and the two the
+      design turns on — **nothing is ever posted for an undone decision**, and the ledger gains no
+      delete.
+
+### Decisions — all four settled (2026-08-09)
+
+Answered by the author in the same session the plan was written, so nothing in Tier 5 is blocked.
+
+| # | Question | Settled as | Consequence |
+|---|---|---|---|
+| **D1** | How should undo work? | **Defer the write.** The decision is held for the snackbar window and the ledger row is written — and the download enqueued — only when it expires. | I4 needs **no ledger delete** and can never post a `PLAY` the user retracted. The row is optimistic for those seconds, and a decision made and immediately killed is lost; the ADR must state that plainly. |
+| **D2** | Does undo replace the bulk confirmation dialogs? | **Both stay.** Undo is for single swipes; bulk actions keep naming their count first. | ADR 0013/0014 stand unamended. I3's selection-mode confirmation is still required. |
+| **D3** | Filter chips on a narrow screen? | **Scroll horizontally**, single line. | I1's header height stays fixed; the first episode row does not move down on the narrowest screens. Discoverability of the off-screen chip is the accepted cost — the test asserts it is reachable, not that it is visible. |
+| **D4** | *Mark unplayed* / a ledger delete? | **Ignore it.** Not built, and not carried as an open question. | The ledger stays append-only. I3 ships §5's designed set — Download, Mark as played, Select all — and the issue's *mark unplayed* is declined with the rest of its out-of-scope list. |

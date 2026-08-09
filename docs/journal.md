@@ -3342,3 +3342,80 @@ circular mask with nothing clipped.
   needs Nextcloud and a granted folder. The icon — the part that could have been wrong — is tested
   against the same alpha reduction the system performs. Recorded as such in `logo.md` §7 rather than
   rounded up to "verified".
+
+---
+
+## 2026-08-09 (later) — four issues from real use, and three of them were not what they said
+
+Planning only, no code. Read `.claude/CLAUDE.md`, the eight documents in `docs/`, and the four open
+GitHub issues (#46–#49), then traced each one into the source before writing a plan. The result is
+`TODO.md`'s new Tier 5.
+
+### The pattern that keeps recurring
+
+Three of the four issues describe a symptom whose cause is somewhere other than where the issue
+looks — and in two cases the cause is the same shape this project has now hit **four times**:
+something specified in full, implemented at both ends, and never connected in the middle.
+
+- **#46 (multi-select)** reads like a feature request. It is nearly finished. The whole selection
+  model — five events, the "empty selection leaves selection mode" rule, the "a filter change drops
+  the selection" rule — is implemented in `EpisodeListViewModel` and unit-tested. What is missing is
+  `combinedClickable`: the row uses `clickable`, so long-press fires nothing and the mode is simply
+  unreachable. Plus there is nowhere to put the toolbar, because —
+- **#48 (clipped filter row)** is really two faults, and the bigger one is that **S2 has no
+  `TopAppBar` at all** — the only one of eight screens without one. No back arrow, no title, no `⋮`
+  carrying *Download all (n)* (whose event and confirmation dialog are built and tested and have no
+  emitter), and content starting under the status bar. The chip row being a fixed `Row` with no
+  scroll is the part the screenshot shows; the missing app bar is the part it doesn't.
+- **#47 (activity delayed)** proposes an event bus. S7 already observes Room `Flow`s, so that
+  plumbing exists. The real causes: `DownloadWorker` never calls `setProgress`, so
+  `WorkInfo.progress` is always empty and **every** downloading row app-wide renders the
+  indeterminate *resuming* bar forever (`WorkScheduler.observeDownloadWork()` exists and has no
+  caller anywhere) — and `ActivityViewModel` re-projects the *entire* ledger with an N+1
+  `episodeRepository.get()` per row on every emission, before filtering to the handful it renders.
+  On a device with ~9,500 episodes that is thousands of sequential queries per ledger write, and it
+  degrades as triage proceeds. Which matches the report exactly: fine at first, stale later.
+
+Reading the code before believing the issue was worth roughly the whole session. The issues appear
+to be LLM-drafted against assumptions about the app (RecyclerView, `ActionMode`, playlists, delete)
+that do not hold — so the acceptance criteria are useful and the implementation notes mostly are not.
+
+### #49 is the interesting one, because it overrules a shipped decision
+
+`docs/UI.md` §12.3 is titled *"No undo — re-download instead"* and argues it from the protocol: a
+skip becomes a `PLAY` in an **append-only** log that other clients act on, and the GPodder API has no
+retraction. The author has now asked for undo, having hit the accidental swipe in practice. That is
+a legitimate reversal — but the *how* decides whether it stays honest, so it goes to the author as a
+decision rather than being implemented against the document that forbids it.
+
+The sharp edge: `EpisodeLedgerRepository` has no delete, deliberately (CLAUDE.md §11 — the row "must
+outlive the file"). So "write immediately, revert on undo" needs a new port method **and** cannot
+help once the outbox has drained; "defer the write for the snackbar window" needs neither and cannot
+post anything by mistake, at the cost of a decision being lost if the app dies within those seconds.
+Recommended the latter, but did not write ADR 0021 — the lesson from ADR 0012, recorded in `TODO.md`,
+is to write the ADR when the decision happens rather than ahead of it to reserve a number.
+
+### Ordering, and the four decisions answered the same session
+
+I1 (#48) → I2 (#47) → I3 (#46) → I4 (#49). Not by severity: I1 builds the app bar I3 needs, and I4
+was last because it was the only one blocked on an answer.
+
+All four decisions came back within the session, so nothing is actually blocked: **defer the write**
+for undo (so no ledger delete, and an undone swipe leaves no trace anywhere), **keep** the bulk
+confirmation dialogs alongside it, **scroll** the filter chips on one line, and **drop** *mark
+unplayed* entirely rather than carry it as an open question. Three of the four were the recommended
+option; the fourth went further than the recommendation — I had suggested deferring the ledger-delete
+question, the author closed it.
+
+Worth noting for the experiment: presenting each decision with its cost stated rather than as a
+preference is what made them answerable in one pass. D1's real content was not "would you like
+undo" but "which of these two things are you willing to lose" — a few seconds of durability, or the
+guarantee that nothing un-retractable reaches the shared log.
+
+### Also found, and deliberately not folded in
+
+`EpisodeListUiState.feedError` is set by nobody and read by nobody, and `RetryFeedClicked` is in the
+interface document but not in the code — so `docs/UI.md` §5's "feed fetch failed" banner cannot
+occur, and a feed that fails to fetch is silent in S2. That is a *fifth* instance of the same shape.
+Noted in `docs/backlog.md` rather than attached to #48, because that issue is about layout and this
+is a missing state. Scope discipline over tidiness.
