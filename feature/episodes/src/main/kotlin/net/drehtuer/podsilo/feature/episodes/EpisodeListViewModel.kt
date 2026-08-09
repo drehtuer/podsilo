@@ -150,6 +150,8 @@ class EpisodeListViewModel(
     fun onEvent(event: EpisodeListEvent) {
         when (event) {
             is EpisodeListEvent.RowClicked -> emit(EpisodeListEffect.OpenDetail(event.episodeKey))
+            EpisodeListEvent.BackClicked -> emit(EpisodeListEffect.NavigateUp)
+            EpisodeListEvent.ActivityClicked -> emit(EpisodeListEffect.OpenActivity)
             is EpisodeListEvent.FilterChanged -> {
                 filter.value = event.filter
                 // A filter change invalidates a selection made under the old one: acting on rows the

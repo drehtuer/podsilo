@@ -89,6 +89,12 @@ sealed interface EpisodeListEvent {
         val episodeKey: String,
     ) : EpisodeListEvent
 
+    /** Up navigation. Back from S2 returns to S1 with its scroll position intact (`docs/UI.md` §3). */
+    data object BackClicked : EpisodeListEvent
+
+    /** S2's app bar → S7, one of the two routes into Activity the navigation map draws. */
+    data object ActivityClicked : EpisodeListEvent
+
     data class Triage(
         val episodeKey: String,
         val action: EpisodeUiAction,
@@ -150,6 +156,11 @@ sealed interface EpisodeListEffect {
     data class OpenDetail(
         val episodeKey: String,
     ) : EpisodeListEffect
+
+    /** Pops back to S1. An effect rather than a screen-local `popBackStack`: the screen owns no navigation. */
+    data object NavigateUp : EpisodeListEffect
+
+    data object OpenActivity : EpisodeListEffect
 
     data class OpenUrl(
         val url: String,

@@ -61,6 +61,22 @@ noted here before that date was instead either built, declined in conversation, 
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.
+- **S1's filter chips have the same shape as the row #48 reported on S2.** `PodcastFilterChips` is
+  the same fixed `Row` with no scroll and no wrap. It has not been reported, and it has only two
+  chips — *With new episodes* and *All podcasts* — so it fits a 360 dp screen at the default font
+  scale and clips only at a large one. Deliberately **not** changed while fixing #48: that issue is
+  about the episode screen, and CLAUDE.md §9 says note it rather than widen the change. The fix is
+  the same two lines if it is ever wanted.
+
+- **The S2 row overflow `⋮` does not exist.** `docs/UI.md` §5's row anatomy ends with an overflow
+  carrying *Download* / *Download again*, *Mark as played*, *Retry*, *Cancel download*, *Copy episode
+  link* and *Open in browser*; `EpisodeRow` instead renders the applicable ones as inline
+  `TextButton`s from `EpisodeUi.actions`. Nothing is unreachable as a result — `actions` is the same
+  single source of truth either way — but *Copy episode link* and *Open in browser* have no row-level
+  call site at all, since `labelFor` returns `null` for both (they exist only in S3). Noticed while
+  building the *app-bar* overflow for #48, and left alone: swapping visible buttons for a hidden menu
+  is a design change, not a bug fix.
+
 - **S2's feed-error banner is specified, has a state field, and is connected at neither end.** Found
   on 2026-08-09 while tracing the four v0.3.0 issues. `EpisodeListUiState.feedError` exists with a
   KDoc explaining that it "renders as an inline banner *above* the list, never in place of it" —

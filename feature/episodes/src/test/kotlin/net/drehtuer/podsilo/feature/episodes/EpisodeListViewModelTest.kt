@@ -2,6 +2,7 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import app.cash.turbine.test
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -630,5 +631,29 @@ class EpisodeListViewModelTest {
 
             assertEquals(listOf("e1"), scheduler.cancellations)
             assertTrue(ledger.writes.isEmpty())
+        }
+
+    /**
+     * The two app-bar routes (`docs/UI.md` §3), as effects rather than as navigation the screen
+     * performs itself — S2 owns no `NavController` (`docs/UI_interface.md` §0.2).
+     */
+    @Test
+    fun `the app bar navigates and decides nothing`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+
+            vm.effect.test {
+                vm.onEvent(EpisodeListEvent.BackClicked)
+                assertEquals(EpisodeListEffect.NavigateUp, awaitItem())
+
+                vm.onEvent(EpisodeListEvent.ActivityClicked)
+                assertEquals(EpisodeListEffect.OpenActivity, awaitItem())
+
+                expectNoEvents()
+            }
+            assertTrue("navigating must never write a ledger row", ledger.writes.isEmpty())
+            assertTrue(scheduler.downloads.isEmpty())
         }
 }

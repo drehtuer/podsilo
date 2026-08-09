@@ -4,8 +4,10 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.LedgerState
@@ -27,8 +29,15 @@ private const val TEST_FEED_URL = "https://example.org/feed.xml"
  * Robolectric's shadows cannot vouch for. Behaviour is asserted in the JVM tests, which are faster
  * and run everywhere.
  *
- * The case chosen is `docs/decisions/0011`'s guarantee, because it is the one where being wrong is
- * a button that cannot work.
+ * The first case is `docs/decisions/0011`'s guarantee, because it is the one where being wrong is a
+ * button that cannot work.
+ *
+ * **The rest are issue #48's**, and they are here rather than only in the JVM suite for a specific
+ * reason: that bug was a *measured layout* fault on a real screen, and it stayed green through 627
+ * JVM tests. The Robolectric versions pin the behaviour at a synthetic `w320dp` qualifier; these
+ * measure against the device's own width, density and font scale — the three inputs that actually
+ * produced the report — and exercise the overflow as a **real popup window**, which is a separate
+ * window rather than the shadow Robolectric substitutes.
  */
 @RunWith(AndroidJUnit4::class)
 class EpisodeListScreenInstrumentedTest {
@@ -94,5 +103,74 @@ class EpisodeListScreenInstrumentedTest {
         }
 
         compose.onNodeWithText("Choose folder").assertIsDisplayed()
+    }
+
+    /**
+     * Issue #48, measured on the device rather than at a synthetic qualifier.
+     *
+     * The assertion is *reachability*, not visibility: on a narrow screen the four chips genuinely
+     * cannot all be on screen at once, which is what decision D3 accepted when it chose a scrolling
+     * line over a wrapping one. What the shipped row got wrong was having no scroll at all, so the
+     * last chip was clipped and `All` could not be reached by any means. `performScrollTo` fails on a
+     * node whose parents cannot scroll, so this fails against the row that was reported.
+     *
+     * It is also the test that a large system font scale would break first, which is the point of
+     * running it against a real device's settings.
+     */
+    @Test
+    fun everyFilterChipIsReachableAtTheDeviceWidth() {
+        val events = mutableListOf<EpisodeListEvent>()
+        compose.setContent {
+            EpisodeListScreen(state = stateWith(row()), onEvent = { events += it }, zone = ZoneOffset.UTC)
+        }
+
+        compose.onNodeWithText("All").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("All").performClick()
+
+        assertEquals(listOf(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL)), events)
+    }
+
+    /**
+     * The app bar S2 shipped without — alone among the eight screens, which is why there was no up
+     * navigation and no host for the overflow.
+     */
+    @Test
+    fun theAppBarNamesTheFeedAndOffersUpNavigation() {
+        val events = mutableListOf<EpisodeListEvent>()
+        compose.setContent {
+            EpisodeListScreen(state = stateWith(row()), onEvent = { events += it }, zone = ZoneOffset.UTC)
+        }
+
+        compose.onNodeWithText("Der Podcast").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+
+        assertEquals(listOf(EpisodeListEvent.BackClicked), events)
+    }
+
+    /**
+     * *Download all (n)* end to end on a real runtime.
+     *
+     * Worth a device test specifically because a `DropdownMenu` is a **popup in its own window**, and
+     * a popup is one of the things Robolectric substitutes rather than runs. The assertion that
+     * opening the menu emits nothing is `docs/decisions/0014`'s safeguard: the count is named before
+     * anything is written, and only the confirmation dialog writes.
+     */
+    @Test
+    fun theOverflowOpensAsARealPopupAndOffersDownloadAll() {
+        val events = mutableListOf<EpisodeListEvent>()
+        compose.setContent {
+            EpisodeListScreen(
+                state = stateWith(row()).copy(downloadAllCount = 12),
+                onEvent = { events += it },
+                zone = ZoneOffset.UTC,
+            )
+        }
+
+        compose.onNodeWithContentDescription("More actions").performClick()
+        compose.onNodeWithText("Download all (12)").assertIsDisplayed()
+        assertEquals(emptyList<EpisodeListEvent>(), events)
+
+        compose.onNodeWithText("Download all (12)").performClick()
+        assertEquals(listOf(EpisodeListEvent.DownloadAllRequested), events)
     }
 }

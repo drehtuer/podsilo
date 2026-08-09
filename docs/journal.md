@@ -3419,3 +3419,60 @@ interface document but not in the code — so `docs/UI.md` §5's "feed fetch fai
 occur, and a feed that fails to fetch is silent in S2. That is a *fifth* instance of the same shape.
 Noted in `docs/backlog.md` rather than attached to #48, because that issue is about layout and this
 is a missing state. Scope discipline over tidiness.
+
+---
+
+## 2026-08-09 (later still) — I1: the filter row was the smaller half of #48
+
+First of Tier 5. Issue #48 reports clipped filter chips; the fix is two lines. The larger finding is
+what the screenshot does *not* show: **S2 had no app bar at all**, alone among the eight screens.
+
+That absence had been quietly load-bearing. No up navigation, no feed title, content starting at the
+top of the window — and no host for *Download all (n)*, whose event, `BulkPreview`, confirmation
+dialog and tests had all shipped with **nothing able to emit them**. Also no host for #46's selection
+bar, which is why I3 was ordered after this one. The chip row is the part that got reported because
+it is the part you can see.
+
+### Two things the tests changed my mind about
+
+**The regression test earned its keep by failing first.** Reverting the chip fix and re-running gave
+`Semantic Node has no parent layout with a Scroll SemanticsAction` — which is the bug stated in the
+framework's own words: the last chip is not merely off-screen, it is unreachable by any gesture. That
+is the difference between a test that pins a fix and one that pins a bug.
+
+**And it disproved something I had written down as fact.** The plan claimed
+`sizeIn(minHeight = MinTouchTarget)` caused the "overlapping the action labels" half of the report.
+A layout assertion at 320 dp says otherwise: the chip row and the first episode row do not overlap,
+with or without the fix. What the screenshot actually shows is a row *scrolled under* a fixed chip
+row — its bottom edge, the action buttons, hard against the chips with no gap to read as a boundary.
+A legibility fault, not a layout one, fixed by padding rather than by the scroll. Both `TODO.md` and
+the test's own KDoc now say so; the test is kept as an invariant guard, labelled as one, because a
+test that passes against the unfixed code cannot claim to have found the bug.
+
+### On-device tests, written blind
+
+The author asked mid-session whether I had written tests that could run once a device is attached.
+I had not — everything was Robolectric. Three instrumented tests now exist, and the reason they are
+worth having is specific rather than ceremonial: #48 was a *measured layout* fault that stayed green
+through 627 JVM tests. The Robolectric versions assert against a synthetic `w320dp` qualifier; the
+device versions measure against the real width, density and **font scale**, which is the input most
+likely to break the chip row next. One of them also exercises the overflow as a real popup window —
+a separate window, not the shadow Robolectric substitutes.
+
+They compile. They have not been run, and `TODO.md` says so rather than rounding up.
+
+### detekt asked for the split, and it was right
+
+`EpisodeListScreen.kt` hit `TooManyFunctions` at 11 on the way in. Same call as the DAO and the
+ledger port before it: the threshold was pointing at a real seam — the screen owns the list and its
+chrome, the app bar owns navigation *out* of the screen — so `EpisodeListAppBar.kt` exists rather
+than a suppression.
+
+### Not done, on purpose
+
+S1's chip row is the identical `Row` with the identical defect, unreported and clipping only at a
+large font scale. Two lines would fix it. It went to `docs/backlog.md` instead, because #48 is about
+the episode screen. Same for the S2 *row* overflow, which §5 specifies and which does not exist —
+noticed precisely because I was building the app-bar one.
+
+635 JVM tests, 0 failures, 3 skipped.

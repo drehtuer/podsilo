@@ -3,6 +3,7 @@
 package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +15,10 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +50,7 @@ internal const val TITLE_LINES = 2
  * the view model computed once, so the row body, the overflow and the accessibility actions cannot
  * disagree about what an episode currently offers (`docs/UI.md` §12.6).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EpisodeListScreen(
     state: EpisodeListUiState,
@@ -54,7 +58,10 @@ fun EpisodeListScreen(
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
-    Scaffold(modifier = modifier) { padding ->
+    Scaffold(
+        modifier = modifier,
+        topBar = { EpisodeListAppBar(state, onEvent) },
+    ) { padding ->
         // Scoped to this feed (conditional GET — docs/UI.md §5). Like S1's, this gesture was
         // specified and its event handled, but nothing ever emitted it: S2 had no refresh
         // affordance of any kind, so a feed that failed to parse could never be retried from here.
@@ -150,20 +157,37 @@ private fun OfflineBanner() {
     }
 }
 
+/**
+ * The four filter chips (`docs/UI.md` §5).
+ *
+ * **One horizontally scrollable line, not a wrap** (issue #48, decision D3). The four labels — the
+ * longest being *Played / handled* — do not fit across a 360 dp phone, and the row that shipped had
+ * neither scroll nor wrap, so the fourth chip was simply clipped off the right edge and `All` was
+ * unreachable. Scrolling keeps the header height fixed; wrapping would push the first episode row
+ * down on exactly the narrow screens that have the least room for it.
+ *
+ * The vertical padding is load-bearing rather than cosmetic: `sizeIn(minHeight = MinTouchTarget)`
+ * grows each chip to the 48 dp floor §12.12 requires, and without padding of its own the row hands
+ * that grown height straight to its neighbours.
+ */
 @Composable
 private fun FilterChips(
     selected: EpisodeFilter,
     onEvent: (EpisodeListEvent) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = RowPadding),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = RowPadding, vertical = ChipRowPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         EpisodeFilter.entries.forEach { filter ->
             FilterChip(
                 selected = filter == selected,
                 onClick = { onEvent(EpisodeListEvent.FilterChanged(filter)) },
-                label = { Text(filter.label) },
+                label = { Text(filter.label, maxLines = 1, softWrap = false) },
                 // §12.12: chips are interactive controls, and reading as labels is exactly the drift
                 // that puts them below the 48 dp floor.
                 modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
@@ -171,6 +195,8 @@ private fun FilterChips(
         }
     }
 }
+
+private val ChipRowPadding = 4.dp
 
 private val EpisodeFilter.label: String
     get() =

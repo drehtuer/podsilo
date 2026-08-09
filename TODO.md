@@ -366,7 +366,13 @@ pull-to-refresh, the artwork slot and the swipe gesture — see `EpisodeSwipe.kt
 **Convention:** one branch and one PR per issue, Conventional Commits, `./gradlew ktlintCheck detekt
 test` green before each is called done (CLAUDE.md §12).
 
-### I1 — [#48] The filter row is clipped on a narrow screen (bug)
+### I1 — [#48] The filter row is clipped on a narrow screen (bug) — **done 2026-08-09**
+
+**Built.** 7 JVM tests + 3 instrumented; 635 JVM tests total, 0 failures, 3 skipped;
+`ktlintCheck detekt test` green across the repo. The chip-reachability test was verified to **fail**
+against the unfixed row (`Semantic Node has no parent layout with a Scroll SemanticsAction`) before
+the fix was restored. The three instrumented tests **compile but have not been run** — no device was
+attached; they are written for the next time one is.
 
 **Root cause — two faults, and the larger one is not in the chip row.**
 
@@ -378,25 +384,44 @@ test` green before each is called done (CLAUDE.md §12).
    to go.
 2. **`FilterChips` is a fixed-width `Row`** (`EpisodeListScreen.kt:154`) — four chips at their
    intrinsic widths with `spacedBy(8.dp)`, no scroll, no wrap, so the fourth chip (`All`) is simply
-   clipped off the right edge. `Modifier.sizeIn(minHeight = MinTouchTarget)` grows each chip's
-   touch target to 48 dp without giving the row any vertical padding, which is the "overlapping the
-   action labels" half of the report.
+   clipped off the right edge and unreachable by any gesture.
+   - **Correction (2026-08-09, on implementing it):** this entry originally also blamed
+     `sizeIn(minHeight = MinTouchTarget)` for the "overlapping the action labels" half of the report.
+     A layout test at 320 dp disproves that — the chip row and the first episode row do not overlap,
+     with or without the fix. What the screenshot shows is a row *scrolled under* the fixed chip row,
+     whose bottom edge (its action buttons) then sits hard against the chips with no gap to read as a
+     boundary. That is a legibility fault, fixed by giving the row vertical padding, not a layout one.
+     The clipping is the real layout bug.
 
 **Work**
 
-- [ ] Add S2's app bar per `docs/UI.md` §5: back, feed title (falling back to the URL), the `⋮`
-      overflow with *Download all (n)* — the event and its `BulkPreview` dialog already exist and are
-      tested, nothing emits `DownloadAllRequested` today — and the activity action. Apply window
-      insets so nothing sits under the status bar.
-- [ ] Make the chip row survive a narrow screen: **one horizontally scrollable line** (D3). The
-      header height must stay fixed — wrapping would push the first episode row down on exactly the
-      screens with the least room.
-- [ ] Keep the ≥ 48 dp touch target (§12.12) with explicit vertical padding rather than by growing
-      the chips into their neighbours.
+- [x] S2's app bar per `docs/UI.md` §5 — `EpisodeListAppBar.kt`: back, feed title (falling back to
+      the URL), the activity action §3's map draws, and the `⋮` overflow with *Download all (n)*,
+      which finally gives that event an emitter. `Scaffold(topBar = …)` applies the window insets.
+      Two new events (`BackClicked`, `ActivityClicked`) resolve to *effects* — the screen owns no
+      `NavController`.
+      - **Its own file.** detekt's `TooManyFunctions` flagged `EpisodeListScreen.kt` at 11, and the
+        split it asked for is a real seam rather than a threshold to suppress: the screen owns the
+        list and its chrome, the app bar owns navigation out of the screen.
+      - **No `[filter]` icon**, despite §5's diagram label: §18's allow-list contains none, and the
+        filter is the chip row directly beneath. Recorded in `docs/UI_interface.md` §3.
+- [x] The chip row is **one horizontally scrollable line** (D3), with explicit vertical padding so
+      the 48 dp touch target §12.12 requires is not handed to its neighbours.
 
-**Tests** — Robolectric Compose tests at a constrained width (the screenshot is ~360 dp) asserting
-every filter chip is reachable and that the fourth is not clipped; a device screenshot at that width
-to confirm, since this is precisely the class of bug that stayed green in 627 JVM tests.
+**Tests** — 7 Robolectric Compose tests (chip reachability at `w320dp`, no overlap, the app bar's
+title/back/activity, the overflow's count, its absence at zero, and its disabled-with-a-reason state
+while paused) + 1 view-model test that the two app-bar events navigate and write nothing. **The
+reachability test was checked against the unfixed row and fails there** (CLAUDE.md §7's
+regression-test rule), so it pins the bug rather than merely the fix.
+
+Three **instrumented** tests were added for the same screen, because #48 was a measured-layout fault
+that 627 JVM tests never saw: chip reachability at the *device's* width, density and font scale; the
+app bar; and the overflow as a **real popup window** rather than Robolectric's shadow. They compile;
+**they have not been run** — no device was attached at the time.
+
+**Correction to the plan above:** the "overlap" half of the report is not reproduced by the layout.
+A test at 320 dp shows the chip row and the first episode row do not overlap, with or without the
+fix. See the corrected root-cause note below.
 
 ### I2 — [#47] Downloads appear delayed in Activity (bug)
 

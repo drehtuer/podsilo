@@ -4,12 +4,15 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import net.drehtuer.podsilo.core.model.ErrorCause
@@ -20,6 +23,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -295,12 +299,16 @@ class EpisodeListScreenTest {
      * S2's half of the missing-refresh bug (see `PodcastListScreenTest`): the event and its handler
      * existed, and **no affordance anywhere on this screen emitted it** — so a feed whose fetch had
      * failed could not be retried from the screen that shows the failure.
+     *
+     * Swiping the row rather than `hasScrollAction()`: the chip row became scrollable in its own
+     * right when issue #48 was fixed, so that matcher now finds two nodes. Nested scroll carries the
+     * gesture from the row up to the `PullToRefreshBox` regardless.
      */
     @Test
     fun `pulling the episode list down refreshes this feed`() {
         render(listOf(row()))
 
-        compose.onNode(hasScrollAction()).performTouchInput { swipeDown() }
+        compose.onNodeWithText("Warum Hamburg immer regnet").performTouchInput { swipeDown() }
 
         assertTrue(
             "pulling the episode list down must request a refresh, got $events",
@@ -378,5 +386,118 @@ class EpisodeListScreenTest {
         render(listOf(row(sizeBytes = 4_096)))
 
         compose.onNode(hasText("<1 MB", substring = true)).assertIsDisplayed()
+    }
+
+    // ---- The app bar, and the filter row that had no room (issue #48) ----
+
+    /**
+     * The regression test for issue #48, and it is deliberately about *reachability*, not visibility.
+     *
+     * On a 320 dp screen the four chips genuinely cannot all be on screen at once — that is what
+     * decision D3 accepted when it chose a scrolling line over a wrapping one. What the shipped row
+     * got wrong was having no scroll at all, so the last chip was clipped and `All` could not be
+     * reached by any means. `performScrollTo` fails on a node inside a container that cannot scroll,
+     * which is exactly the bug, so this test fails against the old `Row`.
+     */
+    @Test
+    @Config(qualifiers = "w320dp-h640dp")
+    fun `every filter chip is reachable on a narrow screen`() {
+        render(listOf(row()))
+
+        compose.onNodeWithText("All").performScrollTo().performClick()
+
+        assertTrue(
+            "the last filter chip must be reachable at 320 dp, got $events",
+            events.contains(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL)),
+        )
+    }
+
+    /**
+     * An invariant guard, and **not** a reproduction of #48's reported overlap — stated plainly
+     * because it passes against the unfixed row too, so it did not find that bug and cannot claim to.
+     *
+     * What the screenshot shows is a row *scrolled under* the chips: the chip row is fixed while the
+     * `LazyColumn` scrolls beneath it, so a partially scrolled row shows only its bottom edge — its
+     * action buttons — hard up against the chips, with no vertical gap to read as a boundary. The
+     * fix for that is the row's own padding, which is a legibility change rather than a layout one.
+     * The genuine layout fault #48 reports is the clipping, covered by the test above.
+     */
+    @Test
+    @Config(qualifiers = "w320dp-h640dp")
+    fun `the chip row does not overlap the first episode row`() {
+        render(listOf(row()))
+
+        val chips = compose.onNodeWithText("To decide").getUnclippedBoundsInRoot()
+        val firstRow = compose.onNodeWithText("Warum Hamburg immer regnet").getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "the first episode row (top=${firstRow.top}) must start below the chips (bottom=${chips.bottom})",
+            firstRow.top >= chips.bottom,
+        )
+    }
+
+    /**
+     * S2 shipped with no app bar at all — alone among the eight screens — so there was no up
+     * navigation, no feed title, and no host for the overflow or for #46's selection bar.
+     */
+    @Test
+    fun `the app bar names the feed and offers up navigation`() {
+        render(listOf(row()))
+
+        compose.onNodeWithText("Der Podcast").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+
+        assertTrue(events.contains(EpisodeListEvent.BackClicked))
+    }
+
+    @Test
+    fun `the app bar reaches Activity, the second route the navigation map draws into it`() {
+        render(listOf(row()))
+
+        compose.onNodeWithContentDescription("Activity").performClick()
+
+        assertTrue(events.contains(EpisodeListEvent.ActivityClicked))
+    }
+
+    /**
+     * *Download all (n)* had a view-model handler, a `BulkPreview`, a confirmation dialog and tests —
+     * and nothing that could emit `DownloadAllRequested`, because the app bar it belongs in did not
+     * exist.
+     */
+    @Test
+    fun `the overflow offers Download all with its count, and writes nothing by opening`() {
+        render(listOf(row()).copy(downloadAllCount = 12))
+
+        compose.onNodeWithContentDescription("More actions").performClick()
+        compose.onNodeWithText("Download all (12)").assertIsDisplayed()
+
+        assertTrue("opening the menu must decide nothing", events.isEmpty())
+
+        compose.onNodeWithText("Download all (12)").performClick()
+        assertTrue(events.contains(EpisodeListEvent.DownloadAllRequested))
+    }
+
+    /** An overflow whose only item is absent is a button that opens an empty menu. */
+    @Test
+    fun `the overflow is absent when there is nothing to download`() {
+        render(listOf(row()).copy(downloadAllCount = 0))
+
+        compose.onAllNodesWithContentDescription("More actions").assertCountEquals(0)
+    }
+
+    /** §5: disabled *with the reason*. A greyed item that does not say why is a dead end. */
+    @Test
+    fun `Download all is disabled with its reason while the queue is paused`() {
+        render(
+            listOf(row()).copy(
+                downloadAllCount = 12,
+                queueStatus = QueueStatus.Paused(QueueStatus.PauseCause.FOLDER_REVOKED, queuedCount = 0),
+            ),
+        )
+
+        compose.onNodeWithContentDescription("More actions").performClick()
+
+        compose.onNodeWithText("Download all (12)").assertIsNotEnabled()
+        compose.onNodeWithText("folder unavailable").assertIsDisplayed()
     }
 }
