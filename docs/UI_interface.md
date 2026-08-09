@@ -223,11 +223,13 @@ enum class EpisodeFilter { TO_DECIDE, DOWNLOADED, PLAYED_OR_HANDLED, ALL }
 
 sealed interface EpisodeListEvent {
     data class RowClicked(val episodeKey: String) : EpisodeListEvent          // opens S3, never triages
+    data object BackClicked : EpisodeListEvent                                 // -> EpisodeListEffect.NavigateUp
+    data object ActivityClicked : EpisodeListEvent                             // -> EpisodeListEffect.OpenActivity
     data class Triage(val episodeKey: String, val action: EpisodeUiAction) : EpisodeListEvent
     data class SwipeCommitted(val episodeKey: String, val direction: SwipeDirection) : EpisodeListEvent
     data class FilterChanged(val filter: EpisodeFilter) : EpisodeListEvent
     data class SelectionToggled(val episodeKey: String) : EpisodeListEvent
-    data object SelectionStarted : EpisodeListEvent
+    data class SelectionStarted(val episodeKey: String) : EpisodeListEvent     // carries its row: a long-press selects the one it landed on
     data object SelectionCleared : EpisodeListEvent
     data object SelectAllInFilter : EpisodeListEvent
     data class BulkConfirmed(val action: EpisodeUiAction, val keys: Set<String>) : EpisodeListEvent
@@ -241,6 +243,15 @@ sealed interface EpisodeListEvent {
 **Confirmation is a UI-owned dialog, not a state field of the list.** `DownloadAllRequested` makes
 the ViewModel produce a `BulkPreview` (below) which the dialog renders; nothing is written until
 `DownloadAllConfirmed`.
+
+**The app bar** (added 2026-08-09, issue #48 — S2 had shipped without one, alone among the eight
+screens) carries up navigation, the feed title, the Activity action that `UI.md` §3's map draws, and
+the overflow holding *Download all (n)*. Both new events resolve to *effects* — `NavigateUp` and
+`OpenActivity` — because the screen owns no `NavController` (§0.2). The overflow renders only when
+`downloadAllCount > 0`, since the ViewModel zeroes it outside the *To decide* filter and an overflow
+with no items is a button that opens an empty menu. `docs/UI.md` §5's diagram also shows a `[filter]`
+label in the bar; there is no filter *icon* — §18's allow-list has none — and the filter is the chip
+row directly beneath.
 
 ```kotlin
 data class BulkPreview(
