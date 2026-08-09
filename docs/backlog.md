@@ -81,6 +81,16 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   belongs with the Fastlane metadata below; the dev container has no image tooling, so it needs
   generating elsewhere. Source is `assets/logos/podsilo-icon.svg`, whose geometry does not change
   with scale.
+- ~~**Espresso is too old for the phone.**~~ **Fixed 2026-08-09.** Compose UI tests pull
+  `androidx.test.espresso:espresso-core` transitively, and nothing pinned it — so it resolved to
+  **3.5.0** (2022) while `androidx.test:core` had been bumped to 1.7.0. On Android 17 every Compose
+  instrumented test died inside `Espresso.onIdle()` with
+  `NoSuchMethodException: android.hardware.input.InputManager.getInstance`, before running a line of
+  its own. That silently killed the **entire** Tier 3 Compose suite — 21 tests across `:feature:*`,
+  including conformance tests that had been passing on older devices. Pinned to 3.7.0 in the version
+  catalog. Worth remembering as a shape: a transitive test dependency nobody pinned is one Android
+  release away from taking a whole tier with it, and the failure names a platform method rather than
+  anything about this project.
 - **Outline the wordmark in the lockup SVGs.** `docs/logo.md` §2: anything leaving the app — store
   listing, README, press — must not depend on Archivo being installed. Nothing in-app is blocked,
   since the in-app lockups are composed from live type.

@@ -215,11 +215,28 @@ site was the empty state §4.2 now owns.
 
 Also closed: the **splash screen** is declined, not deferred (§3).
 
+**Closed on 2026-08-09 — the mark has now been seen on a device** (Pixel 10a, Android 17). Both
+questions this section carried as answerable-only-by-eye are answered, and both are now regression
+tests rather than a memory of having looked:
+
+- **Does the 24 dp mark read?** Yes. `MarkLegibilityConformanceTest` (`:core:ui`, instrumented)
+  rasterises each build on the device's real canvas and counts opaque/transparent alternations down
+  the mark's centre line — separation *is* the figure, so a mark whose bars had fused would collapse
+  that count. It holds at 24 dp and at §1's 16 dp floor, and the inverse and mono builds are the same
+  figure as the two-colour one rather than three drawings that drifted.
+- **Does the notification silhouette survive the alpha mask?** Yes.
+  `NotificationIconConformanceTest` (`:core:download`, instrumented) reduces the icon to what the
+  system keeps — alpha only — and asserts both that the figure still alternates and that the outer
+  margin is empty, so the padding §3 demands is checked rather than trusted.
+- **The luminance switch was verified live, in the case a resource qualifier gets wrong** (§6): with
+  the phone in dark mode and the app's own theme set to Light, S1 and S4 correctly showed the
+  *two-colour* mark. A `drawable-night` qualifier would have served the white one onto a light
+  surface there.
+
 Still open:
 
 - **Outline the wordmark** in the lockup SVGs before any use outside the app (§2). Nothing in-app
   depends on it, since in-app lockups are composed from type.
-- **The mark has never been seen on a device.** Every placement below is verified by Tier 1 renders
-  only. The two that a headless test genuinely cannot answer: whether the 24 dp mark reads at all in
-  the app bar, and whether the notification silhouette survives the system's alpha mask on a real
-  shade. Both are Tier 3 checks.
+- **The notification has not been seen in a real shade** — only its icon, reduced to alpha exactly as
+  the system reduces it. Posting one needs a real download, which needs Nextcloud and a granted
+  folder; the icon is the part that could have been wrong.

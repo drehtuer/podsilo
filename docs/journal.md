@@ -3278,3 +3278,67 @@ rather than deleted, since the rule would be right if selection mode ever reache
 One assertion deliberately avoided: "S5 has no wordmark" cannot be checked by searching for the text
 `podsilo`, because the Nextcloud account name it displays can be anything — and the existing
 confirmation test uses `podsilo` as exactly that. Counting tags is the only question that stays true.
+
+---
+
+## 2026-08-09 — the logo on a real phone, and the dead test tier nobody had noticed
+
+The two questions `docs/logo.md` §7 had been carrying as "Tier 3, unverified" — does the 24 dp mark
+read in an app bar, does the notification silhouette survive the alpha mask — plus a live look at
+the app on the author's Pixel 10a.
+
+### Both questions are answered, and neither is answered by eye
+
+Looking at a screenshot would have been the obvious move and the weak one: "does it read?" judged
+from a 36-pixel glyph in a screenshot is a guess with a confident tone. Both questions are really the
+same question — *do the gaps survive?* — and a gap is a pixel fact.
+
+So both are now instrumented tests that rasterise the drawable on the device's own canvas and count
+opaque/transparent alternations down the mark's centre line. Separation **is** the figure: two bars,
+the silo's open mouth, the stored band. A mark whose bars had fused into the vessel — exactly what
+§1's 16 dp floor exists to prevent — collapses that count, and the assertion says so. It holds at
+24 dp and at 16 dp, and the inverse and mono builds turn out to be the same figure as the two-colour
+one rather than three drawings that drifted apart.
+
+Deliberately runner-only, no Compose and no Espresso. That was luck at first and turned out to be the
+reason those tests could run at all.
+
+### The find: the entire Compose Tier 3 suite was dead
+
+The first device run failed 13 for 13 in `:feature:episodes` with
+`NoSuchMethodException: android.hardware.input.InputManager.getInstance`, thrown inside
+`Espresso.onIdle()` before any test body ran. Crucially it took the **pre-existing** conformance
+tests down with it, not just the new ones — which is what made it a finding rather than a mistake of
+mine.
+
+Cause: `espresso-core` arrives transitively from `compose-ui-test-junit4` and nothing ever pinned it,
+so it resolved to **3.5.0** while `androidx.test:core` had been bumped to 1.7.0. `InputManager.
+getInstance()` no longer exists on Android 17. One version-catalog pin to 3.7.0 revived 21 tests.
+
+The uncomfortable part: that suite has presumably been failing since the phone updated, and nothing
+said so, because Tier 3 is run by hand. A tier that only runs when someone remembers to run it is a
+tier that can be dead for weeks.
+
+### What the phone actually showed
+
+The luminance switch is the piece worth having verified live rather than argued about. With the
+**phone in dark mode** and the **app's own theme set to Light**, S1 and S4 correctly showed the
+two-colour mark — the precise case a `drawable-night` qualifier gets wrong, and the reason `docs/
+logo.md` §6 says not to use one. Seeing the red bars on the light surface while the system was dark
+is the whole argument in one screenshot.
+
+Also confirmed: the app-bar mark reads at 24 dp; the stacked lockup carries the first-run screen; the
+About lockup sits properly with the version; the launcher icon renders white-on-accent inside the
+circular mask with nothing clipped.
+
+### Two things I did not do
+
+- **I did not uninstall the app to get past the signature mismatch.** The build in the container is
+  signed with its own debug key, so it could not upgrade the installed 0.2.1 — and clearing that
+  costs the ledger, the login and the folder grant. `INSTALL_FAILED_UPDATE_INCOMPATIBLE` is a
+  *non-destructive* failure, so attempting the install was safe and stopping there was the point.
+  The author cleared the app themselves; that was their call to make, not mine to make for them.
+- **The notification has still not been seen in a real shade.** Posting one needs a download, which
+  needs Nextcloud and a granted folder. The icon — the part that could have been wrong — is tested
+  against the same alpha reduction the system performs. Recorded as such in `logo.md` §7 rather than
+  rounded up to "verified".
