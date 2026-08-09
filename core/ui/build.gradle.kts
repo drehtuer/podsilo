@@ -14,6 +14,7 @@ android {
 
     defaultConfig {
         minSdk = 33
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -42,6 +43,14 @@ dependencies {
     // Artwork comes from the network in every screen that has a slot, so the loader belongs here
     // beside the icons rather than in each feature module (ADR 0015).
     api(libs.coil.compose)
+
+    // The mark is a VectorDrawable, and whether it still reads once rasterised is a question only a
+    // real canvas answers — Robolectric's is a no-op. Deliberately runner-only: no Compose, no
+    // Espresso, so this set still runs on devices where the Compose instrumented tests currently
+    // cannot (see docs/backlog.md).
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
