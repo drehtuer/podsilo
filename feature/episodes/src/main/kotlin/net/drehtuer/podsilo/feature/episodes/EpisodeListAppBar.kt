@@ -2,13 +2,16 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,6 +19,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
@@ -45,6 +51,13 @@ internal fun EpisodeListAppBar(
     state: EpisodeListUiState,
     onEvent: (EpisodeListEvent) -> Unit,
 ) {
+    // Selection mode *replaces* the bar rather than adding to it: the actions belong to the
+    // selection, and leaving "back" in place beside "3 selected" invites leaving the screen when the
+    // user meant to leave the mode (docs/UI.md §5).
+    state.selection?.let { selection ->
+        SelectionAppBar(selection, onEvent)
+        return
+    }
     TopAppBar(
         title = {
             Text(
@@ -76,6 +89,118 @@ internal fun EpisodeListAppBar(
         },
     )
 }
+
+/**
+ * Selection mode's bar: `n selected`, the two triage actions, *Select all*, and ✕ (`docs/UI.md` §5).
+ *
+ * The answer to "12 new episodes, no undo, 12 swipes" — and the reason issue #46 was ordered after
+ * the app bar existed at all, since there was previously nowhere to put this.
+ *
+ * Two details that are requirements rather than polish:
+ *
+ * - **The count is a live region** (`docs/UI.md` §12.12): TalkBack announces `n selected` on every
+ *   change, which is the only feedback a non-sighted user gets that a tap toggled anything.
+ * - **Acting confirms first.** Both actions go through [EpisodeListEvent.SelectionActionRequested],
+ *   which writes nothing; only the dialog's confirm button writes. That is the same safeguard
+ *   *Download all* and *Mark all as played* carry, and it matters most here because a bulk
+ *   *Mark as played* emits `PLAY` actions to a shared log that no undo reaches.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectionAppBar(
+    selection: Selection,
+    onEvent: (EpisodeListEvent) -> Unit,
+) {
+    val count = selection.keys.size
+    TopAppBar(
+        title = {
+            Text(
+                text = "$count selected",
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        },
+        navigationIcon = {
+            IconButton(
+                onClick = { onEvent(EpisodeListEvent.SelectionCleared) },
+                modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+            ) {
+                PodsiloIcon(PodsiloIcons.Close, contentDescription = "Leave selection mode")
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = { onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.DOWNLOAD)) },
+                modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+            ) {
+                PodsiloIcon(PodsiloIcons.Download, contentDescription = "Download selected")
+            }
+            IconButton(
+                onClick = { onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.MARK_AS_PLAYED)) },
+                modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+            ) {
+                PodsiloIcon(PodsiloIcons.Played, contentDescription = "Mark selected as played")
+            }
+            // Scoped to the current filter — `allInFilter` is the count the view model computed from
+            // the rows actually on screen, never "every episode in the feed".
+            TextButton(
+                onClick = { onEvent(EpisodeListEvent.SelectAllInFilter) },
+                modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+            ) { Text("Select all", maxLines = 1, softWrap = false) }
+        },
+    )
+}
+
+/**
+ * The confirmation selection-mode actions commit through (`docs/UI.md` §5, `docs/decisions/0014`).
+ *
+ * Names the exact count, and for *Mark as played* says where the state goes — the wording is not
+ * decoration: those actions reach the shared log and other clients act on them.
+ */
+@Composable
+internal fun SelectionActionDialog(
+    action: EpisodeUiAction,
+    selection: Selection,
+    onEvent: (EpisodeListEvent) -> Unit,
+) {
+    val count = selection.keys.size
+    val download = action == EpisodeUiAction.DOWNLOAD
+    AlertDialog(
+        onDismissRequest = { onEvent(EpisodeListEvent.SelectionActionDismissed) },
+        title = {
+            Text(
+                if (download) {
+                    "Download $count ${episodeWord(count)}?"
+                } else {
+                    "Mark $count ${episodeWord(count)} as played?"
+                },
+            )
+        },
+        text = {
+            if (!download) {
+                Column {
+                    Text(
+                        "They stay in your download folder — Podsilo never deletes files.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "Played state is sent to Nextcloud, so your other clients see it too.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onEvent(EpisodeListEvent.BulkConfirmed(action, selection.keys)) }) {
+                Text(if (download) "Download" else "Mark as played")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onEvent(EpisodeListEvent.SelectionActionDismissed) }) { Text("Cancel") }
+        },
+    )
+}
+
+private fun episodeWord(count: Int): String = if (count == 1) "episode" else "episodes"
 
 /**
  * *Download all (n)* — in the overflow rather than as a button, deliberately (`docs/UI.md` §5,

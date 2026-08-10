@@ -2,12 +2,16 @@
 
 package net.drehtuer.podsilo.feature.episodes
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.LedgerState
@@ -172,5 +176,42 @@ class EpisodeListScreenInstrumentedTest {
 
         compose.onNodeWithText("Download all (12)").performClick()
         assertEquals(listOf(EpisodeListEvent.DownloadAllRequested), events)
+    }
+
+    /**
+     * Issue #46's entry point, on a real runtime.
+     *
+     * Worth a device test rather than only a Robolectric one because a long-press is a **timed
+     * gesture**: it depends on the platform's real `ViewConfiguration.getLongPressTimeout()` and on
+     * the touch-slop of an actual input pipeline, neither of which Robolectric's shadows exercise.
+     * A long-press that Compose interprets as a scroll or a tap is exactly how this affordance
+     * fails in the hand while passing headless.
+     */
+    @Test
+    fun longPressingARowEntersSelectionMode() {
+        val events = mutableListOf<EpisodeListEvent>()
+        compose.setContent {
+            EpisodeListScreen(state = stateWith(row()), onEvent = { events += it }, zone = ZoneOffset.UTC)
+        }
+
+        compose.onNodeWithText("Warum Hamburg immer regnet").performTouchInput { longClick() }
+
+        assertEquals(listOf(EpisodeListEvent.SelectionStarted("e1")), events)
+    }
+
+    /** The bar replaces the normal one, so "Back" must be gone while a selection is live. */
+    @Test
+    fun theSelectionBarReplacesTheNormalOne() {
+        compose.setContent {
+            EpisodeListScreen(
+                state = stateWith(row()).copy(selection = Selection(setOf("e1"), allInFilter = 1)),
+                onEvent = { },
+                zone = ZoneOffset.UTC,
+            )
+        }
+
+        compose.onNodeWithText("1 selected").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Selected").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Back").assertCountEquals(0)
     }
 }

@@ -4,7 +4,12 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +40,14 @@ import java.time.ZoneId
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
+ * How long a swipe decision is held before it is written (`docs/decisions/0021`).
+ *
+ * Matched to a Material `SnackbarDuration.Short`, so the window closes at roughly the moment the
+ * undo affordance leaves the screen. The view model is the authority on when it actually closes.
+ */
+private const val UNDO_WINDOW_MS = 5_000L
+
+/**
  * S2. Observes the ledger join, projects it into rows, and turns events into ledger writes plus
  * scheduling requests — never into network calls (`docs/UI_interface.md` §0.1/§0.3).
  *
@@ -56,12 +69,23 @@ class EpisodeListViewModel(
     private val folderStatus: DownloadFolderStatus,
     private val workMonitor: DownloadWorkMonitor,
     private val zone: ZoneId = ZoneId.systemDefault(),
+    /**
+     * Where a decision still inside its undo window is written when the screen goes away.
+     *
+     * A scope that **outlives this view model**, because `viewModelScope` is already cancelled by
+     * the time `onCleared` runs — a write launched there would never happen. Injected so tests can
+     * pass the test scope rather than waiting on a real dispatcher (`docs/decisions/0021`).
+     */
+    private val commitScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : ViewModel() {
     private val filter = MutableStateFlow(EpisodeFilter.TO_DECIDE)
     private val selection = MutableStateFlow<Selection?>(null)
     private val refreshing = MutableStateFlow(false)
     private val pendingBulk = MutableStateFlow<BulkPreview?>(null)
     private val pendingMarkAll = MutableStateFlow<List<String>?>(null)
+    private val pendingSelectionAction = MutableStateFlow<EpisodeUiAction?>(null)
+    private val pendingUndo = MutableStateFlow<PendingUndo?>(null)
+    private var undoJob: Job? = null
 
     private val effects = Channel<EpisodeListEffect>(Channel.BUFFERED)
     val effect: Flow<EpisodeListEffect> = effects.receiveAsFlow()
@@ -80,20 +104,23 @@ class EpisodeListViewModel(
     val state: StateFlow<EpisodeListUiState> =
         combine(
             filter,
-            selection,
+            // Both describe "which rows are special right now", and combine tops out at five sources.
+            combine(selection, pendingUndo, ::Pair),
             // Nested because `combine` tops out at five sources; these three are the screen's
             // chrome — the indicator, the dialog and the paused banner — rather than its content.
-            combine(refreshing, pendingBulk, folderStatus.observe(), pendingMarkAll, ::Chrome),
+            combine(refreshing, pendingBulk, folderStatus.observe(), pendingMarkAll, pendingSelectionAction, ::Chrome),
             settingsRepository.observeSwipeMapping(),
             connectivityMonitor.observe(),
-        ) { current, currentSelection, chrome, mapping, connectivity ->
+        ) { current, selectionAndUndo, chrome, mapping, connectivity ->
             Snapshot(
                 filter = current,
-                selection = currentSelection,
+                selection = selectionAndUndo.first,
+                pendingUndo = selectionAndUndo.second,
                 refreshing = chrome.refreshing,
                 pendingBulk = chrome.pendingBulk,
                 folder = chrome.folder,
                 pendingMarkAll = chrome.pendingMarkAll,
+                pendingSelectionAction = chrome.pendingSelectionAction,
                 mapping = mapping,
                 online = connectivity.online,
             )
@@ -148,7 +175,15 @@ class EpisodeListViewModel(
         feedArtwork: String?,
         work: DownloadWork,
     ): EpisodeListUiState {
-        val rows = items.map { it.toUi(feedTitle = feedTitle, feedArtworkUrl = feedArtwork, work = work) }
+        val rows =
+            items
+                .map { it.toUi(feedTitle = feedTitle, feedArtworkUrl = feedArtwork, work = work) }
+                // The held decision is shown as though it had been taken. Nothing is written yet
+                // (docs/decisions/0021) — but a swipe that appeared to do nothing for five seconds
+                // would read as the app ignoring it, and the user would swipe again.
+                .map { row ->
+                    pendingUndo?.takeIf { it.episodeKey == row.episodeKey }?.let { row.asPending(it) } ?: row
+                }
         return EpisodeListUiState(
             feedUrl = feedUrl,
             feedTitle = feedTitle,
@@ -165,6 +200,8 @@ class EpisodeListViewModel(
             isRefreshing = refreshing,
             pendingBulk = pendingBulk,
             pendingMarkAll = pendingMarkAll,
+            pendingSelectionAction = pendingSelectionAction,
+            pendingUndo = pendingUndo,
             isOffline = !online,
             swipeMapping = mapping,
             // The overflow reads "Download all (n)"; n is the *undecided* count, so the item is
@@ -187,16 +224,25 @@ class EpisodeListViewModel(
                 // A filter change invalidates a selection made under the old one: acting on rows the
                 // user can no longer see is exactly the accidental bulk action §14.2 warns about.
                 selection.value = null
+                // And a confirmation whose set just changed under it must not survive to be tapped.
+                pendingSelectionAction.value = null
             }
             is EpisodeListEvent.SelectionStarted ->
                 selection.value = Selection(setOf(event.episodeKey), currentRowCount())
             is EpisodeListEvent.SelectionToggled -> toggleSelection(event.episodeKey)
-            EpisodeListEvent.SelectionCleared -> selection.value = null
+            EpisodeListEvent.SelectionCleared -> {
+                selection.value = null
+                pendingSelectionAction.value = null
+            }
             EpisodeListEvent.SelectAllInFilter -> selectAll()
+            // Opens the confirmation and writes nothing; only BulkConfirmed writes.
+            is EpisodeListEvent.SelectionActionRequested -> pendingSelectionAction.value = event.action
+            EpisodeListEvent.SelectionActionDismissed -> pendingSelectionAction.value = null
             is EpisodeListEvent.Triage -> viewModelScope.launch { triage(listOf(event.episodeKey), event.action) }
             is EpisodeListEvent.SwipeCommitted -> onSwipe(event.episodeKey, event.direction)
             is EpisodeListEvent.BulkConfirmed ->
                 viewModelScope.launch {
+                    pendingSelectionAction.value = null
                     triage(event.keys.toList(), event.action)
                     selection.value = null
                 }
@@ -222,6 +268,12 @@ class EpisodeListViewModel(
                     if (keys.isNotEmpty()) triage(keys, EpisodeUiAction.MARK_AS_PLAYED)
                 }
             EpisodeListEvent.MarkAllDismissed -> pendingMarkAll.value = null
+            EpisodeListEvent.UndoRequested -> {
+                // Nothing was written, so there is nothing to revert: the held decision is simply
+                // dropped and the row returns to undecided (docs/decisions/0021).
+                undoJob?.cancel()
+                pendingUndo.value = null
+            }
             EpisodeListEvent.PullToRefresh -> refresh()
             // The fix lives outside this screen (the SAF picker, or the user freeing space), so the
             // host handles it; S2 only reports that the queue is held.
@@ -229,6 +281,19 @@ class EpisodeListViewModel(
         }
     }
 
+    /**
+     * A swipe decision, **held for [UNDO_WINDOW_MS] before anything is written**
+     * (`docs/decisions/0021`).
+     *
+     * The deferral is the whole design. A skip becomes a `PLAY` action in an append-only log that
+     * other clients act on, and the GPodder API has no retraction — so the only reliably reversible
+     * state is one where the row was never written. Nothing here touches the ledger, the outbox or
+     * WorkManager until the window elapses; [EpisodeListEvent.UndoRequested] simply discards it.
+     *
+     * The cost, stated plainly because the ADR states it: a decision made and then immediately
+     * killed (process death inside the window) is **lost**. Nothing wrong is written — the episode
+     * is merely still undecided — which is the trade this design accepts.
+     */
     private fun onSwipe(
         episodeKey: String,
         direction: SwipeDirection,
@@ -237,14 +302,58 @@ class EpisodeListViewModel(
             // Read from the stored mapping rather than from `state.value`: the swipe background
             // renders from the same setting, so the gesture and its label cannot disagree
             // (docs/UI.md §12.1) — and this stays correct even before anything collects `state`.
-            val action = settingsRepository.observeSwipeMapping().first().triageFor(direction)
-            if (action != null) triage(listOf(episodeKey), action)
+            val action = settingsRepository.observeSwipeMapping().first().triageFor(direction) ?: return@launch
+
+            // One pending decision at a time: a second swipe commits the first rather than
+            // discarding it. Two live windows would need two snackbars and an answer to "which one
+            // does Undo mean".
+            commitPendingUndo()
+
+            pendingUndo.value = PendingUndo(episodeKey, action)
+            emit(EpisodeListEffect.ShowUndo(action))
+            undoJob =
+                viewModelScope.launch {
+                    delay(UNDO_WINDOW_MS)
+                    commitPendingUndo()
+                }
         }
+    }
+
+    /**
+     * Writes the held decision, if there still is one.
+     *
+     * Idempotent by design — the timer, a following swipe and leaving the screen all call it, and an
+     * undo that arrives after the write finds nothing to discard rather than racing it.
+     */
+    private suspend fun commitPendingUndo() {
+        val pending = pendingUndo.value ?: return
+        pendingUndo.value = null
+        undoJob?.cancel()
+        // notify = false: the undo snackbar already reported this decision. A second one announcing
+        // it again five seconds later, with no action on it, would be noise.
+        triage(listOf(pending.episodeKey), pending.action, notify = false)
+    }
+
+    /**
+     * Leaving the screen **commits** rather than discarding.
+     *
+     * Silently dropping a decision the user made and watched take effect is worse than committing
+     * one they might have wanted back: they can still act again, and the row shows what happened.
+     */
+    override fun onCleared() {
+        // `viewModelScope` is cancelled during onCleared, so the write cannot run there. The pending
+        // decision is handed to a scope that outlives this view model — this is the one place the
+        // class reaches outside its own lifecycle, and it is why `commitScope` exists.
+        val pending = pendingUndo.value ?: return super.onCleared()
+        pendingUndo.value = null
+        commitScope.launch { triage(listOf(pending.episodeKey), pending.action, notify = false) }
+        super.onCleared()
     }
 
     private suspend fun triage(
         episodeKeys: List<String>,
         action: EpisodeUiAction,
+        notify: Boolean = true,
     ) {
         val episodes = episodeKeys.mapNotNull { episodeRepository.get(it) }
         if (episodes.isEmpty()) return
@@ -252,7 +361,7 @@ class EpisodeListViewModel(
         when (action) {
             EpisodeUiAction.MARK_AS_PLAYED -> {
                 triageWriter.markAsPlayed(episodes)
-                emit(EpisodeListEffect.ShowMessage(SnackbarText.BulkApplied(episodes.size)))
+                if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.BulkApplied(episodes.size)))
             }
             EpisodeUiAction.DOWNLOAD, EpisodeUiAction.DOWNLOAD_AGAIN, EpisodeUiAction.RETRY -> {
                 triageWriter.queue(episodes)
@@ -261,7 +370,7 @@ class EpisodeListViewModel(
                 // (docs/decisions/0012).
                 val userRequested = action == EpisodeUiAction.DOWNLOAD_AGAIN
                 episodes.forEach { scheduler.enqueueDownload(it.episodeKey, userRequested) }
-                emit(EpisodeListEffect.ShowMessage(SnackbarText.Queued(episodes.size)))
+                if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.Queued(episodes.size)))
             }
             EpisodeUiAction.CANCEL -> episodes.forEach { scheduler.cancelDownload(it.episodeKey) }
             EpisodeUiAction.OPEN_IN_BROWSER, EpisodeUiAction.COPY_LINK ->
@@ -330,6 +439,8 @@ class EpisodeListViewModel(
         val mapping: SwipeMapping,
         val online: Boolean,
         val pendingMarkAll: List<String>?,
+        val pendingSelectionAction: EpisodeUiAction?,
+        val pendingUndo: PendingUndo?,
     )
 
     /** `combine` tops out at five sources; these four are all "transient chrome". */
@@ -338,6 +449,7 @@ class EpisodeListViewModel(
         val pendingBulk: BulkPreview?,
         val folder: FolderState,
         val pendingMarkAll: List<String>?,
+        val pendingSelectionAction: EpisodeUiAction?,
     )
 }
 

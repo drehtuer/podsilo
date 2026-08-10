@@ -232,6 +232,8 @@ sealed interface EpisodeListEvent {
     data class SelectionStarted(val episodeKey: String) : EpisodeListEvent     // carries its row: a long-press selects the one it landed on
     data object SelectionCleared : EpisodeListEvent
     data object SelectAllInFilter : EpisodeListEvent
+    data class SelectionActionRequested(val action: EpisodeUiAction) : EpisodeListEvent  // opens the confirm; writes nothing
+    data object SelectionActionDismissed : EpisodeListEvent
     data class BulkConfirmed(val action: EpisodeUiAction, val keys: Set<String>) : EpisodeListEvent
     data object DownloadAllRequested : EpisodeListEvent                        // opens the confirm dialog
     data class DownloadAllConfirmed(val keys: List<String>) : EpisodeListEvent
@@ -243,6 +245,21 @@ sealed interface EpisodeListEvent {
 **Confirmation is a UI-owned dialog, not a state field of the list.** `DownloadAllRequested` makes
 the ViewModel produce a `BulkPreview` (below) which the dialog renders; nothing is written until
 `DownloadAllConfirmed`.
+
+**Undo** (built 2026-08-09, issue #49, `docs/decisions/0021`): a swipe emits `ShowUndo` and holds
+its decision in `pendingUndo` for ~5 s, writing **nothing** until the window elapses;
+`UndoRequested` discards it. The **view model owns the window**, not the snackbar — the host only
+reports a tap, and one arriving after the write finds nothing to discard. The row renders the state
+the decision will produce, which is presentation only. Scope is swipes: the row buttons, S3 and
+every bulk action still commit immediately.
+
+**Selection mode** (built 2026-08-09, issue #46) replaces the app bar rather than adding to it, and
+its actions go through `SelectionActionRequested` rather than reaching `BulkConfirmed` directly —
+that indirection is what makes "name the count before you write" structural here as well. The count
+is a **live region**, and every row carries a custom accessibility action so selection is reachable
+without a long-press (`UI.md` §12.12); `pendingSelectionAction` is its own state field for the same
+reason `pendingBulk` and `pendingMarkAll` are, so one confirmation's wording can never be rendered
+over another's action.
 
 **The app bar** (added 2026-08-09, issue #48 — S2 had shipped without one, alone among the eight
 screens) carries up navigation, the feed title, the Activity action that `UI.md` §3's map draws, and

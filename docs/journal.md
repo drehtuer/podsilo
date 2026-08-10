@@ -3539,3 +3539,113 @@ on purpose: if one flow backed all three, "the delivered list changed" could be 
 in-flight query and the test would prove nothing.
 
 653 tests, 0 failures, 3 skipped.
+
+---
+
+## 2026-08-09 (I3) — the feature that was three-quarters written
+
+Issue #46 asks for multi-select. The view model already had it: five events, the "an empty selection
+leaves the mode" rule, the "a filter change drops the selection" rule, and unit tests for all of it.
+`EpisodeRow` used `clickable` rather than `combinedClickable`, so **nothing could emit
+`SelectionStarted`** and the mode was unreachable — and with no app bar (until I1) there was nowhere
+to render `n selected` anyway.
+
+So the work was one new event pair and a bar. Which is the interesting part: this is the *sixth*
+instance of the shape this project keeps producing — specified, wired at both ends, no connection in
+the middle. The others were pull-to-refresh, the artwork slot, the swipe gesture, *Download all*, and
+S2's feed-error banner. Something about building state-first, with the screen last, reliably leaves
+exactly this gap, and unit tests never catch it because the view model genuinely works.
+
+### The one thing I added to the model rather than the UI
+
+The bar could have emitted `BulkConfirmed` straight from its buttons and let the screen own a
+dialog. `SelectionActionRequested` exists instead, so that "name the count before anything is
+written" is *structural* — the bar cannot reach the write path without passing through a
+confirmation, exactly as *Download all* and *Mark all as played* already work. For an action that
+emits `PLAY` to a shared log no undo reaches, a convention is not good enough.
+
+`pendingSelectionAction` is its own state field rather than sharing `pendingBulk`, for the reason
+already written into that field's KDoc: three dialogs say different things, and one shared field is
+one bug away from rendering the download wording over a mark-as-played confirmation.
+
+### Accessibility was the part with a real decision in it
+
+`docs/UI.md` §12.12 says selection must be reachable without a long-press, and suggests "a checkbox
+appears when the accessibility service is active". I did not implement service detection: branching
+the UI on whether TalkBack is running means the layout a sighted user sees is not the one being
+tested, and a11y-only code paths rot quietly. A **custom accessibility action** on every row is
+better — always present, no detection, and it emits the *same* event the long-press does rather than
+a parallel path that could drift.
+
+That also gave `square`/`square-check` their first call site. They had been on §18's allow-list, for
+exactly this, since the list was written.
+
+### Scope the issue asked for and did not get
+
+*Add to queue*, *add to playlist* and *remove/delete* are §1 non-goals; *mark unplayed* was declined
+by the author as decision D4. All four were already recorded in `docs/backlog.md` during planning, so
+this needed no new judgement — which is the value of having written it down a week earlier.
+
+666 tests, 0 failures, 3 skipped, plus 2 instrumented (long-press is a *timed* gesture and depends on
+the platform's real long-press timeout and touch slop — the kind of thing that passes headless and
+fails in the hand). Not run: no device attached.
+
+---
+
+## 2026-08-09 (I4) — undo that never had to un-send anything
+
+Last of Tier 5. Issue #49 asks for undo after a swipe, against a design document titled
+*"No undo — re-download instead"* whose argument was the protocol: a skip becomes a `PLAY` in an
+append-only log, other clients act on it, and the GPodder API has no retraction.
+
+The interesting part is that the argument survived the reversal. The author asked for undo; the
+question that went back (D1) was not *whether* but *which of two costs are you buying*. Write now and
+revert on undo is durable across process death and needs a **delete on the ledger** — the one table
+CLAUDE.md §11 says must never lose a row — and it still cannot help once the outbox has drained,
+which can happen immediately. Defer the write needs no delete and cannot post something it must
+retract, at the cost of losing a decision if the process dies inside the window.
+
+The author chose to defer. So the implementation never touches the ledger until the window closes,
+and *Undo* is a `null` assignment. The ADR states the loss case explicitly rather than leaving it to
+be discovered.
+
+### Three things that were not obvious until they were written
+
+**The view model has to own the window, not the snackbar.** The tempting version lets
+`SnackbarResult.ActionPerformed` decide. Then the snackbar's duration and the write timer are two
+clocks, and a tap at 4.9 s races a write at 5.0 s. Making the view model authoritative turns the race
+into a no-op: an undo that arrives late finds nothing to discard. The host only reports the tap.
+
+**Leaving the screen must commit, and `viewModelScope` cannot do it.** By the time `onCleared` runs
+the scope is already cancelled, so a write launched there never happens — silently. The commit goes
+to an injected scope that outlives the view model. That is the one place this class reaches outside
+its own lifecycle, and it is worth the parameter: the alternative is a decision the user watched take
+effect vanishing because they hit Back.
+
+**The row has to lie for five seconds.** A swipe that appears to do nothing reads as the app ignoring
+it, and the user swipes again. So the row renders the state the decision *will* produce — which also
+means it does not change appearance a second time when the write lands. Presentation only; every
+other screen reads storage and correctly lags by the window.
+
+### Testing the lifecycle without a test hook
+
+`onCleared` is `protected`. The options were adding a `@VisibleForTesting` method to production code
+or going through a real `ViewModelStore` — construct a provider that hands back the instance, then
+`store.clear()`. The second is four lines and exercises the actual hook; the first would have been a
+method that exists only because a test wanted it.
+
+### detekt, a fourth time
+
+`EpisodeListViewModelTest` went over `LargeClass`. The undo window is genuinely its own behaviour —
+every test in it moves virtual time — so the harness moved to `EpisodeListTestHarness` and the undo
+tests to `EpisodeListUndoTest`. Fourth time this ceiling has pointed at a real seam rather than an
+arbitrary limit (after the DAO split, the ledger port, and `EpisodeListScreen`).
+
+### A pre-existing test caught the behaviour change, which is the system working
+
+`a swipe performs the configured action, not a hard-coded one` failed immediately: it asserted a
+write straight after the swipe. Its subject is *which* action, not *when*, so it now waits the window
+out. Worth noting because it is the only signal that would have caught an accidental change in swipe
+semantics — and it fired on the first run.
+
+673 tests, 0 failures, 3 skipped.

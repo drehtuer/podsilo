@@ -4,30 +4,21 @@ package net.drehtuer.podsilo.feature.episodes
 
 import app.cash.turbine.test
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.SwipeAction
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
-import java.time.Clock
 import java.time.Instant
-import java.time.ZoneOffset
 
 /**
  * S2's behaviour, as a plain object with fakes — no Robolectric, no `WorkManager`, no Compose.
@@ -38,68 +29,7 @@ import java.time.ZoneOffset
  * again* may carry the flag that gets past `DownloadWorker`'s terminal-row refusal.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class EpisodeListViewModelTest {
-    @Before
-    fun setUpMain() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-    }
-
-    @After
-    fun tearDownMain() {
-        Dispatchers.resetMain()
-    }
-
-    private val ledger = FakeLedgerRepository()
-    private val episodes = FakeEpisodeRepository()
-    private val feeds = FakeFeedRepository()
-    private val settings = FakeSettingsRepository()
-    private val connectivity = FakeConnectivityMonitor()
-    private val scheduler = RecordingScheduler()
-    private val workMonitor = FakeDownloadWorkMonitor()
-    private val spaceProbe = FakeSpaceProbe()
-    private val folderStatus = FakeFolderStatus()
-    private val clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC)
-
-    /**
-     * `Dispatchers.setMain(UnconfinedTestDispatcher())` makes `viewModelScope` run eagerly, so an
-     * event is fully processed by the time `onEvent` returns — no manual pumping, and the production
-     * class needs no injected scope.
-     *
-     * `state` is `WhileSubscribed`, so tests that assert on it collect it into [backgroundScope],
-     * which is the same condition the real screen creates.
-     */
-    private fun TestScope.viewModel(filter: EpisodeFilter? = null): EpisodeListViewModel {
-        feeds.seed(feed())
-        val vm =
-            EpisodeListViewModel(
-                feedUrl = FEED_URL,
-                feedRepository = feeds,
-                episodeRepository = episodes,
-                listRepository = ledger,
-                settingsRepository = settings,
-                connectivityMonitor = connectivity,
-                triageWriter = TriageWriter(ledger, clock),
-                scheduler = scheduler,
-                spaceProbe = spaceProbe,
-                folderStatus = folderStatus,
-                workMonitor = workMonitor,
-                zone = ZoneOffset.UTC,
-            )
-        backgroundScope.launch { vm.state.collect { } }
-        // A row that already carries a ledger state is invisible under the default "To decide"
-        // filter by definition, so progress tests have to ask for a filter that shows it.
-        filter?.let { vm.onEvent(EpisodeListEvent.FilterChanged(it)) }
-        return vm
-    }
-
-    private fun seed(vararg items: net.drehtuer.podsilo.core.model.Episode) {
-        episodes.seed(*items)
-        ledger.seed(*items)
-    }
-
-    private fun rows(state: EpisodeListUiState): List<EpisodeUi> =
-        (state.content as? EpisodeListUiState.Content.Episodes)?.items.orEmpty()
-
+class EpisodeListViewModelTest : EpisodeListTestHarness() {
     @Test
     fun `the default filter is To decide, and it means exactly no ledger row`() =
         runTest {
@@ -221,6 +151,9 @@ class EpisodeListViewModelTest {
             runCurrent()
 
             vm.onEvent(EpisodeListEvent.SwipeCommitted("e1", SwipeDirection.RIGHT))
+            // The write is deferred by the undo window now (docs/decisions/0021); *which* action it
+            // is remains this test's point, so it waits the window out rather than changing subject.
+            advanceTimeBy(UNDO_WINDOW_FOR_TEST + 1)
             runCurrent()
 
             assertEquals(
@@ -712,6 +645,93 @@ class EpisodeListViewModelTest {
 
             assertTrue("nothing may be enqueued, got ${scheduler.downloads}", scheduler.downloads.isEmpty())
             assertTrue(rows(vm.state.value).isNotEmpty())
+        }
+
+    // ---- Selection mode's confirmation gate (issue #46) ----
+
+    /**
+     * §5's safeguard, and the reason `SelectionActionRequested` exists at all rather than the bar
+     * emitting `BulkConfirmed` directly: requesting an action opens a dialog and **writes nothing**.
+     * The same rule *Download all* and *Mark all as played* already follow.
+     */
+    @Test
+    fun `requesting a selection action opens the confirmation and writes nothing`() =
+        runTest {
+            seed(episode("e1"), episode("e2"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionToggled("e2"))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.MARK_AS_PLAYED))
+            runCurrent()
+
+            assertEquals(EpisodeUiAction.MARK_AS_PLAYED, vm.state.value.pendingSelectionAction)
+            assertTrue("the dialog must not write", ledger.writes.isEmpty())
+            assertTrue(scheduler.downloads.isEmpty())
+        }
+
+    @Test
+    fun `dismissing the confirmation keeps the selection and writes nothing`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.DOWNLOAD))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.SelectionActionDismissed)
+            runCurrent()
+
+            assertNull(vm.state.value.pendingSelectionAction)
+            // Cancelling the dialog is not cancelling the selection — the user may pick the other
+            // action, and losing twelve taps' worth of selection would be its own bug.
+            assertEquals(
+                setOf("e1"),
+                vm.state.value.selection
+                    ?.keys,
+            )
+            assertTrue(ledger.writes.isEmpty())
+        }
+
+    @Test
+    fun `confirming writes once, in one transaction, and leaves selection mode`() =
+        runTest {
+            seed(episode("e1"), episode("e2"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionToggled("e2"))
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.MARK_AS_PLAYED))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.BulkConfirmed(EpisodeUiAction.MARK_AS_PLAYED, setOf("e1", "e2")))
+            runCurrent()
+
+            assertEquals("one batched write", 1, ledger.writes.size)
+            assertEquals(2, ledger.writes.single().size)
+            assertNull(vm.state.value.pendingSelectionAction)
+            assertFalse(vm.state.value.inSelectionMode)
+        }
+
+    /** A confirmation whose set changed under it must not survive to be tapped. */
+    @Test
+    fun `changing the filter drops a pending confirmation with the selection`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+            vm.onEvent(EpisodeListEvent.SelectionStarted("e1"))
+            vm.onEvent(EpisodeListEvent.SelectionActionRequested(EpisodeUiAction.DOWNLOAD))
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.FilterChanged(EpisodeFilter.ALL))
+            runCurrent()
+
+            assertNull(vm.state.value.selection)
+            assertNull(vm.state.value.pendingSelectionAction)
         }
 
     /**

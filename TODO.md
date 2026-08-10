@@ -489,7 +489,11 @@ defaults. The consequence was ADR 0011 and `docs/UI.md` §12.11 quietly not work
 cannot possibly succeed, because the screen had no way to tell one failure from another. Fixed in
 all three queries, with a regression test **verified to fail against the unprojected `SELECT`s**.
 
-### I3 — [#46] Multi-episode selection in the episode list (enhancement)
+### I3 — [#46] Multi-episode selection in the episode list (enhancement) — **done 2026-08-09**
+
+**Built.** 13 new tests (666 total, 0 failures, 3 skipped) + 2 instrumented;
+`ktlintCheck detekt test` green. The estimate below held: the view model needed **one** new event
+pair, and everything else was the UI that had never been written.
 
 **Already designed, and already three-quarters built.** `docs/UI.md` §5 *Batch triage* specifies it,
 and `EpisodeListViewModel` implements the whole selection model — `SelectionStarted`,
@@ -507,18 +511,21 @@ already routes a tap to `SelectionToggled` while in selection mode.
 
 **Work** — depends on I1.
 
-- [ ] `combinedClickable` with `onLongClick` → `SelectionStarted(episodeKey)`.
-- [ ] The selection app bar, replacing the normal one while `state.inSelectionMode`: the count,
-      Download, Mark as played, Select all (scoped to the current filter, which `Selection.allInFilter`
-      already carries), and ✕ / system back → `SelectionCleared`.
-- [ ] The confirmation naming the count that §5 requires before a bulk action commits — the same
-      safeguard *Download all* and *Mark all as played* already have.
-- [ ] Accessibility, which the issue asks for and `docs/UI.md` §12.12 already requires: TalkBack
-      content descriptions for the selected state, and selection reachable without the gesture (the
-      row's existing per-action buttons and the overflow are the non-gesture path).
-- [ ] Correct `docs/UI_interface.md` §3: it declares `SelectionStarted` as a `data object`, the code
-      has it carrying an `episodeKey`, and the code is right — a long-press has to select the row it
-      landed on.
+- [x] `combinedClickable` with `onLongClick` → `SelectionStarted(episodeKey)`.
+- [x] The selection app bar, **replacing** the normal one while a selection is live — the count as a
+      **live region** so TalkBack announces `n selected` on every change (§12.12), Download, Mark as
+      played, *Select all* (scoped to the filter, from `Selection.allInFilter`), and ✕.
+      Replacing rather than augmenting: leaving *Back* beside "3 selected" invites leaving the
+      screen when the user meant to leave the mode.
+- [x] The confirmation naming the count, via a new `SelectionActionRequested`/`SelectionActionDismissed`
+      pair and `pendingSelectionAction` — so the bar cannot reach `BulkConfirmed` directly and the
+      "name the count before you write" rule is structural, as it already is for *Download all* and
+      *Mark all as played*. A filter change drops a pending confirmation along with its selection.
+- [x] Accessibility: a **custom accessibility action** on every row, so selection is reachable
+      without the long-press §12.12 requires — the same event, not a parallel path — plus a leading
+      checkbox in selection mode. That gives `square`/`square-check` their first call site; they had
+      been on §18's allow-list for exactly this since it was written.
+- [x] `docs/UI_interface.md` §3's `SelectionStarted` correction — done in I1.
 
 **Out of scope, and worth saying explicitly in the issue:** the issue's action list asks for *add to
 queue*, *add to playlist*, *remove/delete* and *mark unplayed*. The first three are CLAUDE.md §1
@@ -529,7 +536,11 @@ row, so it would mean deleting the record that stops an episode being downloaded
 implementation notes (RecyclerView, `ActionMode`, the AndroidX Selection library) describe a View-based
 app; this one is Compose, and the selection model they recommend building already exists.
 
-### I4 — [#49] Undo after a swipe (enhancement) — reverses a shipped design rule
+### I4 — [#49] Undo after a swipe (enhancement) — **done 2026-08-09**
+
+**Built** as a deferred write (D1), with **ADR 0021** and the `docs/UI.md` §12.1/§12.3 amendments.
+7 new tests (673 total, 0 failures, 3 skipped); `ktlintCheck detekt test assembleDebug` green. The
+ledger gained **no delete**, which was the point of choosing this option.
 
 **This contradicts a shipped, deliberate design rule.** `docs/UI.md` §12.3 is titled *"No undo —
 re-download instead"*, and §12.1 says a swipe "commits immediately — there is no undo". The reasoning
@@ -559,22 +570,27 @@ touched. It still needs **ADR 0021** written at the point the code is.
 
 **Work**
 
-- [ ] ADR `0021-undo-for-swipe-triage.md` recording D1 — written **with** the change, not now to
-      reserve a number (the lesson from ADR 0012, recorded above). It has to state the cost as well
-      as the decision: a decision made and immediately killed is silently lost.
-- [ ] Amend `docs/UI.md` §12.1 and rewrite §12.3 — it is currently titled and argued as *No undo*,
-      and leaving it contradicting the app is worse than either behaviour.
-- [ ] Amend `docs/UI_interface.md` §3 (a pending-undo state and its effect) and §12.
-- [ ] Implement the deferred write in the view model, **not** in the composable: the pending
-      decision must survive a recomposition and a rotation, and the row has to render optimistically
-      (greyed, or gone from *To decide*) while it is pending, or the swipe will look ignored.
-- [ ] Bulk actions are untouched (D2): selection mode, *Download all* and *Mark all as played* keep
-      their confirmation dialogs, and get no undo.
-- [ ] Tests: the window expiring writes exactly one row; undo inside the window writes **none** and
-      enqueues no work; a second swipe on another row while one is pending commits the first rather
-      than dropping it; leaving the screen commits rather than silently discarding; and the two the
-      design turns on — **nothing is ever posted for an undone decision**, and the ledger gains no
-      delete.
+- [x] ADR `0021-undo-for-swipe-triage.md`, written **with** the change. It states the cost as well as
+      the decision: a decision made and then immediately killed is silently lost.
+- [x] `docs/UI.md` §12.1, §12.3 (retitled), principle 6 and the motion table's "a snackbar never
+      carries an action" line — all four contradicted the app otherwise.
+- [x] `docs/UI_interface.md` §3.
+- [x] The deferred write lives in the **view model**, so the held decision survives recomposition and
+      rotation. The row renders the state the decision *will* produce (`EpisodeUi.asPending`), so a
+      swipe never looks ignored and the row does not change appearance twice.
+- [x] Bulk actions untouched (D2). The row's own action buttons and S3 also commit immediately —
+      **scope is swipes only**, since a button press is a deliberate press on a named affordance,
+      not a gesture that can be started by trying to scroll.
+- [x] Tests: the window expiring writes exactly one row; undo inside it writes none and enqueues
+      nothing, *and stays undone after the timer would have fired*; the row renders the pending
+      decision with nothing stored; a second swipe commits the first; leaving the screen commits; an
+      undo arriving after the window is ignored rather than racing; and bulk still writes at once
+      with no undo.
+      - `onCleared` is reached through a real `ViewModelStore` rather than by adding a test-only
+        method to the production class.
+      - detekt flagged `EpisodeListViewModelTest` as too large, so the harness moved to
+        `EpisodeListTestHarness` and the undo tests to their own class — the fourth time that
+        ceiling has pointed at a real seam.
 
 ### Decisions — all four settled (2026-08-09)
 
