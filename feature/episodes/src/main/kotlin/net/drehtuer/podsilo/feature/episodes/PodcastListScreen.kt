@@ -3,6 +3,7 @@
 package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -31,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.ui.ArtworkSize
+import net.drehtuer.podsilo.core.ui.ChipRowPadding
 import net.drehtuer.podsilo.core.ui.LogoGap
 import net.drehtuer.podsilo.core.ui.MaxContentWidth
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
@@ -145,20 +148,33 @@ private fun PodcastListTitle() {
     }
 }
 
+/**
+ * S1's filter chips — the same row shape issue #48 reported on S2, fixed the same way.
+ *
+ * It was never reported here because there are only two chips and they fit a 360 dp screen at the
+ * default font scale. *With new episodes* and *All podcasts* are long labels, though, and a large
+ * system font scale is all it takes to push the second one off the edge with no way to reach it.
+ * One horizontally scrollable line (decision D3) keeps the header height fixed; the vertical padding
+ * stops `sizeIn(minHeight = MinTouchTarget)` handing the grown chip height to the row beneath.
+ */
 @Composable
 private fun PodcastFilterChips(
     selected: PodcastFilter,
     onEvent: (PodcastListEvent) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = RowPadding),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = RowPadding, vertical = ChipRowPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PodcastFilter.entries.forEach { filter ->
             FilterChip(
                 selected = filter == selected,
                 onClick = { onEvent(PodcastListEvent.FilterChanged(filter)) },
-                label = { Text(filter.label) },
+                label = { Text(filter.label, maxLines = 1, softWrap = false) },
                 modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
             )
         }

@@ -56,6 +56,7 @@ class EpisodeListScreenTest {
         publishedAt: Instant? = Instant.parse("2026-07-14T09:00:00Z"),
         durationMinutes: Long? = 48,
         sizeBytes: Long? = null,
+        episodePageUrl: String? = null,
     ) = EpisodeUi(
         episodeKey = key,
         feedUrl = FEED_URL,
@@ -69,6 +70,7 @@ class EpisodeListScreenTest {
         ledgerState = ledgerState,
         progress = progress,
         lastError = failure,
+        episodePageUrl = episodePageUrl,
     )
 
     private fun render(state: EpisodeListUiState = EpisodeListUiState(feedUrl = FEED_URL, feedTitle = "Der Podcast")) {
@@ -110,9 +112,15 @@ class EpisodeListScreenTest {
         assertEquals(kotlin.collections.listOf(EpisodeListEvent.RowClicked("e1")), events)
     }
 
+    /**
+     * `docs/UI.md` §5's row overflow, and §12.1's **mandatory** non-gesture equivalent of the swipes.
+     * It did not exist: the row rendered inline `TextButton`s instead, and this replaces them.
+     */
     @Test
-    fun `an undecided episode offers Download and Mark as played`() {
+    fun `an undecided episode offers Download and Mark as played in its overflow`() {
         render(listOf(row()))
+
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
 
         compose.onNodeWithText("Download").assertIsDisplayed()
         compose.onNodeWithText("Mark as played").assertIsDisplayed()
@@ -122,12 +130,71 @@ class EpisodeListScreenTest {
     fun `Download emits a triage event for that episode`() {
         render(listOf(row()))
 
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
         compose.onNodeWithText("Download").performClick()
 
         assertEquals(
             kotlin.collections.listOf(EpisodeListEvent.Triage("e1", EpisodeUiAction.DOWNLOAD)),
             events,
         )
+    }
+
+    /**
+     * The two actions that had **no row-level call site at all**: `labelFor` returned `null` for
+     * both, so they were reachable only from S3 even though §5 lists them in the row's overflow.
+     */
+    @Test
+    fun `the overflow offers the two actions the row could never reach`() {
+        render(listOf(row(episodePageUrl = "https://example.org/episodes/1")))
+
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
+
+        compose.onNodeWithText("Open in browser").assertIsDisplayed()
+        compose.onNodeWithText("Copy episode link").performClick()
+
+        assertEquals(
+            kotlin.collections.listOf(EpisodeListEvent.Triage("e1", EpisodeUiAction.COPY_LINK)),
+            events,
+        )
+    }
+
+    /** The menu is built from `actions`, so a terminal row offers a re-decision and not a first one. */
+    @Test
+    fun `a downloaded episode offers Download again rather than Download`() {
+        render(listOf(row(ledgerState = LedgerState.DOWNLOADED)))
+
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
+
+        compose.onNodeWithText("Download again").assertIsDisplayed()
+    }
+
+    /** Selection mode owns the row; a per-row menu would compete with the selection bar's actions. */
+    @Test
+    fun `the row overflow is absent in selection mode`() {
+        render(selecting("e1"))
+
+        compose.onAllNodesWithContentDescription("Actions for Warum Hamburg immer regnet").assertCountEquals(0)
+    }
+
+    // ---- The feed-error banner (docs/UI.md §5), which nothing could ever show ----
+
+    @Test
+    fun `a feed failure shows its plain sentence above the list, with Try again`() {
+        render(listOf(row()).copy(feedError = "Feed server did not respond."))
+
+        compose.onNodeWithText("Feed server did not respond.").assertIsDisplayed()
+        // The episodes stay listed: a failed refresh must not empty the screen (§5).
+        compose.onNodeWithText("Warum Hamburg immer regnet").assertIsDisplayed()
+
+        compose.onNodeWithText("Try again").performClick()
+        assertTrue(events.contains(EpisodeListEvent.RetryFeedClicked))
+    }
+
+    @Test
+    fun `no banner when the feed is healthy`() {
+        render(listOf(row()))
+
+        compose.onAllNodes(hasText("Try again")).assertCountEquals(0)
     }
 
     @Test
@@ -148,6 +215,8 @@ class EpisodeListScreenTest {
                 ),
             ),
         )
+
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
 
         compose.onNodeWithText("Choose folder").assertIsDisplayed()
         compose.onAllNodes(hasText("Retry", substring = true)).assertCountEquals(0)
@@ -170,6 +239,7 @@ class EpisodeListScreenTest {
             ),
         )
 
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
         compose.onNodeWithText("Retry").assertIsDisplayed()
         // The message is shown verbatim — it is the one string the UI does not re-word.
         compose.onNode(hasText("connection reset", substring = true)).assertIsDisplayed()
@@ -283,8 +353,8 @@ class EpisodeListScreenTest {
 
         compose.onNode(hasText("may not fit", substring = true)).assertIsDisplayed()
         // The confirm button stays present: the estimate is a guess and must not veto the decision.
-        // Matched by exact text, since the row underneath also has a "Download" button.
-        compose.onAllNodes(hasText("Download")).assertCountEquals(2)
+        // One node now, not two: the row's own Download moved into its overflow (docs/UI.md §5).
+        compose.onAllNodes(hasText("Download")).assertCountEquals(1)
     }
 
     /**
@@ -311,7 +381,13 @@ class EpisodeListScreenTest {
     fun `pulling the episode list down refreshes this feed`() {
         render(listOf(row()))
 
-        compose.onNodeWithText("Warum Hamburg immer regnet").performTouchInput { swipeDown() }
+        // An explicit distance, not the default `swipeDown()`. That swipes from the node's top to
+        // its bottom, and the row got shorter when its buttons moved into the overflow — short
+        // enough that the gesture no longer crossed the pull-to-refresh threshold. The row's height
+        // is not what this test is about.
+        compose.onNodeWithText("Warum Hamburg immer regnet").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + PULL_DISTANCE_PX)
+        }
 
         assertTrue(
             "pulling the episode list down must request a refresh, got $events",
@@ -653,3 +729,5 @@ private fun androidx.compose.ui.test.SemanticsNodeInteraction.performCustomAcces
                 ?: error("no custom accessibility action labelled '$label'; found ${actions.map { a -> a.label }}")
         action.action()
     }
+
+/** Comfortably past the pull-to-refresh threshold, and independent of any row's height. */

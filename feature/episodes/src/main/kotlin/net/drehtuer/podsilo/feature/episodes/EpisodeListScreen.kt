@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import net.drehtuer.podsilo.core.ui.ChipRowPadding
 import net.drehtuer.podsilo.core.ui.MaxContentWidth
 import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
@@ -82,6 +83,9 @@ fun EpisodeListScreen(
                         if (status is QueueStatus.Paused) PausedBanner(status, onEvent)
                     }
                     if (state.isOffline) OfflineBanner()
+                    // Above the list, never in place of it: a failed refresh must leave the
+                    // previously parsed episodes on screen (docs/UI.md §5).
+                    state.feedError?.let { FeedErrorBanner(it, onEvent) }
                     FilterChips(state.filter, onEvent)
                     MarkAllRow(state, onEvent)
 
@@ -146,6 +150,41 @@ private fun PausedBanner(
     }
 }
 
+/**
+ * The failed-fetch banner from `docs/UI.md` §5 — **the state field existed and nothing ever set or
+ * read it**, so until now a feed that would not load was silent on the screen that lists it.
+ *
+ * `circle-alert`, not `triangle-alert`: §18 draws the distinction and it matters here. A feed that
+ * did not respond is *input the user can act on* (try again, or fix the feed in Nextcloud), not a
+ * condition the download queue is in. Swapping them makes a broken feed look like a system fault.
+ *
+ * The message is the same plain sentence `FeedRefresher` wrote to the error log, passed through
+ * verbatim — one writer, so the banner and S8 cannot describe the same failure differently.
+ */
+@Composable
+private fun FeedErrorBanner(
+    message: String,
+    onEvent: (EpisodeListEvent) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.errorContainer)
+                .padding(RowPadding)
+                .semantics { contentDescription = message },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PodsiloIcon(PodsiloIcons.InputError, contentDescription = null)
+        Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        TextButton(
+            onClick = { onEvent(EpisodeListEvent.RetryFeedClicked) },
+            modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+        ) { Text("Try again", maxLines = 1, softWrap = false) }
+    }
+}
+
 @Composable
 private fun OfflineBanner() {
     Row(
@@ -200,8 +239,6 @@ private fun FilterChips(
         }
     }
 }
-
-private val ChipRowPadding = 4.dp
 
 private val EpisodeFilter.label: String
     get() =

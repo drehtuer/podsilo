@@ -154,6 +154,7 @@ private fun EpisodesDestination(
             EpisodeListEffect.NavigateUp -> host.navController.popBackStack()
             EpisodeListEffect.OpenActivity -> host.navController.navigate(Routes.ACTIVITY)
             is EpisodeListEffect.OpenUrl -> host.onOpenUrl(effect.url)
+            is EpisodeListEffect.CopyLink -> host.actions.copy(effect.url)
             EpisodeListEffect.ResolvePausedQueue -> host.onChooseFolder()
             is EpisodeListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
             // The one snackbar with a reply. The view model still owns the window (ADR 0021); this
@@ -186,6 +187,7 @@ private fun DetailDestination(
             EpisodeDetailEffect.Close -> host.navController.popBackStack()
             // Not navigation: the sheet stays open behind the browser (docs/UI.md §6).
             is EpisodeDetailEffect.OpenUrl -> host.onOpenUrl(effect.url)
+            is EpisodeDetailEffect.CopyLink -> host.actions.copy(effect.url)
             EpisodeDetailEffect.OpenErrorLog -> host.navController.navigate(Routes.ERROR_LOG)
             is EpisodeDetailEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
         }

@@ -52,6 +52,11 @@ sealed interface EpisodeDetailEffect {
         val url: String,
     ) : EpisodeDetailEffect
 
+    /** *Copy episode link*, which used to emit [OpenUrl] and therefore opened a browser instead. */
+    data class CopyLink(
+        val url: String,
+    ) : EpisodeDetailEffect
+
     /** Deciding closes the sheet (`docs/UI.md` §6); dismissal is the host's to perform. */
     data object Close : EpisodeDetailEffect
 

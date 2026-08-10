@@ -69,7 +69,26 @@ class FeedRefresher(
     /** @return `false` only for a transient failure worth retrying. */
     private suspend fun refreshOne(feed: Feed): Boolean =
         when (val result = feedFetcher.fetch(feed.url, feed.httpEtag, feed.httpLastModified)) {
-            is FeedFetchResult.NotModified -> true
+            // A 304 is a *successful* check: the feed was reached and is unchanged. It has to move
+            // `lastRefreshedAt` or a feed that always 304s would show an ever-older "last refreshed"
+            // on S1 despite being checked every pass — and S2's feed-error banner, which shows an
+            // error newer than the last success, would never clear.
+            is FeedFetchResult.NotModified -> {
+                feedRepository.updateRefreshMetadata(
+                    feedUrl = feed.url,
+                    metadata =
+                        FeedRefreshMetadata(
+                            // Nothing was re-parsed, so everything but the timestamp is carried
+                            // through unchanged — including the validators that produced the 304.
+                            title = feed.title,
+                            imageUrl = feed.imageUrl,
+                            httpEtag = feed.httpEtag,
+                            httpLastModified = feed.httpLastModified,
+                            refreshedAt = clock.millis(),
+                        ),
+                )
+                true
+            }
             is FeedFetchResult.Fetched -> store(feed, result)
             // A 404/410 means the feed is gone; retrying achieves nothing, and the subscription list
             // is the server's business, not ours to prune (CLAUDE.md §1 — read-only follower).

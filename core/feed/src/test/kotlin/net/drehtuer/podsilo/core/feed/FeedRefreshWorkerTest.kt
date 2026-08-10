@@ -159,7 +159,17 @@ class FeedRefreshWorkerTest {
             assertEquals(ListenableWorker.Result.success(), result)
             assertEquals("\"v1\"", server.takeRequest().getHeader("If-None-Match"))
             assertTrue("a 304 must not rewrite the episode cache", episodes.stored.isEmpty())
-            assertEquals(0, feeds.metadataUpdates)
+
+            // **Changed 2026-08-10.** This used to assert `metadataUpdates == 0`, i.e. that a 304
+            // wrote nothing at all. But a 304 is a *successful check* — the feed was reached and is
+            // unchanged — and recording nothing meant `lastRefreshedAt` never moved for a feed that
+            // rarely changes. S1 would show "last refreshed 3 d ago" for a feed checked every 15
+            // minutes, and S2's feed-error banner (which shows an error newer than the last success)
+            // could never clear. What must not change is everything the 304 did not re-fetch.
+            val stored = checkNotNull(feeds.get(feed(title = "Der Podcast", etag = "\"v1\"").url))
+            assertEquals("the validators that produced the 304 must survive it", "\"v1\"", stored.httpEtag)
+            assertEquals("Der Podcast", stored.title)
+            assertEquals(NOW_MILLIS, stored.lastRefreshedAt)
         }
 
     @Test

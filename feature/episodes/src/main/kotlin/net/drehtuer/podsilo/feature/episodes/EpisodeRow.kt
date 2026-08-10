@@ -12,11 +12,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -33,13 +39,7 @@ import net.drehtuer.podsilo.core.ui.PodsiloArtwork
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
-import java.time.Duration
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-
-internal const val MINUTES_PER_HOUR = 60
 
 /**
  * One episode row and everything it renders — split from the screen because a Compose file is a
@@ -109,15 +109,70 @@ internal fun EpisodeRow(
         // Leading artwork, per docs/UI.md §5's row anatomy — the episode's own image when the feed
         // supplied one, otherwise the podcast's. `EpisodeUi.artworkUrl` already resolves that.
         PodsiloArtwork(url = episode.artworkUrl, title = episode.title)
-        EpisodeRowBody(episode, onEvent, zone, Modifier.weight(1f))
+        EpisodeRowBody(episode, zone, Modifier.weight(1f))
+        // Trailing `⋮`, closing §5's row anatomy. Hidden in selection mode, where the row's job is
+        // to be selected and a per-row menu would compete with the selection bar's actions.
+        if (!inSelectionMode) EpisodeOverflow(episode, onEvent)
     }
 }
+
+/**
+ * The row overflow `docs/UI.md` §5 specifies, and §12.1 calls a **mandatory** non-gesture equivalent
+ * of the swipes — which did not exist. The row rendered its applicable actions as inline
+ * `TextButton`s instead, and two actions had no row-level call site at all because `labelFor`
+ * returned `null` for them: *Copy episode link* and *Open in browser* were reachable only from S3.
+ *
+ * Built from [EpisodeUi.actions] and nothing else — no `when (state)` here. That set is computed
+ * once in the view model, so this menu, the swipe label and the accessibility actions cannot
+ * disagree about what an episode currently offers (§12.6).
+ *
+ * **This replaces the inline buttons**, which §5's row anatomy never had: it ends at
+ * "status badge/progress, overflow `⋮`". A row with two or three buttons in it also crowds out the
+ * description snippet at large font scales, which §12.12 asks to keep readable.
+ */
+@Composable
+private fun EpisodeOverflow(
+    episode: EpisodeUi,
+    onEvent: (EpisodeListEvent) -> Unit,
+) {
+    if (episode.actions.isEmpty()) return
+    var expanded by remember { mutableStateOf(false) }
+
+    IconButton(
+        onClick = { expanded = true },
+        modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
+    ) {
+        PodsiloIcon(PodsiloIcons.Overflow, contentDescription = "Actions for ${episode.title}")
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        episode.actions.forEach { action ->
+            DropdownMenuItem(
+                text = { Text(action.menuLabelFor(episode)) },
+                onClick = {
+                    expanded = false
+                    onEvent(EpisodeListEvent.Triage(episode.episodeKey, action))
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Every action's menu label — unlike [labelFor], this returns a string for **all** of them, because
+ * a menu that silently drops an item the view model offered is how *Copy episode link* stayed
+ * unreachable from the list.
+ */
+internal fun EpisodeUiAction.menuLabelFor(episode: EpisodeUi): String =
+    when (this) {
+        EpisodeUiAction.OPEN_IN_BROWSER -> "Open in browser"
+        EpisodeUiAction.COPY_LINK -> "Copy episode link"
+        else -> labelFor(episode) ?: name
+    }
 
 /** The text column beside the artwork — split out only so [EpisodeRow] stays readable. */
 @Composable
 private fun EpisodeRowBody(
     episode: EpisodeUi,
-    onEvent: (EpisodeListEvent) -> Unit,
     zone: ZoneId,
     modifier: Modifier = Modifier,
 ) {
@@ -168,95 +223,6 @@ private fun EpisodeRowBody(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-
-        EpisodeActions(episode, onEvent)
-    }
-}
-
-/**
- * Rendered from [EpisodeUi.actions] and nothing else — no `when (state)` here, which is what stops
- * this list drifting from the overflow and the accessibility actions (`docs/UI.md` §12.6).
- */
-@Composable
-private fun EpisodeActions(
-    episode: EpisodeUi,
-    onEvent: (EpisodeListEvent) -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        episode.actions.forEach { action ->
-            val label = action.labelFor(episode) ?: return@forEach
-            TextButton(
-                onClick = { onEvent(EpisodeListEvent.Triage(episode.episodeKey, action)) },
-                modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
-            ) { Text(label) }
-        }
-    }
-}
-
-/**
- * A `FOLDER_UNAVAILABLE` or `DISK_FULL` failure replaces *Retry* with the action that can actually
- * clear it (`docs/UI.md` §12.11, `docs/decisions/0011`) — a Retry there is a button that cannot work.
- */
-internal fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
-    when (this) {
-        EpisodeUiAction.DOWNLOAD -> "Download"
-        EpisodeUiAction.DOWNLOAD_AGAIN -> "Download again"
-        EpisodeUiAction.MARK_AS_PLAYED -> "Mark as played"
-        EpisodeUiAction.CANCEL -> "Cancel"
-        EpisodeUiAction.RETRY ->
-            when (episode.lastError?.remedy) {
-                FailureRemedy.CHOOSE_FOLDER -> "Choose folder"
-                FailureRemedy.FREE_UP_SPACE -> "Free up space"
-                null -> "Retry"
-            }
-        // Reachable from the row overflow and the detail sheet, not as a primary button.
-        EpisodeUiAction.OPEN_IN_BROWSER, EpisodeUiAction.COPY_LINK -> null
-    }
-
-internal fun EpisodeUi.metaLine(zone: ZoneId): String =
-    listOfNotNull(publishedAt?.formatDate(zone), duration?.formatDuration(), sizeBytes?.formatSize())
-        .joinToString(" · ")
-
-internal fun EpisodeUi.statusLine(): String? =
-    when (ledgerState) {
-        null -> null
-        LedgerState.QUEUED -> "queued"
-        LedgerState.DOWNLOADING -> null
-        LedgerState.DOWNLOADED -> "downloaded"
-        LedgerState.SKIPPED -> "played"
-        LedgerState.HANDLED_REMOTELY -> "handled elsewhere"
-        // The message is passed through verbatim: it is the one string the UI does not re-word.
-        LedgerState.ERROR -> lastError?.let { "failed — ${it.message} (attempt ${it.attempts})" } ?: "failed"
-    }
-
-/**
- * The badge beside [statusLine].
- *
- * `HANDLED_REMOTELY` gets `cloud-check`, **not** `check`: rendering it as the same tick as a download
- * this device performed would claim a decision the user did not make here, and the affordances differ
- * (`docs/UI.md` §12.6, §18). `play` is the *played* marker and never playback — Podsilo has no player
- * — which is why it only ever appears beside the word.
- */
-internal fun EpisodeUi.statusIcon(): Int? =
-    when (ledgerState) {
-        null, LedgerState.DOWNLOADING -> null
-        LedgerState.QUEUED -> PodsiloIcons.Download
-        LedgerState.DOWNLOADED -> PodsiloIcons.Check
-        LedgerState.SKIPPED -> PodsiloIcons.Played
-        LedgerState.HANDLED_REMOTELY -> PodsiloIcons.HandledRemotely
-        LedgerState.ERROR -> PodsiloIcons.Warning
-    }
-
-private fun Instant.formatDate(zone: ZoneId): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(zone).format(this)
-
-/** Never fabricated: an absent duration simply has no part in the meta line (`docs/UI.md` §5). */
-private fun Duration.formatDuration(): String {
-    val minutes = toMinutes()
-    return if (minutes >= MINUTES_PER_HOUR) {
-        "${minutes / MINUTES_PER_HOUR} h ${minutes % MINUTES_PER_HOUR} min"
-    } else {
-        "$minutes min"
     }
 }
 

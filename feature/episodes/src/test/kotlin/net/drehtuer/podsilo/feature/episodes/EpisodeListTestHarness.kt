@@ -47,6 +47,7 @@ abstract class EpisodeListTestHarness {
     protected val workMonitor = FakeDownloadWorkMonitor()
     protected val spaceProbe = FakeSpaceProbe()
     protected val folderStatus = FakeFolderStatus()
+    protected val logs = FakeLogRepository()
     protected val clock: Clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC)
 
     /**
@@ -58,7 +59,8 @@ abstract class EpisodeListTestHarness {
      * condition the real screen creates.
      */
     protected fun TestScope.viewModel(filter: EpisodeFilter? = null): EpisodeListViewModel {
-        feeds.seed(feed())
+        // Only if the test has not supplied its own: several care about `lastRefreshedAt`.
+        feeds.seedIfAbsent(feed())
         val vm =
             EpisodeListViewModel(
                 feedUrl = FEED_URL,
@@ -72,6 +74,7 @@ abstract class EpisodeListTestHarness {
                 spaceProbe = spaceProbe,
                 folderStatus = folderStatus,
                 workMonitor = workMonitor,
+                logRepository = logs,
                 zone = ZoneOffset.UTC,
                 // onCleared runs after viewModelScope is cancelled, so the commit needs a scope that
                 // outlives the view model. backgroundScope is the test-owned equivalent.
@@ -112,3 +115,12 @@ internal fun EpisodeListViewModel.clearForTest() {
     )[EpisodeListViewModel::class.java]
     store.clear()
 }
+
+/**
+ * A pull comfortably past the refresh threshold, independent of any row's height.
+ *
+ * `swipeDown()`'s default travels from a node's top to its bottom, which made two pull-to-refresh
+ * tests depend on how tall a row happened to be — they broke the moment the row's buttons moved
+ * into its overflow. Row height is not what those tests are about.
+ */
+internal const val PULL_DISTANCE_PX = 1_000f

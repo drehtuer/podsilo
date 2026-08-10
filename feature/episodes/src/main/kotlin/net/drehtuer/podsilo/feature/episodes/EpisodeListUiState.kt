@@ -188,6 +188,9 @@ sealed interface EpisodeListEvent {
 
     /** The banner always carries its fix as a button (`docs/UI.md` §12.11). */
     data object PausedBannerActionClicked : EpisodeListEvent
+
+    /** *Try again* on the feed-error banner. Same refresh as the pull gesture, different affordance. */
+    data object RetryFeedClicked : EpisodeListEvent
 }
 
 /**
@@ -205,6 +208,15 @@ sealed interface EpisodeListEffect {
     data object OpenActivity : EpisodeListEffect
 
     data class OpenUrl(
+        val url: String,
+    ) : EpisodeListEffect
+
+    /**
+     * *Copy episode link*. Its own effect because copying is not opening — both actions existed and
+     * both emitted `OpenUrl`, so "copy" launched a browser and `SnackbarText.LinkCopied` had no
+     * producer at all. Found when the row overflow gave the action its first call site.
+     */
+    data class CopyLink(
         val url: String,
     ) : EpisodeListEffect
 
