@@ -4,13 +4,13 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import org.junit.Assert.assertEquals
@@ -19,6 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.Instant
 
 /**
@@ -262,6 +263,24 @@ class PodcastListScreenTest {
     }
 
     /**
+     * The same defect issue #48 reported on S2, on the screen where it was never reported.
+     *
+     * Two chips fit a 360 dp phone at the default font scale, which is why nobody hit it — but the
+     * labels are long, and a narrow screen or a large font scale is all it takes. The shipped row
+     * had no scroll, so the second chip was clipped and unreachable by any gesture;
+     * `performScrollTo` fails on a node whose parents cannot scroll, so this fails against it.
+     */
+    @Test
+    @Config(qualifiers = "w320dp-h640dp")
+    fun `both filter chips are reachable on a narrow screen`() {
+        render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = 12)))
+
+        compose.onNodeWithText("All podcasts").performScrollTo().performClick()
+
+        assertEquals(listOf(PodcastListEvent.FilterChanged(PodcastFilter.ALL)), events)
+    }
+
+    /**
      * The regression test for what the first real-account run exposed.
      *
      * `PullToRefresh` existed as an event and the view model handled it, but **nothing in the UI
@@ -275,7 +294,12 @@ class PodcastListScreenTest {
     fun `a screen with feeds can be refreshed by pulling it down`() {
         render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = 12)))
 
-        compose.onNode(hasScrollAction()).performTouchInput { swipeDown() }
+        // Swiping the feed row rather than `hasScrollAction()`: S1's chip row became scrollable in
+        // its own right when it got #48's fix, so that matcher now finds two nodes. Nested scroll
+        // carries the gesture from the row up to the `PullToRefreshBox` regardless.
+        compose.onNodeWithText("Der Podcast").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + PULL_DISTANCE_PX)
+        }
 
         assertTrue(
             "pulling a populated list down must request a refresh, got $events",

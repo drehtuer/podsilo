@@ -17,6 +17,16 @@ val MinTouchTarget = 48.dp
 /** Episode rows are two lines plus metadata; anything shorter crowds the triage buttons. */
 val MinRowHeight = 72.dp
 
+/**
+ * Vertical breathing room around a filter-chip row.
+ *
+ * Load-bearing rather than cosmetic: [MinTouchTarget] grows each chip to the accessibility floor,
+ * and without padding of its own the row hands that grown height straight to its neighbours — the
+ * crowding half of issue #48. Here rather than in one screen because S1 and S2 both have such a row,
+ * and two screens disagreeing about it is the drift this file exists to prevent.
+ */
+val ChipRowPadding = 4.dp
+
 /** Feed artwork, and therefore the podcast row's minimum height. */
 val ArtworkSize = 56.dp
 

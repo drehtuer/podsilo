@@ -253,6 +253,10 @@ reports a tap, and one arriving after the write finds nothing to discard. The ro
 the decision will produce, which is presentation only. Scope is swipes: the row buttons, S3 and
 every bulk action still commit immediately.
 
+**The feed-error banner** (built 2026-08-10): `feedError` is a `String?` and not the `FailureUi?` this document once declared — the text is the plain sentence `FeedRefresher` already wrote to the error log, passed through verbatim, so the banner and S8 cannot describe one failure two ways. It shows while that entry is **newer than `Feed.lastRefreshedAt`**, which is why a 304 now moves that timestamp. `RetryFeedClicked` exists and refreshes exactly as the pull gesture does.
+
+**The row overflow** (built 2026-08-10) renders `EpisodeUi.actions` and **replaces** the inline buttons the row used to draw — `UI.md` §5's anatomy ends at "status badge/progress, overflow ⋮". It is also the first row-level call site for `COPY_LINK` and `OPEN_IN_BROWSER`; the former now emits its own `CopyLink` effect, having previously emitted `OpenUrl` and therefore opened a browser.
+
 **Selection mode** (built 2026-08-09, issue #46) replaces the app bar rather than adding to it, and
 its actions go through `SelectionActionRequested` rather than reaching `BulkConfirmed` directly —
 that indirection is what makes "name the count before you write" structural here as well. The count

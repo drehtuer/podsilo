@@ -121,8 +121,14 @@ class EpisodeDetailViewModel(
                 emit(EpisodeDetailEffect.ShowMessage(SnackbarText.Queued(1)))
             }
             EpisodeUiAction.CANCEL -> scheduler.cancelDownload(episodeKey)
-            EpisodeUiAction.OPEN_IN_BROWSER, EpisodeUiAction.COPY_LINK ->
-                episode.link?.let { emit(EpisodeDetailEffect.OpenUrl(it)) }
+            EpisodeUiAction.OPEN_IN_BROWSER -> episode.link?.let { emit(EpisodeDetailEffect.OpenUrl(it)) }
+            // Copying is not opening. Both used to emit OpenUrl here too, so the sheet's
+            // *Copy episode link* launched a browser as well.
+            EpisodeUiAction.COPY_LINK ->
+                episode.link?.let {
+                    emit(EpisodeDetailEffect.CopyLink(it))
+                    emit(EpisodeDetailEffect.ShowMessage(SnackbarText.LinkCopied))
+                }
         }
         // Deciding closes the sheet (docs/UI.md §6) — the list animates the row into its new state,
         // and a sheet left open over a row that has already changed is the confusing half of that.

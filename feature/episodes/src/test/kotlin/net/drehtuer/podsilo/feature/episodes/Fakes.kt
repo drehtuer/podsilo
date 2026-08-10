@@ -214,8 +214,23 @@ class FakeEpisodeRepository(
 class FakeFeedRepository(
     private val feeds: MutableList<Feed> = mutableListOf(),
 ) : FeedRepository {
+    /**
+     * Seeding the same URL twice **replaces** it, as the real table's primary key would.
+     *
+     * Appending instead made the result order-dependent: a test that seeded a feed with a
+     * `lastRefreshedAt` and then let the harness seed its default would end up with two rows for one
+     * URL, and whether the screen saw the right one depended on which was seeded first.
+     */
     fun seed(vararg items: Feed) {
-        feeds += items
+        items.forEach { item ->
+            feeds.removeAll { it.url == item.url }
+            feeds += item
+        }
+    }
+
+    /** Seeds the default only when the test has not already supplied its own row for that URL. */
+    fun seedIfAbsent(item: Feed) {
+        if (feeds.none { it.url == item.url }) feeds += item
     }
 
     override fun observeAll(): Flow<List<Feed>> = MutableStateFlow(feeds.toList())
@@ -363,4 +378,51 @@ class FakeDownloadWorkMonitor(
     fun set(work: DownloadWork) {
         state.value = work
     }
+}
+
+/**
+ * An in-memory error log, for S2's feed-error banner.
+ *
+ * `record` appends rather than collapsing: collapse-on-identity is the DAO's job and is tested
+ * there, and a fake that reimplements it would only prove the fake works.
+ */
+class FakeLogRepository : net.drehtuer.podsilo.core.model.port.LogRepository {
+    private val entries = MutableStateFlow<List<net.drehtuer.podsilo.core.model.port.LogEntry>>(emptyList())
+
+    /** Newest first, as the real DAO returns them — the banner takes the first match. */
+    fun seed(
+        feedUrl: String,
+        message: String,
+        at: Long,
+        category: net.drehtuer.podsilo.core.model.port.LogCategory =
+            net.drehtuer.podsilo.core.model.port.LogCategory.FEED,
+    ) {
+        entries.value =
+            listOf(
+                net.drehtuer.podsilo.core.model.port.LogEntry(
+                    id = entries.value.size + 1L,
+                    at = at,
+                    category = category,
+                    feedUrl = feedUrl,
+                    episodeKey = null,
+                    message = message,
+                    detail = null,
+                    occurrences = 1,
+                    firstSeenAt = at,
+                ),
+            ) + entries.value
+    }
+
+    override fun observe(
+        category: net.drehtuer.podsilo.core.model.port.LogCategory?,
+    ): Flow<List<net.drehtuer.podsilo.core.model.port.LogEntry>> =
+        entries.map { list -> list.filter { category == null || it.category == category } }
+
+    override suspend fun record(entry: net.drehtuer.podsilo.core.model.port.NewLogEntry) = Unit
+
+    override suspend fun clear() {
+        entries.value = emptyList()
+    }
+
+    override suspend fun exportPlainText(): String = ""
 }

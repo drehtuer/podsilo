@@ -1,5 +1,15 @@
 # Podsilo
 
+[![CI](https://github.com/drehtuer/podsilo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drehtuer/podsilo/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver)](https://github.com/drehtuer/podsilo/releases/latest)
+[![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue)](LICENSE)
+
+The **CI** badge covers ktlint, detekt, the Tier 1 unit tests and both APK builds — the whole
+workflow is one job, so a green badge means all four passed and a red one means at least one did
+not. It deliberately says nothing about the device tests: those live in `src/androidTest/` and no
+hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
+why an emulator is not added there).
+
 An Android **podcast catcher** that downloads episodes into a folder you control — and deliberately
 does not play them.
 
@@ -8,7 +18,7 @@ consumed by whatever audio player you actually like.
 
 > **Status: [v0.3.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
 > end to end.** Subscription mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud
-> login, naming and tagging are built and tested (627 JVM tests, green), and all eight screens in
+> login, naming and tagging are built and tested (684 JVM tests, green), and all eight screens in
 > `docs/UI.md` render and are reachable. Verified against a **real Nextcloud on a real phone** —
 > login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and backup/restore.
 > `podsilo-0.3.0.apk` is a signed, minified release build; sideload it on your own device.

@@ -61,33 +61,6 @@ noted here before that date was instead either built, declined in conversation, 
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.
-- **S1's filter chips have the same shape as the row #48 reported on S2.** `PodcastFilterChips` is
-  the same fixed `Row` with no scroll and no wrap. It has not been reported, and it has only two
-  chips — *With new episodes* and *All podcasts* — so it fits a 360 dp screen at the default font
-  scale and clips only at a large one. Deliberately **not** changed while fixing #48: that issue is
-  about the episode screen, and CLAUDE.md §9 says note it rather than widen the change. The fix is
-  the same two lines if it is ever wanted.
-
-- **The S2 row overflow `⋮` does not exist.** `docs/UI.md` §5's row anatomy ends with an overflow
-  carrying *Download* / *Download again*, *Mark as played*, *Retry*, *Cancel download*, *Copy episode
-  link* and *Open in browser*; `EpisodeRow` instead renders the applicable ones as inline
-  `TextButton`s from `EpisodeUi.actions`. Nothing is unreachable as a result — `actions` is the same
-  single source of truth either way — but *Copy episode link* and *Open in browser* have no row-level
-  call site at all, since `labelFor` returns `null` for both (they exist only in S3). Noticed while
-  building the *app-bar* overflow for #48, and left alone: swapping visible buttons for a hidden menu
-  is a design change, not a bug fix.
-
-- **S2's feed-error banner is specified, has a state field, and is connected at neither end.** Found
-  on 2026-08-09 while tracing the four v0.3.0 issues. `EpisodeListUiState.feedError` exists with a
-  KDoc explaining that it "renders as an inline banner *above* the list, never in place of it" —
-  `EpisodeListViewModel` never sets it, and `EpisodeListScreen` never reads it. `docs/UI_interface.md`
-  §3 also declares a `RetryFeedClicked` event that does not exist in the code. So `docs/UI.md` §5's
-  "Feed fetch failed: inline banner with the reason in plain words + **Try again**" state cannot
-  occur: a feed that fails to fetch is silent in S2, and the only trace is the S8 entry
-  `FeedRefresher` writes. Not folded into the #48 work — that issue is about layout, and this is a
-  missing state — but it is the fourth instance of the same shape (specified, wired at one end, no
-  connection in the middle) and cheap to close alongside any other S2 change.
-
 - **Revoke the app password when the account is rejected.** S5 now confirms the account before
   storing it (ADR 0019), so *Use a different account* throws away a password that Nextcloud has
   already issued and still lists under *Security*. `DELETE /ocs/v2.php/core/apppassword`
@@ -134,6 +107,21 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
 - **Reproducible builds are unverified.** `BuildConfig.BUILD_TIME` alone makes two builds of one
   commit differ. F-Droid does not require reproducibility, but it forecloses the verified-build
   badge, and the timestamp is the only obstacle.
+
+## Closed
+
+- ~~**S1's filter chips have the same shape as the row #48 reported on S2.**~~ ~~**The S2 row
+  overflow `⋮` does not exist.**~~ ~~**S2's feed-error banner is connected at neither end.**~~
+  **All three done 2026-08-10.** The chip row scrolls on both screens and `ChipRowPadding` moved to
+  `:core:ui` so they cannot drift; the row overflow exists and **replaced** the inline buttons, which
+  §5's row anatomy never had; and the banner reads the plain sentence `FeedRefresher` already writes
+  to the error log, shown while it is newer than the last successful refresh.
+
+  Two things fell out of doing them, both recorded here because they were not part of the ask:
+  **`COPY_LINK` emitted `OpenUrl` in both S2 and S3**, so *Copy episode link* opened a browser and
+  `SnackbarText.LinkCopied` had no producer at all — found the moment the overflow gave that action
+  its first row-level call site. And **a 304 did not move `lastRefreshedAt`**, so a feed that is
+  reached and unchanged looked ever-staler on S1 and could never clear the new banner.
 
 ## Declined, with reasons
 

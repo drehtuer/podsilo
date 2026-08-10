@@ -92,6 +92,7 @@ class EpisodeViewModelFactory
                     spaceProbe = spaceProbe,
                     folderStatus = folderStatus,
                     workMonitor = workMonitor,
+                    logRepository = logRepository,
                 )
             }
 

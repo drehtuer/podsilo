@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -31,6 +30,9 @@ import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.LogEntry
+import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
@@ -68,6 +70,7 @@ class EpisodeListViewModel(
     private val spaceProbe: DownloadSpaceProbe,
     private val folderStatus: DownloadFolderStatus,
     private val workMonitor: DownloadWorkMonitor,
+    private val logRepository: LogRepository,
     private val zone: ZoneId = ZoneId.systemDefault(),
     /**
      * Where a decision still inside its undo window is written when the screen goes away.
@@ -90,8 +93,31 @@ class EpisodeListViewModel(
     private val effects = Channel<EpisodeListEffect>(Channel.BUFFERED)
     val effect: Flow<EpisodeListEffect> = effects.receiveAsFlow()
 
-    /** The feed's own row, for the title and artwork. Read once per collection of [state]. */
-    private val feedFlow: Flow<Feed?> = flow { emit(feedRepository.get(feedUrl)) }
+    /**
+     * The feed's own row — title, artwork, and `lastRefreshedAt`.
+     *
+     * **Observed, not read once.** It used to be a one-shot read, which was fine for a title but
+     * cannot support the feed-error banner: that has to disappear the moment a later refresh
+     * succeeds, and "succeeded" *is* a change to this row. Subscription lists are tiny, so filtering
+     * the full list costs nothing.
+     */
+    private val feedFlow: Flow<Feed?> =
+        feedRepository.observeAll().map { feeds ->
+            feeds.firstOrNull { it.url == feedUrl }
+        }
+
+    /**
+     * The banner `docs/UI.md` §5 specifies for a failed fetch — **which nothing has ever been able
+     * to show.** `feedError` existed as a state field with a KDoc, set by nobody and read by nobody,
+     * so a feed that failed to load was completely silent on the screen that lists it.
+     *
+     * The text comes from the error log rather than from a second error channel, because
+     * `FeedRefresher` already writes a plain-language sentence there for exactly these failures
+     * ("Feed server did not respond.") and §5 wants that sentence verbatim. One writer, two readers —
+     * S8 and this banner — rather than two writers that can disagree.
+     */
+    private val feedErrorFlow: Flow<LogEntry?> =
+        logRepository.observe(LogCategory.FEED).map { entries -> entries.firstOrNull { it.feedUrl == feedUrl } }
 
     /**
      * Derived rather than pushed into a `MutableStateFlow` from an `init` block.
@@ -135,9 +161,16 @@ class EpisodeListViewModel(
                 // Live byte progress, which no screen had until issue #47: the ledger says an
                 // episode is DOWNLOADING, only this process knows how far along.
                 workMonitor.observe(),
-            ) { items, feed, work ->
+                feedErrorFlow,
+            ) { items, feed, work, lastFeedError ->
                 resumeStranded(work, items)
-                snapshot.toUiState(items, feed?.title ?: feedUrl, feed?.imageUrl, work)
+                snapshot.toUiState(
+                    items = items,
+                    feedTitle = feed?.title ?: feedUrl,
+                    feedArtwork = feed?.imageUrl,
+                    work = work,
+                    feedError = lastFeedError.takeIf { it.isNewerThanLastSuccess(feed) }?.message,
+                )
             }
         }.stateIn(
             scope = viewModelScope,
@@ -169,11 +202,13 @@ class EpisodeListViewModel(
 
     private val alreadyResumed = mutableSetOf<String>()
 
+    @Suppress("LongParameterList")
     private fun Snapshot.toUiState(
         items: List<EpisodeListItem>,
         feedTitle: String,
         feedArtwork: String?,
         work: DownloadWork,
+        feedError: String?,
     ): EpisodeListUiState {
         val rows =
             items
@@ -202,6 +237,7 @@ class EpisodeListViewModel(
             pendingMarkAll = pendingMarkAll,
             pendingSelectionAction = pendingSelectionAction,
             pendingUndo = pendingUndo,
+            feedError = feedError,
             isOffline = !online,
             swipeMapping = mapping,
             // The overflow reads "Download all (n)"; n is the *undecided* count, so the item is
@@ -274,7 +310,9 @@ class EpisodeListViewModel(
                 undoJob?.cancel()
                 pendingUndo.value = null
             }
-            EpisodeListEvent.PullToRefresh -> refresh()
+            // Both mean "fetch this feed again"; the banner is simply the affordance a user who is
+            // looking at the failure will reach for first.
+            EpisodeListEvent.PullToRefresh, EpisodeListEvent.RetryFeedClicked -> refresh()
             // The fix lives outside this screen (the SAF picker, or the user freeing space), so the
             // host handles it; S2 only reports that the queue is held.
             EpisodeListEvent.PausedBannerActionClicked -> emit(EpisodeListEffect.ResolvePausedQueue)
@@ -373,8 +411,14 @@ class EpisodeListViewModel(
                 if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.Queued(episodes.size)))
             }
             EpisodeUiAction.CANCEL -> episodes.forEach { scheduler.cancelDownload(it.episodeKey) }
-            EpisodeUiAction.OPEN_IN_BROWSER, EpisodeUiAction.COPY_LINK ->
-                episodes.firstOrNull()?.link?.let { emit(EpisodeListEffect.OpenUrl(it)) }
+            EpisodeUiAction.OPEN_IN_BROWSER -> episodes.firstOrNull()?.link?.let { emit(EpisodeListEffect.OpenUrl(it)) }
+            // Copying is not opening. Both used to emit OpenUrl, so *Copy episode link* launched a
+            // browser and the "Link copied" snackbar was unreachable.
+            EpisodeUiAction.COPY_LINK ->
+                episodes.firstOrNull()?.link?.let {
+                    emit(EpisodeListEffect.CopyLink(it))
+                    emit(EpisodeListEffect.ShowMessage(SnackbarText.LinkCopied))
+                }
         }
     }
 
@@ -470,4 +514,19 @@ interface EpisodeScheduler {
 
     /** Suspends until the refresh reaches a terminal state, so the UI can show it for its duration. */
     suspend fun requestFeedRefresh(feedUrl: String?)
+}
+
+/**
+ * Whether a logged feed failure is still the *current* state of this feed.
+ *
+ * The rule is "newer than the last successful refresh", not "exists": an error from three days ago
+ * that a later refresh cleared must not sit on the screen for ever. A feed that has never been
+ * refreshed has no success to compare against, so any error stands.
+ *
+ * This is why a 304 has to move `lastRefreshedAt` (see `FeedRefresher`): a feed that is reached
+ * successfully and is merely unchanged would otherwise never clear its banner.
+ */
+internal fun LogEntry?.isNewerThanLastSuccess(feed: Feed?): Boolean {
+    val error = this ?: return false
+    return error.at > (feed?.lastRefreshedAt ?: 0L)
 }

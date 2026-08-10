@@ -3649,3 +3649,66 @@ out. Worth noting because it is the only signal that would have caught an accide
 semantics — and it fired on the first run.
 
 673 tests, 0 failures, 3 skipped.
+
+---
+
+## 2026-08-10 — three backlog notes, and the two bugs hiding behind them
+
+The author asked for the three items `docs/backlog.md` picked up while Tier 5 was being built. Each
+was small; two of them were sitting on top of something that was not.
+
+### The row overflow was a design decision, not a gap
+
+`docs/UI.md` §5's row anatomy ends at "status badge/progress, overflow `⋮`", and §12.1 calls that
+overflow a **mandatory** non-gesture equivalent of the swipes. The row instead drew its applicable
+actions as inline `TextButton`s. Building the overflow therefore meant *removing* those buttons, not
+adding a menu beside them — which is a visible change to something the author uses daily, so it is
+flagged rather than slipped in. The design is the reason; if it turns out wrong in the hand it is a
+small revert.
+
+**What it exposed:** `COPY_LINK` and `OPEN_IN_BROWSER` both emitted `OpenUrl` — in S2 *and* S3. So
+*Copy episode link* opened a browser, and `SnackbarText.LinkCopied` had no producer anywhere. That
+had been true since the actions were written; nothing caught it because `labelFor` returned `null`
+for both, so the list had no call site and only the sheet could reach them — where "copy" quietly
+did the wrong thing. Giving an action its first real call site is a good way to find out it never
+worked.
+
+### The banner needed a fact the app was not recording
+
+The feed-error banner is easy: read the plain sentence `FeedRefresher` already writes to the error
+log. The hard half is *when to stop showing it*. "An error exists" is wrong — one from three days ago
+that a later refresh cleared would sit there for ever. The right rule is "newer than the last
+successful refresh".
+
+Except a **304 did not update `lastRefreshedAt`**. A feed that is reached and unchanged — the common
+case for a podcast between episodes — recorded nothing at all, so S1 showed an ever-older "last
+refreshed" for a feed being checked every fifteen minutes, and the banner could never clear. That is
+a real bug in its own right; the banner just needed it to be true.
+
+Its test asserted `metadataUpdates == 0`, so the change failed immediately. The old assertion was
+defensible about the thing it was protecting (don't rewrite what you didn't fetch) and wrong about
+how it checked (nothing at all). It now asserts the validators and title survive **and** the
+timestamp moves.
+
+### Two more tests broke for a reason worth keeping
+
+Both pull-to-refresh tests failed once the buttons left the rows. `swipeDown()` travels from a node's
+top to its bottom, so the gesture's distance depended on how tall a row happened to be — and a
+shorter row stopped crossing the refresh threshold. They now swipe an explicit distance. A test whose
+subject is "does pulling refresh" should not be coupled to row height.
+
+The `FakeFeedRepository` also turned out to append on `seed`, so seeding one URL twice produced two
+rows and which one the screen saw depended on ordering. It replaces by URL now, as the real primary
+key would, and the harness defers to a test's own row.
+
+### A NUL byte, self-inflicted
+
+A `perl -0pi` edit with a mistyped `\x A7` wrote a literal NUL into a test file, and every `grep`
+against it silently returned nothing — the file was being treated as binary. Worth remembering as a
+failure mode: the tool did not report an error, it just stopped answering. `rg` said "binary file
+matches" and gave the offset, which is how it was found.
+
+detekt asked for two splits along the way (`EpisodeRowText.kt`, `EpisodeListFeedErrorTest`), both
+real seams. That is the fifth and sixth time.
+
+684 tests, 0 failures, 3 skipped.
