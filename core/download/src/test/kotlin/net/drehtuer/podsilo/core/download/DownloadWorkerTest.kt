@@ -52,6 +52,7 @@ class DownloadWorkerTest {
     private lateinit var target: FakeDownloadTarget
     private val ledger = FakeEpisodeLedgerRepository()
     private val syncTrigger = RecordingSyncTrigger()
+    private val progressUpdater = RecordingProgressUpdater()
     private val clock = Clock.fixed(Instant.ofEpochMilli(NOW_MILLIS), ZoneId.of("Europe/Berlin"))
 
     @Before
@@ -153,6 +154,7 @@ class DownloadWorkerTest {
                     .putBoolean(DownloadWorker.KEY_USER_REQUESTED, userRequested)
                     .build(),
             ).setWorkerFactory(factory)
+            .setProgressUpdater(progressUpdater)
             .build()
     }
 

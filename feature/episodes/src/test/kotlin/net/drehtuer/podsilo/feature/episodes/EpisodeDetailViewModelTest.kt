@@ -31,6 +31,7 @@ class EpisodeDetailViewModelTest {
     private val ledger = FakeLedgerRepository()
     private val feeds = FakeFeedRepository()
     private val scheduler = RecordingScheduler()
+    private val workMonitor = FakeDownloadWorkMonitor()
     private val clock = Clock.fixed(Instant.parse("2026-08-02T12:00:00Z"), ZoneOffset.UTC)
 
     @Before
@@ -63,6 +64,7 @@ class EpisodeDetailViewModelTest {
         triageWriter = TriageWriter(ledger, clock),
         scheduler = scheduler,
         folderLabel = { folder },
+        workMonitor = workMonitor,
     )
 
     @Test
@@ -136,6 +138,9 @@ class EpisodeDetailViewModelTest {
     fun `the sheet stays live while the download it started runs`() =
         runTest {
             episodes.seed(sampleEpisode())
+            // The work has to actually be live, or §7's third case applies and the row correctly
+            // reads *queued* instead — see the test below.
+            workMonitor.set(DownloadWork(live = setOf("e1")))
             val viewModel = viewModel()
 
             viewModel.state.test {
@@ -147,6 +152,48 @@ class EpisodeDetailViewModelTest {
                 // Not "0 %": progress after a state change is only ever a live update (§7).
                 assertNull(downloading.episode.progress)
                 assertEquals(setOf(EpisodeUiAction.CANCEL), downloading.episode.actions)
+            }
+        }
+
+    /**
+     * `docs/UI_interface.md` §7's first row, which nothing in the app could satisfy before issue
+     * #47: `DownloadWorker` never published progress and no screen observed any, so a running
+     * download drew the indeterminate bar from start to finish.
+     */
+    @Test
+    fun `a live update draws the real percentage`() =
+        runTest {
+            episodes.seed(sampleEpisode())
+            workMonitor.set(
+                DownloadWork(
+                    progress = mapOf("e1" to DownloadProgress(bytesDownloaded = 620, totalBytes = 1_000)),
+                    live = setOf("e1"),
+                ),
+            )
+            ledger.seedRow(ledgerRow("e1", state = LedgerState.DOWNLOADING))
+            val viewModel = viewModel()
+
+            viewModel.state.test {
+                val downloading = awaitUntil { it?.episode?.progress != null }
+                assertEquals(62, downloading.episode.progress?.percent)
+            }
+        }
+
+    /**
+     * §7's third case: a `DOWNLOADING` ledger row with no work behind it was killed mid-download.
+     * Rendering it as *downloading* would claim something is happening that is not.
+     */
+    @Test
+    fun `a downloading row with no work behind it reads as queued`() =
+        runTest {
+            episodes.seed(sampleEpisode())
+            ledger.seedRow(ledgerRow("e1", state = LedgerState.DOWNLOADING))
+            val viewModel = viewModel()
+
+            viewModel.state.test {
+                val stranded = awaitUntil { it?.episode?.ledgerState != null }
+                assertEquals(LedgerState.QUEUED, stranded.episode.ledgerState)
+                assertNull(stranded.episode.progress)
             }
         }
 

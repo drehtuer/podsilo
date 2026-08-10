@@ -32,7 +32,8 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import java.time.Clock
 import java.util.concurrent.TimeUnit
 
-private const val PROGRESS_NOTIFICATION_INTERVAL_MS = 1_000L
+/** 1 Hz — one tick drives the notification *and* `WorkInfo.progress`, so they cannot disagree. */
+private const val PROGRESS_INTERVAL_MS = 1_000L
 private const val BACKOFF_SECONDS = 30L
 
 /** Terminal ledger states (`docs/architecture.md` §9) — none of them may be re-entered by a download. */
@@ -133,7 +134,7 @@ class DownloadWorker
             notifications.ensureChannel()
             setForeground(foregroundInfo(episode.title, 0, null))
 
-            var lastNotifiedAt = 0L
+            var lastPublishedAt = 0L
             val outcome =
                 episodeDownloader.download(
                     DownloadRequest(
@@ -147,9 +148,10 @@ class DownloadWorker
                     // Throttled: a 64 KB read granularity would otherwise redraw the notification
                     // hundreds of times a second for no benefit.
                     val now = clock.millis()
-                    if (now - lastNotifiedAt >= PROGRESS_NOTIFICATION_INTERVAL_MS) {
-                        lastNotifiedAt = now
+                    if (now - lastPublishedAt >= PROGRESS_INTERVAL_MS) {
+                        lastPublishedAt = now
                         notifications.showProgress(episode.title, written, total)
+                        publishProgress(written, total)
                     }
                 }
             notifications.clear()
@@ -195,6 +197,35 @@ class DownloadWorker
             ledgerRepository.upsert(rowFor(episode, LedgerState.DOWNLOADED, attempts, fileName))
             syncTrigger.requestSyncNow()
             return Result.success()
+        }
+
+        /**
+         * Publishes byte progress for the UI, in the **same throttled tick** as the notification.
+         *
+         * That shared tick is the point, not an economy: `docs/UI_interface.md` §7 requires the
+         * notification, the episode row, S1's aggregate and S7 never to disagree, and the surest way
+         * to guarantee that is for one clock to drive them all. This is the only publisher; nothing
+         * persists a percentage, so after process death there is simply no progress to read and the
+         * row correctly reads *resuming* rather than a stale number.
+         *
+         * `setProgressAsync` rather than the suspending `setProgress`: the downloader's callback is
+         * an ordinary function, and making it suspend would push a coroutine boundary all the way
+         * down through `EnclosureDownloader`'s read loop to buy nothing here.
+         */
+        private fun publishProgress(
+            bytesWritten: Long,
+            totalBytes: Long?,
+        ) {
+            setProgressAsync(
+                Data
+                    .Builder()
+                    .putLong(KEY_PROGRESS_BYTES, bytesWritten)
+                    // -1, not absent: "the server disclosed no Content-Length" is a fact the UI acts
+                    // on (indeterminate bar), and a missing key would be indistinguishable from a
+                    // progress update that had not arrived yet.
+                    .putLong(KEY_PROGRESS_TOTAL, totalBytes ?: UNKNOWN_TOTAL)
+                    .build(),
+            )
         }
 
         /** No [Episode] row left to denormalise from, so the queued row's own snapshot is preserved. */
@@ -272,10 +303,33 @@ class DownloadWorker
             /** Beyond this, retrying is noise: the ledger keeps ERROR + `lastError` and the user decides. */
             const val MAX_ATTEMPTS: Int = 5
 
+            /** Bytes on disk so far, in `WorkInfo.progress`. Live only — never persisted anywhere. */
+            const val KEY_PROGRESS_BYTES: String = "progressBytes"
+
+            /** Total bytes, or [UNKNOWN_TOTAL] when the server disclosed no `Content-Length`. */
+            const val KEY_PROGRESS_TOTAL: String = "progressTotal"
+
+            const val UNKNOWN_TOTAL: Long = -1L
+
             private const val MILLIS_PER_SECOND = 1_000L
+
+            private const val EPISODE_TAG_PREFIX = "podsilo-download-episode:"
 
             /** One unique work item per episode, so a double tap can't start two downloads of the same file. */
             fun uniqueWorkName(episodeKey: String): String = "podsilo-download:$episodeKey"
+
+            /**
+             * The tag that lets an observer map a `WorkInfo` back to its episode.
+             *
+             * A tag rather than the unique work name: `WorkInfo` exposes its tags and does **not**
+             * expose the unique name it was enqueued under, so without this there is no way to tell
+             * which episode a queued download belongs to — which is what S1's per-feed
+             * "n downloading" and S7's rows both need.
+             */
+            fun episodeTag(episodeKey: String): String = "$EPISODE_TAG_PREFIX$episodeKey"
+
+            fun episodeKeyOf(tags: Set<String>): String? =
+                tags.firstOrNull { it.startsWith(EPISODE_TAG_PREFIX) }?.removePrefix(EPISODE_TAG_PREFIX)
 
             fun request(
                 episodeKey: String,
@@ -288,7 +342,8 @@ class DownloadWorker
                             .putString(KEY_EPISODE_KEY, episodeKey)
                             .putBoolean(KEY_USER_REQUESTED, userRequested)
                             .build(),
-                    ).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                    ).addTag(episodeTag(episodeKey))
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
                     .build()
         }

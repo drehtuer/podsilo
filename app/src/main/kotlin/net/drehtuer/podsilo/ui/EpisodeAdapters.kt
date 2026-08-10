@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.download.DownloadFolderAccess
 import net.drehtuer.podsilo.core.download.DownloadFolderState
 import net.drehtuer.podsilo.core.download.DownloadTarget
+import net.drehtuer.podsilo.core.download.DownloadWorker
 import net.drehtuer.podsilo.core.feed.FeedRefreshWorker
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.Feed
@@ -22,7 +23,10 @@ import net.drehtuer.podsilo.core.naming.DefaultNamingTemplateEngine
 import net.drehtuer.podsilo.core.naming.TitleCleanupRule
 import net.drehtuer.podsilo.feature.episodes.DownloadFolderLabel
 import net.drehtuer.podsilo.feature.episodes.DownloadFolderStatus
+import net.drehtuer.podsilo.feature.episodes.DownloadProgress
 import net.drehtuer.podsilo.feature.episodes.DownloadSpaceProbe
+import net.drehtuer.podsilo.feature.episodes.DownloadWork
+import net.drehtuer.podsilo.feature.episodes.DownloadWorkMonitor
 import net.drehtuer.podsilo.feature.episodes.EpisodeScheduler
 import net.drehtuer.podsilo.feature.episodes.FolderState
 import net.drehtuer.podsilo.feature.episodes.NamingPreview
@@ -182,3 +186,47 @@ internal fun WorkManager.hasActiveWork(): Flow<Boolean> =
     getWorkInfosFlow(
         androidx.work.WorkQuery.fromStates(WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING),
     ).map { it.isNotEmpty() }
+
+/**
+ * The one place `WorkInfo.progress` becomes something a screen can render (issue #47).
+ *
+ * Before this, `DownloadWorker` published no progress and nothing observed any, so every
+ * `DOWNLOADING` row in the app drew the indeterminate *resuming* bar for the entire download.
+ *
+ * `WorkInfo` does not expose the unique work name it was enqueued under, which is why
+ * `DownloadWorker` tags each request with its episode key — without the tag there is no way to map a
+ * queued download back to the episode it belongs to.
+ */
+@Singleton
+class WorkManagerDownloadMonitor
+    @Inject
+    constructor(
+        private val workScheduler: WorkScheduler,
+    ) : DownloadWorkMonitor {
+        override fun observe(): Flow<DownloadWork> =
+            workScheduler.observeDownloadWork().map { infos ->
+                val live = mutableSetOf<String>()
+                val progress = mutableMapOf<String, DownloadProgress>()
+                infos.forEach { info ->
+                    val key = DownloadWorker.episodeKeyOf(info.tags) ?: return@forEach
+                    live += key
+                    // Absent until the worker's first 1 Hz tick, and gone again after process death
+                    // — which is exactly the distinction docs/UI_interface.md §7 renders as
+                    // *resuming* rather than as a stale percentage.
+                    val bytes = info.progress.getLong(DownloadWorker.KEY_PROGRESS_BYTES, UNSET)
+                    if (bytes >= 0) {
+                        val total =
+                            info.progress.getLong(
+                                DownloadWorker.KEY_PROGRESS_TOTAL,
+                                DownloadWorker.UNKNOWN_TOTAL,
+                            )
+                        progress[key] = DownloadProgress(bytes, total.takeIf { it >= 0 })
+                    }
+                }
+                DownloadWork(progress = progress, live = live)
+            }
+
+        private companion object {
+            const val UNSET = -1L
+        }
+    }

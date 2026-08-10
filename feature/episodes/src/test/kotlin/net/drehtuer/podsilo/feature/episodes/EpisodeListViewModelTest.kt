@@ -55,6 +55,7 @@ class EpisodeListViewModelTest {
     private val settings = FakeSettingsRepository()
     private val connectivity = FakeConnectivityMonitor()
     private val scheduler = RecordingScheduler()
+    private val workMonitor = FakeDownloadWorkMonitor()
     private val spaceProbe = FakeSpaceProbe()
     private val folderStatus = FakeFolderStatus()
     private val clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC)
@@ -67,7 +68,7 @@ class EpisodeListViewModelTest {
      * `state` is `WhileSubscribed`, so tests that assert on it collect it into [backgroundScope],
      * which is the same condition the real screen creates.
      */
-    private fun TestScope.viewModel(): EpisodeListViewModel {
+    private fun TestScope.viewModel(filter: EpisodeFilter? = null): EpisodeListViewModel {
         feeds.seed(feed())
         val vm =
             EpisodeListViewModel(
@@ -81,9 +82,13 @@ class EpisodeListViewModelTest {
                 scheduler = scheduler,
                 spaceProbe = spaceProbe,
                 folderStatus = folderStatus,
+                workMonitor = workMonitor,
                 zone = ZoneOffset.UTC,
             )
         backgroundScope.launch { vm.state.collect { } }
+        // A row that already carries a ledger state is invisible under the default "To decide"
+        // filter by definition, so progress tests have to ask for a filter that shows it.
+        filter?.let { vm.onEvent(EpisodeListEvent.FilterChanged(it)) }
         return vm
     }
 
@@ -631,6 +636,82 @@ class EpisodeListViewModelTest {
 
             assertEquals(listOf("e1"), scheduler.cancellations)
             assertTrue(ledger.writes.isEmpty())
+        }
+
+    // ---- Live download progress (issue #47), per docs/UI_interface.md §7's table ----
+
+    @Test
+    fun `a live update gives the row its real percentage`() =
+        runTest {
+            seed(episode("e1"))
+            ledger.seedRow(ledgerRow("e1", LedgerState.DOWNLOADING))
+            workMonitor.set(
+                DownloadWork(
+                    progress = mapOf("e1" to DownloadProgress(bytesDownloaded = 620, totalBytes = 1_000)),
+                    live = setOf("e1"),
+                ),
+            )
+            val vm = viewModel(EpisodeFilter.ALL)
+            runCurrent()
+
+            val row = rows(vm.state.value).single()
+            assertEquals(LedgerState.DOWNLOADING, row.ledgerState)
+            assertEquals(62, row.progress?.percent)
+        }
+
+    @Test
+    fun `live work that has not reported yet is downloading with no percentage`() =
+        runTest {
+            // §7's second row: *resuming*, never "0 %" — the row must not imply it knows how far
+            // along it is just because a worker exists.
+            seed(episode("e1"))
+            ledger.seedRow(ledgerRow("e1", LedgerState.DOWNLOADING))
+            workMonitor.set(DownloadWork(live = setOf("e1")))
+            val vm = viewModel(EpisodeFilter.ALL)
+            runCurrent()
+
+            val row = rows(vm.state.value).single()
+            assertEquals(LedgerState.DOWNLOADING, row.ledgerState)
+            assertNull(row.progress)
+        }
+
+    /**
+     * §7's third row. The process died mid-download, so the ledger says `DOWNLOADING` and there is
+     * no worker. The row must not claim to be downloading, and the work is picked back up.
+     */
+    @Test
+    fun `a stranded downloading row reads as queued and is re-enqueued once`() =
+        runTest {
+            seed(episode("e1"))
+            ledger.seedRow(ledgerRow("e1", LedgerState.DOWNLOADING))
+            val vm = viewModel(EpisodeFilter.ALL)
+            runCurrent()
+
+            assertEquals(LedgerState.QUEUED, rows(vm.state.value).single().ledgerState)
+            assertEquals(listOf("e1" to false), scheduler.downloads)
+
+            // Re-emitting the query must not enqueue a second worker for one file.
+            workMonitor.set(DownloadWork())
+            runCurrent()
+            assertEquals(listOf("e1" to false), scheduler.downloads)
+        }
+
+    /**
+     * The no-auto-download invariant, at the one code path that enqueues without a tap
+     * (CLAUDE.md §1). Resuming is only ever for a row the user already decided on, and it never
+     * carries `userRequested` — the flag that gets past the terminal-row refusal.
+     */
+    @Test
+    fun `resuming never touches an undecided or queued episode, and never claims to be user-requested`() =
+        runTest {
+            seed(episode("undecided"), episode("queued"), episode("done"))
+            ledger.seedRow(ledgerRow("queued", LedgerState.QUEUED))
+            ledger.seedRow(ledgerRow("done", LedgerState.DOWNLOADED))
+            val vm = viewModel(EpisodeFilter.ALL)
+            runCurrent()
+
+            assertTrue("nothing may be enqueued, got ${scheduler.downloads}", scheduler.downloads.isEmpty())
+            assertTrue(rows(vm.state.value).isNotEmpty())
         }
 
     /**

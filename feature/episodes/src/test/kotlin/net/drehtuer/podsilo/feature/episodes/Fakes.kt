@@ -130,6 +130,29 @@ class FakeLedgerRepository(
 
     override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = rows.map { it[episodeKey] }
 
+    /** Derived from the same map, so this cannot disagree with [observeEpisodes] about a row's state. */
+    override fun observeInFlight(): Flow<List<EpisodeListItem>> =
+        rows.map { current ->
+            episodes.mapNotNull { episode ->
+                current[episode.episodeKey]
+                    ?.takeIf { it.state in IN_FLIGHT_STATES }
+                    ?.let { EpisodeListItem(episode, it) }
+            }
+        }
+
+    override fun observeRecentlyDelivered(
+        since: Long,
+        limit: Int,
+    ): Flow<List<EpisodeLedgerRow>> =
+        rows.map { current ->
+            current.values
+                .filter { it.state == LedgerState.DOWNLOADED && it.writtenFileName != null && it.actionedAt > since }
+                .sortedByDescending { it.actionedAt }
+                .take(limit)
+        }
+
+    override fun observeUnsyncedCount(): Flow<Int> = rows.map { current -> current.values.count { !it.syncedToServer } }
+
     /** Derived from the same map as everything else, so a badge here cannot drift from its list. */
     override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> =
         rows.map { current ->
@@ -320,4 +343,24 @@ class FakeFolderStatus(
     var state: FolderState = FolderState.GRANTED,
 ) : DownloadFolderStatus {
     override fun observe(): Flow<FolderState> = MutableStateFlow(state)
+}
+
+/** S7's three groups — the states the narrowed `observeInFlight` query selects. */
+private val IN_FLIGHT_STATES =
+    setOf(LedgerState.QUEUED, LedgerState.DOWNLOADING, LedgerState.ERROR)
+
+/**
+ * A settable [DownloadWorkMonitor], so a test can say "this episode is running and 62 % done" without
+ * a WorkManager anywhere near it.
+ */
+class FakeDownloadWorkMonitor(
+    initial: DownloadWork = DownloadWork(),
+) : DownloadWorkMonitor {
+    private val state = MutableStateFlow(initial)
+
+    override fun observe(): Flow<DownloadWork> = state
+
+    fun set(work: DownloadWork) {
+        state.value = work
+    }
 }

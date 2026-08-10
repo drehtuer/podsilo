@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.drehtuer.podsilo.core.model.EpochTime
 import net.drehtuer.podsilo.core.model.Feed
+import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
+import net.drehtuer.podsilo.core.model.port.EpisodeListItem
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
@@ -68,7 +70,10 @@ class PodcastListViewModel(
             feedRepository.observeAll(),
             listRepository.observeUndecidedCounts(),
             order,
-            combine(filter, refreshing, folderStatus.observe(), ::Triple),
+            // `inFlight` is bounded by the queue, not by the ledger — the same narrowed query S7
+            // uses. It is what finally populates `FeedUi.activeDownloads`, which had a default of 0
+            // and no assignment anywhere, so "n downloading" and the app-bar badge were both dead.
+            combine(filter, refreshing, folderStatus.observe(), listRepository.observeInFlight(), ::Chrome),
             combine(
                 settingsRepository.observeNextcloudAccount(),
                 settingsRepository.observeNaming(),
@@ -77,25 +82,33 @@ class PodcastListViewModel(
                 Environment(account?.serverUrl, namingPreview.render(naming), connectivity.online)
             },
         ) { feeds, counts, frozen, chrome, environment ->
-            build(feeds, counts, frozen, chrome.first, chrome.second, chrome.third, environment)
+            build(feeds, counts, frozen, chrome, environment)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
             initialValue = PodcastListUiState(),
         )
 
-    @Suppress("LongParameterList")
     private fun build(
         feeds: List<Feed>,
         counts: List<FeedUndecidedCount>,
         frozen: List<String>,
-        filter: PodcastFilter,
-        refreshing: Boolean,
-        folder: FolderState,
+        chrome: Chrome,
         environment: Environment,
     ): PodcastListUiState {
+        val (filter, refreshing, folder) = Triple(chrome.filter, chrome.refreshing, chrome.folder)
         val byUrl = counts.associate { it.feedUrl to it.count }
-        val rows = feeds.map { it.toUi(undecidedCount = byUrl[it.url]) }.inFrozenOrder(frozen)
+        // Only actually-running work counts as "downloading". An ERROR row is in flight for S7's
+        // purposes but is emphatically not a download in progress (docs/UI.md §12.5).
+        val downloadingByFeed =
+            chrome.inFlight
+                .filter { it.ledger?.state in ACTIVE_STATES }
+                .groupingBy { it.episode.feedUrl }
+                .eachCount()
+        val rows =
+            feeds
+                .map { it.toUi(undecidedCount = byUrl[it.url], activeDownloads = downloadingByFeed[it.url] ?: 0) }
+                .inFrozenOrder(frozen)
         val visible =
             when (filter) {
                 // A feed whose count is unknown stays visible: "never fetched" is not "nothing new",
@@ -192,6 +205,14 @@ class PodcastListViewModel(
         val namingPreview: String,
         val online: Boolean,
     )
+
+    /** `combine` tops out at five sources; these four are the screen's chrome and its queue. */
+    private data class Chrome(
+        val filter: PodcastFilter,
+        val refreshing: Boolean,
+        val folder: FolderState,
+        val inFlight: List<EpisodeListItem>,
+    )
 }
 
 /**
@@ -210,16 +231,22 @@ internal fun List<FeedUi>.inFrozenOrder(frozen: List<String>): List<FeedUi> {
     return known + added
 }
 
-private fun Feed.toUi(undecidedCount: Int?) =
-    FeedUi(
-        url = url,
-        title = title.takeIf { it.isNotBlank() },
-        artworkUrl = imageUrl,
-        lastRefreshedAt = EpochTime.ofMillisOrNull(lastRefreshedAt),
-        // A feed that has never been fetched has no episode rows, so SQL contributes no count for
-        // it — and "no count" must render as "–", not as 0 (docs/UI.md §12.5).
-        undecidedCount = if (lastRefreshedAt == null) null else undecidedCount ?: 0,
-    )
+private fun Feed.toUi(
+    undecidedCount: Int?,
+    activeDownloads: Int,
+) = FeedUi(
+    url = url,
+    title = title.takeIf { it.isNotBlank() },
+    artworkUrl = imageUrl,
+    lastRefreshedAt = EpochTime.ofMillisOrNull(lastRefreshedAt),
+    // A feed that has never been fetched has no episode rows, so SQL contributes no count for
+    // it — and "no count" must render as "–", not as 0 (docs/UI.md §12.5).
+    undecidedCount = if (lastRefreshedAt == null) null else undecidedCount ?: 0,
+    activeDownloads = activeDownloads,
+)
+
+/** Downloading *now*. `ERROR` is in flight for S7 but is not a download in progress for S1. */
+private val ACTIVE_STATES = setOf(LedgerState.QUEUED, LedgerState.DOWNLOADING)
 
 /** S1's queue banner has no per-episode rows to inspect, so only the folder grant can pause it. */
 private fun queueStatusForFolder(folder: FolderState): QueueStatus =

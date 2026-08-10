@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.database.dao.EpisodeListDao
 import net.drehtuer.podsilo.core.database.toDomain
 import net.drehtuer.podsilo.core.model.Episode
+import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
@@ -35,6 +36,19 @@ class EpisodeListRepositoryImpl(
             }
         return rows.map { list -> list.map { it.toDomain() } }
     }
+
+    override fun observeInFlight(): Flow<List<EpisodeListItem>> =
+        listDao.observeInFlight().map { list -> list.map { it.toDomain() } }
+
+    override fun observeRecentlyDelivered(
+        since: Long,
+        limit: Int,
+    ): Flow<List<EpisodeLedgerRow>> =
+        listDao.observeRecentlyDelivered(since, limit).map { list ->
+            list.map { it.toDomain() }
+        }
+
+    override fun observeUnsyncedCount(): Flow<Int> = listDao.observeUnsyncedCount()
 
     override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> =
         listDao.observeUndecidedCounts().map { rows ->

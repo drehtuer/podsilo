@@ -3476,3 +3476,66 @@ the episode screen. Same for the S2 *row* overflow, which §5 specifies and whic
 noticed precisely because I was building the app-bar one.
 
 635 JVM tests, 0 failures, 3 skipped.
+
+---
+
+## 2026-08-09 (I2) — the Activity screen was slow for a reason nobody had guessed
+
+Issue #47 proposes an event bus. S7 already observed Room `Flow`s, so that plumbing existed and was
+not the problem. Two faults were, and a third turned up on the way.
+
+### Nothing published progress, and nothing observed any
+
+`DownloadWorker` reported bytes to its notification and never called `setProgress`. Nothing read
+`WorkInfo.progress` either — `WorkScheduler.observeDownloadWork()` had been written, documented and
+left without a caller. So `docs/UI.md` §12.2 and `docs/UI_interface.md` §7, both specified in full,
+described behaviour the app had never had: **every** `DOWNLOADING` row in S2, S3 and S7 drew the
+indeterminate *resuming* bar from start to finish.
+
+The fix publishes inside the notification's existing 1 Hz tick rather than adding a second timer.
+That is the whole reason §7 can promise the surfaces never disagree — one clock drives them all.
+
+One thing that had to be discovered rather than assumed: `WorkInfo` exposes its **tags** and not the
+unique work name it was enqueued under. Without a tag carrying the episode key there is no way to
+map a queued download back to its episode, so a per-feed count or an S7 row has nothing to key on.
+
+### The actual latency: an N+1 over the whole ledger
+
+`ActivityViewModel` observed *every* ledger row on the device, then looked each row's episode up one
+at a time in Kotlin, and only then discarded all but the handful in flight. On the author's device
+that is thousands of sequential queries per emission — and it re-ran on every ledger write anywhere
+in the app. The screen was not "not observing"; it was doing far too much work each time it did.
+
+Narrowing it is three queries (`observeInFlight`, `observeRecentlyDelivered`, `observeUnsyncedCount`)
+and no schema change. The cost claim is now a test: a thousand decided rows must not enlarge the
+in-flight result, which is exactly what the Kotlin-side filtering could never promise — by the time
+it filtered, it had already loaded and joined all of them.
+
+### Two dead things found by building the live one
+
+- **`FeedUi.activeDownloads` had a default of 0 and no assignment anywhere.** S1's "n downloading"
+  line and the app-bar badge have never once rendered. It falls out of the same bounded query.
+- **No list query projected `lastErrorCause` or `lastErrorRetryable`.** The columns exist since
+  schema v3, the entity declares them, and all three `SELECT`s left them out, so Room saw `NULL` and
+  the defaults applied. ADR 0011's guarantee — *a lost folder grant offers "Choose folder", never a
+  Retry that cannot work* — was therefore unreachable from the database. Both the ADR and `UI.md`
+  §12.11 read as though it worked; only the SQL disagreed.
+
+That last one is the uncomfortable pattern of this session: **the projection bug was invisible to
+every existing test** because the tests that care about `FailureUi` construct it directly rather than
+reading it back through a query. A regression test that goes through the DAO fails against the old
+`SELECT`s; nothing else did.
+
+### detekt as a design signal, again
+
+`EpisodeLedgerDao` hit the function ceiling when the outbox-depth count was added. The count is a
+*screen read*, so it moved to `EpisodeListDao` — the seam those two DAOs were already split along.
+Third time the ceiling has pointed at a real seam rather than an arbitrary limit.
+
+### S7's view model had no test at all
+
+It does now, with its own fakes in `:app`. Worth noting that the fakes are per-query settable flows
+on purpose: if one flow backed all three, "the delivered list changed" could be satisfied by the
+in-flight query and the test would prove nothing.
+
+653 tests, 0 failures, 3 skipped.

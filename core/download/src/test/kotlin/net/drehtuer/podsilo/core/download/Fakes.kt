@@ -110,6 +110,16 @@ class FakeEpisodeLedgerRepository(
 
     override fun observeRow(episodeKey: String): Flow<EpisodeLedgerRow?> = MutableStateFlow(null)
 
+    // S7's queries. These modules do not render S7, so the honest stub is "nothing in flight".
+    override fun observeInFlight(): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
+
+    override fun observeRecentlyDelivered(
+        since: Long,
+        limit: Int,
+    ): Flow<List<EpisodeLedgerRow>> = MutableStateFlow(emptyList())
+
+    override fun observeUnsyncedCount(): Flow<Int> = MutableStateFlow(0)
+
     override fun observeUndecidedCounts(): Flow<List<FeedUndecidedCount>> = MutableStateFlow(emptyList())
 
     override suspend fun upsert(row: EpisodeLedgerRow) {
@@ -181,5 +191,26 @@ class RecordingSyncTrigger : SyncTrigger {
 
     override fun requestSyncNow() {
         requests++
+    }
+}
+
+/**
+ * Captures what a worker publishes through `setProgressAsync`.
+ *
+ * `TestListenableWorkerBuilder` accepts one of these, which is the only way to see the progress a
+ * worker emits: `WorkInfo.progress` needs a real WorkManager, and the point of issue #47's fix is
+ * precisely that the worker emits anything at all.
+ */
+class RecordingProgressUpdater : androidx.work.ProgressUpdater {
+    val updates = mutableListOf<androidx.work.Data>()
+
+    override fun updateProgress(
+        context: android.content.Context,
+        id: java.util.UUID,
+        data: androidx.work.Data,
+    ): com.google.common.util.concurrent.ListenableFuture<Void?> {
+        updates += data
+        return com.google.common.util.concurrent.Futures
+            .immediateFuture(null)
     }
 }

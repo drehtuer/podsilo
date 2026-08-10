@@ -10,23 +10,24 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
-import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
+import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
-import net.drehtuer.podsilo.core.model.port.LedgerFilter
-import net.drehtuer.podsilo.core.model.port.LedgerFilterState
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.feature.episodes.DownloadFolderStatus
+import net.drehtuer.podsilo.feature.episodes.DownloadWork
+import net.drehtuer.podsilo.feature.episodes.DownloadWorkMonitor
 import net.drehtuer.podsilo.feature.episodes.EpisodeScheduler
-import net.drehtuer.podsilo.feature.episodes.EpisodeUi
 import net.drehtuer.podsilo.feature.episodes.FolderState
 import net.drehtuer.podsilo.feature.episodes.TriageWriter
 import net.drehtuer.podsilo.feature.episodes.queueStatusFor
@@ -48,12 +49,13 @@ private const val RECENT_LIMIT = 20
  */
 @Suppress("LongParameterList") // A view model's parameter list is its port list.
 class ActivityViewModel(
-    private val ledgerRepository: EpisodeLedgerRepository,
     private val episodeRepository: EpisodeRepository,
+    private val listRepository: EpisodeListRepository,
     private val feedRepository: FeedRepository,
     private val settingsRepository: SettingsRepository,
     private val connectivityMonitor: ConnectivityMonitor,
     private val folderStatus: DownloadFolderStatus,
+    private val workMonitor: DownloadWorkMonitor,
     private val syncStatus: SyncStatus,
     private val scheduler: EpisodeScheduler,
     private val triageWriter: TriageWriter,
@@ -64,43 +66,59 @@ class ActivityViewModel(
     private val effects = Channel<ActivityEffect>(Channel.BUFFERED)
     val effect: Flow<ActivityEffect> = effects.receiveAsFlow()
 
+    /**
+     * **Bounded by the queue, not by the ledger** — the fix for issue #47.
+     *
+     * This used to observe *every* ledger row on the device and then look each row's episode up one
+     * at a time, in Kotlin, before discarding all but the handful in flight. On a device with
+     * thousands of decided episodes that is thousands of sequential queries per emission, re-run on
+     * every ledger write anywhere in the app; the screen was seconds behind, and got worse the more
+     * the app was used. Both narrowing and joining are now the database's job.
+     *
+     * `flatMapLatest` on the delivered cursor because `LIMIT` and the cursor are query parameters:
+     * clearing the list has to *replace* the query rather than filter its results.
+     */
+    @Suppress("OPT_IN_USAGE")
     val state: StateFlow<ActivityUiState> =
         combine(
-            ledgerRepository.observe(LedgerFilter(state = LedgerFilterState.ALL)),
+            listRepository.observeInFlight(),
+            workMonitor.observe(),
             folderStatus.observe(),
             connectivityMonitor.observe(),
-            syncStatus.observeLastSyncAt(),
             combine(
+                syncStatus.observeLastSyncAt(),
+                listRepository.observeUnsyncedCount(),
                 settingsRepository.observeNextcloudAccount(),
-                settingsRepository.observeDeliveredClearedAt(),
-                ::Pair,
+                ::Triple,
             ),
-        ) { rows, folder, connectivity, lastSync, accountAndCleared ->
-            Snapshot(
-                rows.map { it.episodeKey to it }.toMap(),
-                folder,
-                connectivity.online,
-                lastSync,
-                accountAndCleared.first != null,
-                accountAndCleared.second,
-            )
-        }.map { snapshot -> snapshot.toUiState() }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
-                initialValue = ActivityUiState(),
-            )
+        ) { inFlight, work, folder, connectivity, sync ->
+            Snapshot(inFlight, work, folder, connectivity.online, sync.first, sync.second, sync.third != null)
+        }.flatMapLatest { snapshot ->
+            settingsRepository.observeDeliveredClearedAt().flatMapLatest { clearedAt ->
+                listRepository.observeRecentlyDelivered(since = clearedAt, limit = RECENT_LIMIT).map { delivered ->
+                    snapshot.toUiState(delivered)
+                }
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            initialValue = ActivityUiState(),
+        )
 
-    private suspend fun Snapshot.toUiState(): ActivityUiState {
+    private suspend fun Snapshot.toUiState(delivered: List<EpisodeLedgerRow>): ActivityUiState {
         val feeds = feedRepository.getAll().associateBy(Feed::url)
-        val rows = ledger.values.mapNotNull { row -> row.toEpisodeUi(feeds) }
+        val rows =
+            inFlight.map { item ->
+                val feed = feeds[item.episode.feedUrl]
+                item.toUi(feedTitle = feed?.title ?: item.episode.feedUrl, feedArtworkUrl = feed?.imageUrl, work = work)
+            }
 
         return ActivityUiState(
             queueStatus = queueStatusFor(folder, rows),
             sync =
                 SyncUi(
                     lastSyncAt = lastSyncAt,
-                    outboxDepth = ledger.values.count { !it.syncedToServer },
+                    outboxDepth = outboxDepth,
                     canSyncNow = online && configured,
                     blockedReason =
                         when {
@@ -115,40 +133,17 @@ class ActivityViewModel(
                     .filter { it.ledgerState == LedgerState.QUEUED }
                     .map { QueuedUi(it, waitReason(folder, online)) },
             failed = rows.filter { it.ledgerState == LedgerState.ERROR },
+            // Already limited, ordered and cursor-filtered by SQL. The cursor hides rows and deletes
+            // nothing: those rows are what stop an episode being downloaded twice (CLAUDE.md §11).
             recent =
-                ledger.values
-                    .asSequence()
-                    // `deliveredClearedAt` hides rows without deleting them — see SettingsRepository.
-                    .filter {
-                        it.state == LedgerState.DOWNLOADED &&
-                            it.writtenFileName != null &&
-                            it.actionedAt > deliveredClearedAt
-                    }.sortedByDescending { it.actionedAt }
-                    .take(RECENT_LIMIT)
-                    .map {
-                        DeliveredUi(
-                            fileName = it.writtenFileName.orEmpty(),
-                            folderLabel = feeds[it.feedUrl]?.title,
-                            episodeKey = it.episodeKey,
-                            feedUrl = it.feedUrl,
-                        )
-                    }.toList(),
-        )
-    }
-
-    /**
-     * The episode cache can be gone while the ledger row remains — that asymmetry is deliberate
-     * (unsubscribing prunes episodes and keeps the ledger, CLAUDE.md §5). A row with no episode is
-     * skipped rather than rendered with invented text.
-     */
-    private suspend fun net.drehtuer.podsilo.core.model.EpisodeLedgerRow.toEpisodeUi(
-        feeds: Map<String, Feed>,
-    ): EpisodeUi? {
-        val episode = episodeRepository.get(episodeKey) ?: return null
-        val feed = feeds[feedUrl]
-        return EpisodeListItem(episode, this).toUi(
-            feedTitle = feed?.title ?: feedUrl,
-            feedArtworkUrl = feed?.imageUrl,
+                delivered.map {
+                    DeliveredUi(
+                        fileName = it.writtenFileName.orEmpty(),
+                        folderLabel = feeds[it.feedUrl]?.title,
+                        episodeKey = it.episodeKey,
+                        feedUrl = it.feedUrl,
+                    )
+                },
         )
     }
 
@@ -201,12 +196,13 @@ class ActivityViewModel(
     }
 
     private data class Snapshot(
-        val ledger: Map<String, net.drehtuer.podsilo.core.model.EpisodeLedgerRow>,
+        val inFlight: List<EpisodeListItem>,
+        val work: DownloadWork,
         val folder: FolderState,
         val online: Boolean,
         val lastSyncAt: java.time.Instant?,
+        val outboxDepth: Int,
         val configured: Boolean,
-        val deliveredClearedAt: Long,
     )
 }
 
