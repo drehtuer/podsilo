@@ -536,7 +536,11 @@ row, so it would mean deleting the record that stops an episode being downloaded
 implementation notes (RecyclerView, `ActionMode`, the AndroidX Selection library) describe a View-based
 app; this one is Compose, and the selection model they recommend building already exists.
 
-### I4 — [#49] Undo after a swipe (enhancement) — reverses a shipped design rule
+### I4 — [#49] Undo after a swipe (enhancement) — **done 2026-08-09**
+
+**Built** as a deferred write (D1), with **ADR 0021** and the `docs/UI.md` §12.1/§12.3 amendments.
+7 new tests (673 total, 0 failures, 3 skipped); `ktlintCheck detekt test assembleDebug` green. The
+ledger gained **no delete**, which was the point of choosing this option.
 
 **This contradicts a shipped, deliberate design rule.** `docs/UI.md` §12.3 is titled *"No undo —
 re-download instead"*, and §12.1 says a swipe "commits immediately — there is no undo". The reasoning
@@ -566,22 +570,27 @@ touched. It still needs **ADR 0021** written at the point the code is.
 
 **Work**
 
-- [ ] ADR `0021-undo-for-swipe-triage.md` recording D1 — written **with** the change, not now to
-      reserve a number (the lesson from ADR 0012, recorded above). It has to state the cost as well
-      as the decision: a decision made and immediately killed is silently lost.
-- [ ] Amend `docs/UI.md` §12.1 and rewrite §12.3 — it is currently titled and argued as *No undo*,
-      and leaving it contradicting the app is worse than either behaviour.
-- [ ] Amend `docs/UI_interface.md` §3 (a pending-undo state and its effect) and §12.
-- [ ] Implement the deferred write in the view model, **not** in the composable: the pending
-      decision must survive a recomposition and a rotation, and the row has to render optimistically
-      (greyed, or gone from *To decide*) while it is pending, or the swipe will look ignored.
-- [ ] Bulk actions are untouched (D2): selection mode, *Download all* and *Mark all as played* keep
-      their confirmation dialogs, and get no undo.
-- [ ] Tests: the window expiring writes exactly one row; undo inside the window writes **none** and
-      enqueues no work; a second swipe on another row while one is pending commits the first rather
-      than dropping it; leaving the screen commits rather than silently discarding; and the two the
-      design turns on — **nothing is ever posted for an undone decision**, and the ledger gains no
-      delete.
+- [x] ADR `0021-undo-for-swipe-triage.md`, written **with** the change. It states the cost as well as
+      the decision: a decision made and then immediately killed is silently lost.
+- [x] `docs/UI.md` §12.1, §12.3 (retitled), principle 6 and the motion table's "a snackbar never
+      carries an action" line — all four contradicted the app otherwise.
+- [x] `docs/UI_interface.md` §3.
+- [x] The deferred write lives in the **view model**, so the held decision survives recomposition and
+      rotation. The row renders the state the decision *will* produce (`EpisodeUi.asPending`), so a
+      swipe never looks ignored and the row does not change appearance twice.
+- [x] Bulk actions untouched (D2). The row's own action buttons and S3 also commit immediately —
+      **scope is swipes only**, since a button press is a deliberate press on a named affordance,
+      not a gesture that can be started by trying to scroll.
+- [x] Tests: the window expiring writes exactly one row; undo inside it writes none and enqueues
+      nothing, *and stays undone after the timer would have fired*; the row renders the pending
+      decision with nothing stored; a second swipe commits the first; leaving the screen commits; an
+      undo arriving after the window is ignored rather than racing; and bulk still writes at once
+      with no undo.
+      - `onCleared` is reached through a real `ViewModelStore` rather than by adding a test-only
+        method to the production class.
+      - detekt flagged `EpisodeListViewModelTest` as too large, so the harness moved to
+        `EpisodeListTestHarness` and the undo tests to their own class — the fourth time that
+        ceiling has pointed at a real seam.
 
 ### Decisions — all four settled (2026-08-09)
 

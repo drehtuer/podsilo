@@ -56,8 +56,9 @@ or the README and need an ADR before implementation — all three are collected 
    ADR.
 5. **The default view is the small one.** Filters default to "still to decide" everywhere, because a
    podcast catcher's backlog is otherwise unbounded.
-6. **Decisions commit immediately, and are reversible by acting again.** There is no undo snackbar
-   (§12.3): a wrong decision is fixed by downloading the episode again, not by racing a timer.
+6. **Decisions are reversible by acting again.** A swipe carries a ~5 s undo window because a
+   gesture can be started by accident (§12.3, `docs/decisions/0021`); every other decision commits
+   at once and is fixed by downloading the episode again, not by racing a timer.
 7. **State is truthful and local-first.** The UI renders the Room ledger; network activity is shown
    as *activity*, never as a blocking modal. Failures are surfaced but never destructive, and every
    failure is also written to the error log (S8).
@@ -794,8 +795,10 @@ since a tag failure never blocks a download — architecture §11), and abandone
 
 Both directions are **re-mappable in Settings → Triage** (`Download`, `Mark as played`, `Nothing`);
 the swipe background's icon and word are rendered from the current mapping, never hard-coded. Each
-swipe is single-direction, must pass a ~40 % threshold to commit (no accidental flicks), and commits
-immediately — there is no undo (§12.3). Non-gesture equivalents are mandatory: the row overflow `⋮`
+swipe is single-direction, must pass a ~40 % threshold to commit (no accidental flicks), and then
+holds its decision for a ~5 s **undo window** before anything is written (§12.3,
+`docs/decisions/0021`) — the threshold guards against the flick, the window against the deliberate
+swipe on the wrong row. Non-gesture equivalents are mandatory: the row overflow `⋮`
 and the S3 action bar.
 
 Swiping an episode that already has a terminal state performs the same action idempotently:
@@ -831,9 +834,29 @@ work for that `episodeKey` at all (killed before it could re-enqueue), the row s
 work is re-enqueued on first observation. The same rule applies to S7 and to the aggregate ring on S1.
 A percentage is only ever drawn from a progress update received in this process.
 
-### 12.3 No undo — re-download instead
+### 12.3 A swipe has an undo window; everything else is corrected by acting again
 
-There is **no undo snackbar**. Decisions commit immediately and are corrected by acting again:
+**Amended 2026-08-09 (issue #49, `docs/decisions/0021`).** This section was titled *"No undo —
+re-download instead"* and argued it from the protocol: a skip becomes a `PLAY` action in an
+append-only log that other clients act on, and the GPodder API has no retraction. That argument is
+still correct, and it is *why* the amendment takes the shape it does.
+
+**A swipe holds its decision for ~5 s and writes nothing** — no ledger row, no outbox entry, no work
+request — and offers *Undo* on a snackbar. Undo discards the held decision; there is nothing to
+retract because nothing was written. The row renders the decision immediately, so the gesture does
+not look ignored, but that is presentation only. One pending decision at a time: a second swipe
+commits the first, and leaving the screen commits rather than discarding. A decision made and then
+immediately killed by process death is lost, which is the cost the design accepts.
+
+**Everything else still commits immediately**, and the rest of this section is unchanged:
+
+- **The row's action buttons and S3's action bar** are deliberate presses on a named affordance, not
+  a gesture that can be started by trying to scroll. No undo.
+- **Bulk actions keep their confirmations and gain no undo** (`docs/decisions/0021`, decision D2):
+  selection mode, *Download all* and *Mark old / all episodes as played*. Naming the count before
+  writing is a stronger safeguard than five seconds for an action covering hundreds of rows.
+
+Decisions are otherwise corrected by acting again:
 
 - **Download again** is offered on `DOWNLOADED`, `SKIPPED`, `HANDLED_REMOTELY` and `ERROR` episodes
   (row overflow, S3 action bar, swipe-right). It writes `QUEUED` and enqueues `DownloadWorker` as
@@ -1163,14 +1186,15 @@ slide and rule lines wipe; nothing bounces, scales, or fades in from nothing.
 | Chips / segments | 100 ms fill swap with **no** motion — the list beneath rebuilds without a transition, because a filter change is a new question, not a movement |
 | Banners | 250 ms standard height expand, pushing content rather than covering it |
 | Dialogs | scrim fade plus a 12 px translate up, 200 ms |
-| Snackbar | 250 ms up, 3 200 ms hold, 200 ms out; never carries an action, since there is no undo to offer |
+| Snackbar | 250 ms up, 3 200 ms hold, 200 ms out; carries an action in exactly one case — *Undo* on a swipe (§12.3, `docs/decisions/0021`) |
 | Theme change | instant — a colour-scheme crossfade on a flat, high-contrast palette reads as a rendering fault |
 
 Three rules the table cannot express, and the ones that actually get broken:
 
 1. **The triage hold survives reduced motion.** With *Remove animations* on, everything above
    collapses to an instant state change **except** the 400 ms hold at commit. It is not decoration:
-   with no undo (§12.3) it is the only feedback that the decision landed on the row the user meant.
+   for a button press, which has no undo window (§12.3), it is the only feedback that the decision
+   landed on the row the user meant.
    Implement it as a delay, not an animation, so the accessibility setting does not remove it.
 2. **Durable state is never animated into place.** A badge count, an outbox depth and a ledger state
    render at their true value on first paint. Counting a badge up reads as data arriving when it has

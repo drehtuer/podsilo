@@ -246,6 +246,13 @@ sealed interface EpisodeListEvent {
 the ViewModel produce a `BulkPreview` (below) which the dialog renders; nothing is written until
 `DownloadAllConfirmed`.
 
+**Undo** (built 2026-08-09, issue #49, `docs/decisions/0021`): a swipe emits `ShowUndo` and holds
+its decision in `pendingUndo` for ~5 s, writing **nothing** until the window elapses;
+`UndoRequested` discards it. The **view model owns the window**, not the snackbar — the host only
+reports a tap, and one arriving after the write finds nothing to discard. The row renders the state
+the decision will produce, which is presentation only. Scope is swipes: the row buttons, S3 and
+every bulk action still commit immediately.
+
 **Selection mode** (built 2026-08-09, issue #46) replaces the app bar rather than adding to it, and
 its actions go through `SelectionActionRequested` rather than reaching `BulkConfirmed` directly —
 that indirection is what makes "name the count before you write" structural here as well. The count

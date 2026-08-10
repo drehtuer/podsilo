@@ -3589,3 +3589,63 @@ this needed no new judgement — which is the value of having written it down a 
 666 tests, 0 failures, 3 skipped, plus 2 instrumented (long-press is a *timed* gesture and depends on
 the platform's real long-press timeout and touch slop — the kind of thing that passes headless and
 fails in the hand). Not run: no device attached.
+
+---
+
+## 2026-08-09 (I4) — undo that never had to un-send anything
+
+Last of Tier 5. Issue #49 asks for undo after a swipe, against a design document titled
+*"No undo — re-download instead"* whose argument was the protocol: a skip becomes a `PLAY` in an
+append-only log, other clients act on it, and the GPodder API has no retraction.
+
+The interesting part is that the argument survived the reversal. The author asked for undo; the
+question that went back (D1) was not *whether* but *which of two costs are you buying*. Write now and
+revert on undo is durable across process death and needs a **delete on the ledger** — the one table
+CLAUDE.md §11 says must never lose a row — and it still cannot help once the outbox has drained,
+which can happen immediately. Defer the write needs no delete and cannot post something it must
+retract, at the cost of losing a decision if the process dies inside the window.
+
+The author chose to defer. So the implementation never touches the ledger until the window closes,
+and *Undo* is a `null` assignment. The ADR states the loss case explicitly rather than leaving it to
+be discovered.
+
+### Three things that were not obvious until they were written
+
+**The view model has to own the window, not the snackbar.** The tempting version lets
+`SnackbarResult.ActionPerformed` decide. Then the snackbar's duration and the write timer are two
+clocks, and a tap at 4.9 s races a write at 5.0 s. Making the view model authoritative turns the race
+into a no-op: an undo that arrives late finds nothing to discard. The host only reports the tap.
+
+**Leaving the screen must commit, and `viewModelScope` cannot do it.** By the time `onCleared` runs
+the scope is already cancelled, so a write launched there never happens — silently. The commit goes
+to an injected scope that outlives the view model. That is the one place this class reaches outside
+its own lifecycle, and it is worth the parameter: the alternative is a decision the user watched take
+effect vanishing because they hit Back.
+
+**The row has to lie for five seconds.** A swipe that appears to do nothing reads as the app ignoring
+it, and the user swipes again. So the row renders the state the decision *will* produce — which also
+means it does not change appearance a second time when the write lands. Presentation only; every
+other screen reads storage and correctly lags by the window.
+
+### Testing the lifecycle without a test hook
+
+`onCleared` is `protected`. The options were adding a `@VisibleForTesting` method to production code
+or going through a real `ViewModelStore` — construct a provider that hands back the instance, then
+`store.clear()`. The second is four lines and exercises the actual hook; the first would have been a
+method that exists only because a test wanted it.
+
+### detekt, a fourth time
+
+`EpisodeListViewModelTest` went over `LargeClass`. The undo window is genuinely its own behaviour —
+every test in it moves virtual time — so the harness moved to `EpisodeListTestHarness` and the undo
+tests to `EpisodeListUndoTest`. Fourth time this ceiling has pointed at a real seam rather than an
+arbitrary limit (after the DAO split, the ledger port, and `EpisodeListScreen`).
+
+### A pre-existing test caught the behaviour change, which is the system working
+
+`a swipe performs the configured action, not a hard-coded one` failed immediately: it asserted a
+write straight after the swipe. Its subject is *which* action, not *when*, so it now waits the window
+out. Worth noting because it is the only signal that would have caught an accidental change in swipe
+semantics — and it fired on the first run.
+
+673 tests, 0 failures, 3 skipped.
