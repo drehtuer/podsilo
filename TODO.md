@@ -9,6 +9,13 @@ work.
 **Repo state (2026-08-02): Tiers 1–4b complete; Tier 4c complete — all eight screens built,
 navigable, and icon-complete.** 502 tests, 3 skipped, plus 6 instrumented.
 
+**Device test set (2026-08-11, Pixel 10a / Android 17): 60 tests, 52 passed, 2 failed, 6 skipped.**
+The first run since the 2026-08-10 row changes, and it caught what CI structurally cannot: two
+conformance tests still assert the pre-change UI shape. **Neither is an app bug** — *Choose folder*
+moved into the row overflow, and S1's now-scrolling chip row makes `hasScrollAction()` ambiguous.
+Both are written up in `docs/backlog.md` and `docs/dev-environment.md` §6. The 6 skips are the
+long-standing `SafDownloadTargetInstrumentedTest` opt-out on an install with no SAF grant.
+
 **Update (2026-08-09): v0.3.0 is released and running on the author's phone, and four issues came
 back from using it.** They are planned as **[Tier 5](#tier-5--reported-issues-from-using-v030)** at
 the end of this file, in the order to solve them. One of them (#49, undo) contradicts a shipped
