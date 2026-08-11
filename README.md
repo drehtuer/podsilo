@@ -23,9 +23,9 @@ consumed by whatever audio player you actually like.
 > login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and backup/restore.
 > `podsilo-0.3.0.apk` is a signed, minified release build; sideload it on your own device.
 >
-> The device test set was last run on 2026-08-11 against a Pixel 10a (Android 17): **60 tests, 52
-> passed, 2 failed, 6 skipped.** Both failures are stale assertions left by a deliberate UI change,
-> not app faults — see [`docs/dev-environment.md`](docs/dev-environment.md) §6.
+> The device test set was last run on 2026-08-11 against a Pixel 10a (Android 17): **60 tests, 54
+> passed, 0 failed, 6 skipped.** The skips are the SAF write, which opts out on an install with no
+> folder granted — see [`docs/dev-environment.md`](docs/dev-environment.md) §6.
 
 ## The idea
 

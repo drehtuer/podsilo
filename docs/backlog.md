@@ -13,19 +13,14 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
-- **Two device tests are stale after the 2026-08-10 row changes, and fail.** Found by the first
-  device run since that commit (2026-08-11, Pixel 10a — `docs/dev-environment.md` §6). Neither is an
-  app bug; both assert a UI shape the change deliberately replaced.
-  - `EpisodeListScreenInstrumentedTest.aLostFolderGrantOffersChooseFolderRatherThanRetry` expects
-    *Choose folder* to be **displayed** on a `FOLDER_UNAVAILABLE` row. It now lives in the row
-    overflow menu. The rule (`docs/decisions/0011`) still holds in `labelFor`; the assertion should
-    open the overflow, or move to asserting the label rather than its visibility.
-  - `PodcastListConformanceTest.aPopulatedListCanBePulledToRefresh` uses `onNode(hasScrollAction())`,
-    which matches two nodes now that S1's chip row scrolls — an ambiguous-match error, not a refresh
-    failure. It should target the vertical list specifically.
-
-  Left unfixed deliberately: the run was asked for, the repair was not, and the second one is a
-  judgement call about how the test should identify the list. Neither blocks anything.
+- **Nothing lints `src/androidTest/`.** Verified 2026-08-11:
+  `runKtlintCheckOverAndroidTestDebugSourceSet` reports **`NO-SOURCE`** (the Kotlin dir is never
+  registered with ktlint), and detekt's default source roots are `src/main` + `src/test` only, which
+  `build.gradle.kts` does not extend. So the device tests — the ones with no CI coverage either — are
+  also the only Kotlin in the repo with no style or complexity checking at all. Caught while fixing
+  the two stale tests: an over-length line in a device test passed `./gradlew ktlintCheck detekt`
+  and had to be found by hand. Small to fix (add the source dirs to both), but it will surface a
+  backlog of existing violations, which is why it is a note rather than a drive-by.
 
 - **`device-test.sh` and `adb-connect-host.sh` refuse to run over wireless debugging.** Both gate on
   "no adb server inside the container", which is correct for the usbip path and exactly wrong for the
@@ -127,6 +122,15 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   badge, and the timestamp is the only obstacle.
 
 ## Closed
+
+- ~~**Two device tests are stale after the 2026-08-10 row changes, and fail.**~~ **Fixed 2026-08-11**,
+  the same day they were found. `aLostFolderGrantOffersChooseFolderRatherThanRetry` opens the row
+  overflow before looking for *Choose folder*, and now also asserts no bare *Retry* — the half its
+  name promised and never checked. `aPopulatedListCanBePulledToRefresh` swipes the feed row by an
+  explicit distance instead of `onNode(hasScrollAction())`, which is **the same correction
+  `PodcastListScreenTest` already carried** for the identical cause; the Robolectric suite fixed it
+  on 2026-08-10 and the device copy was not updated alongside, because nothing runs it
+  automatically. 60 device tests: 54 passed, 0 failed, 6 skipped.
 
 - ~~**A `scripts/adb-connect-host.sh` helper for Tier 3.**~~ **Done — the item was stale when
   removed on 2026-08-11.** The script has existed since 2026-08-02 and `docs/dev-environment.md` §9
