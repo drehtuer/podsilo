@@ -13,6 +13,27 @@ noted here before that date was instead either built, declined in conversation, 
 
 ## Open items
 
+- **Two device tests are stale after the 2026-08-10 row changes, and fail.** Found by the first
+  device run since that commit (2026-08-11, Pixel 10a — `docs/dev-environment.md` §6). Neither is an
+  app bug; both assert a UI shape the change deliberately replaced.
+  - `EpisodeListScreenInstrumentedTest.aLostFolderGrantOffersChooseFolderRatherThanRetry` expects
+    *Choose folder* to be **displayed** on a `FOLDER_UNAVAILABLE` row. It now lives in the row
+    overflow menu. The rule (`docs/decisions/0011`) still holds in `labelFor`; the assertion should
+    open the overflow, or move to asserting the label rather than its visibility.
+  - `PodcastListConformanceTest.aPopulatedListCanBePulledToRefresh` uses `onNode(hasScrollAction())`,
+    which matches two nodes now that S1's chip row scrolls — an ambiguous-match error, not a refresh
+    failure. It should target the vertical list specifically.
+
+  Left unfixed deliberately: the run was asked for, the repair was not, and the second one is a
+  judgement call about how the test should identify the list. Neither blocks anything.
+
+- **`device-test.sh` and `adb-connect-host.sh` refuse to run over wireless debugging.** Both gate on
+  "no adb server inside the container", which is correct for the usbip path and exactly wrong for the
+  wireless one, where that server is what holds the connection (`docs/dev-environment.md` §9.4). A
+  wireless run currently means executing the script's steps by hand. The distinguishing fact is
+  cheap — a device serial shaped `<ip>:<port>` is a network device, and `adb devices` showing one
+  means the local server is legitimate — so the guard could be narrowed rather than removed.
+
 - **Two `ErrorCause` values are unreachable by design.** `FEED_PARSE` and `TAG_WRITE` are declared
   and never produced anywhere: a tag-write failure must never fail a download (CLAUDE.md §6), so no
   ledger row can carry `TAG_WRITE`; and feed failures are recorded in the *error log*
@@ -46,9 +67,6 @@ noted here before that date was instead either built, declined in conversation, 
   seeding the SQLite file directly does not help, because with no account configured S1 correctly
   shows the *not configured* empty state instead of the list (`docs/UI.md` §4). Do it alongside the
   real-device Nextcloud login.
-- **A `scripts/adb-connect-host.sh` helper** for Tier 3 (emulator on the Windows host, driven from
-  the container). CLAUDE.md §4 asks for it explicitly; `docs/dev-environment.md` §6 records that
-  neither it nor Tier 3 exists yet. Worth writing the first time someone actually needs a device.
 - **Paging 3 for the episode list.** CLAUDE.md §3/§5 mandate it for long lists; the UI contract
   currently says "paging or a keyed `LazyColumn`" (`docs/UI_interface.md` §14.3). A 500-episode feed
   under the `All` filter is the case that decides it — measure before adding the dependency.
@@ -109,6 +127,11 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   badge, and the timestamp is the only obstacle.
 
 ## Closed
+
+- ~~**A `scripts/adb-connect-host.sh` helper for Tier 3.**~~ **Done — the item was stale when
+  removed on 2026-08-11.** The script has existed since 2026-08-02 and `docs/dev-environment.md` §9
+  is built around it; the note had simply never been struck through. Its wireless-path gap is a live
+  item above, not this one.
 
 - ~~**S1's filter chips have the same shape as the row #48 reported on S2.**~~ ~~**The S2 row
   overflow `⋮` does not exist.**~~ ~~**S2's feed-error banner is connected at neither end.**~~

@@ -63,8 +63,15 @@ fi
 
 # The library modules run through Gradle normally. They install only their own small test APK, and
 # UTP handles that fine over this link.
+#
+# `:core:download` and `:core:ui` were missing from this list until 2026-08-10, so
+# NotificationIconConformanceTest and MarkLegibilityConformanceTest had never run on a device
+# despite existing. `:core:database` stays even though it currently has no src/androidTest/ — the
+# task is a no-op there, and leaving it means the day someone adds one it is already wired in.
 ./gradlew :core:database:connectedDebugAndroidTest \
     :core:datastore:connectedDebugAndroidTest \
+    :core:download:connectedDebugAndroidTest \
+    :core:ui:connectedDebugAndroidTest \
     :feature:episodes:connectedDebugAndroidTest \
     :feature:settings:connectedDebugAndroidTest
 
@@ -89,8 +96,27 @@ echo
 echo "==> :app via adb + am instrument (see the comment in this script for why)"
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -q
 
-adb install -r -g app/build/outputs/apk/debug/app-debug.apk >/dev/null
-adb install -r -g -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk >/dev/null
+# The app APK is NOT `app-debug.apk`. `androidComponents.onVariants` in app/build.gradle.kts renames
+# it to `podsilo-<versionName>-debug.apk`, and that rename applies only to the *main* variant — the
+# androidTest APK keeps AGP's default name. Globbing rather than hardcoding the version keeps this
+# working when versionName changes.
+#
+# This was a real fault: the hardcoded `app-debug.apk` kept resolving to a months-old file left in
+# that directory from before the rename, so the run silently tested a stale build. Failing loudly
+# when the glob matches nothing is the point.
+app_apk="$(ls -1 app/build/outputs/apk/debug/podsilo-*-debug.apk 2>/dev/null | head -1)"
+test_apk=app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+if [ -z "$app_apk" ] || [ ! -f "$test_apk" ]; then
+    echo "==> Expected APKs are missing after assembleDebug:" >&2
+    echo "    app:  ${app_apk:-<no match for podsilo-*-debug.apk>}" >&2
+    echo "    test: $test_apk" >&2
+    exit 1
+fi
+
+echo "    installing $(basename "$app_apk")"
+adb install -r -g "$app_apk" >/dev/null
+adb install -r -g -t "$test_apk" >/dev/null
 
 # `-r` (raw) rather than the pretty summary, because THE SUMMARY LIES ABOUT SKIPS.
 #

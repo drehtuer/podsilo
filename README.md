@@ -22,6 +22,10 @@ consumed by whatever audio player you actually like.
 > `docs/UI.md` render and are reachable. Verified against a **real Nextcloud on a real phone** —
 > login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and backup/restore.
 > `podsilo-0.3.0.apk` is a signed, minified release build; sideload it on your own device.
+>
+> The device test set was last run on 2026-08-11 against a Pixel 10a (Android 17): **60 tests, 52
+> passed, 2 failed, 6 skipped.** Both failures are stale assertions left by a deliberate UI change,
+> not app faults — see [`docs/dev-environment.md`](docs/dev-environment.md) §6.
 
 ## The idea
 
@@ -74,12 +78,13 @@ hand-written ID3 frames, no bespoke retry logic.
 
 Development happens in a Docker dev container (JDK 17 + Android SDK) on Windows/WSL2. Tests come in
 three tiers: JVM unit tests as the default and main workload, a headless emulator in the container
-for instrumented runs, and an emulator on the Windows host driven over TCP for interactive UI work.
-Sync is tested against a disposable [opodsync](https://codeberg.org/kd2/opodsync) server, never
-against a real Nextcloud.
+for instrumented runs, and a real device — over USB or wireless debugging — driven from the container
+for everything a device has to answer for. Sync is tested against a disposable
+[opodsync](https://codeberg.org/kd2/opodsync) server, never against a real Nextcloud.
 
 Setup instructions are in [`docs/dev-environment.md`](docs/dev-environment.md), which is also honest
-about which tiers have actually been run (tier 1 has; the two emulator tiers have not). The module
+about which tiers have actually been run — all three have, and its status table says what each run
+proved and what is still unverified. The module
 design, schema and sync semantics are in [`docs/architecture.md`](docs/architecture.md), the screen
 design in [`docs/UI.md`](docs/UI.md). Architecture decisions land in `docs/decisions/`, and
 `docs/journal.md` keeps a running log — this project doubles as an experiment in agent-driven
