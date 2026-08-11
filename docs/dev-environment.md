@@ -381,35 +381,47 @@ What the set covers, in rough order of what it has actually caught:
 
 ### Last run: 2026-08-11, Pixel 10a (Android 17 / API 37), over wireless debugging
 
-**60 declared — 52 passed, 2 failed, 6 skipped.**
+**60 declared — 54 passed, 0 failed, 6 skipped.**
 
 | Module | Class | Result |
 |---|---|---|
 | `:core:datastore` | `KeystoreAppPasswordCipherTest` | 6 ✅ |
 | `:core:download` | `NotificationIconConformanceTest` | 3 ✅ |
 | `:core:ui` | `MarkLegibilityConformanceTest` | 4 ✅ |
-| `:feature:episodes` | `EpisodeListScreenInstrumentedTest` | 7, **1 failed** |
+| `:feature:episodes` | `EpisodeListScreenInstrumentedTest` | 7 ✅ |
 | | `LogoRenderConformanceTest` | 5 ✅ |
-| | `PodcastListConformanceTest` | 6, **1 failed** |
+| | `PodcastListConformanceTest` | 6 ✅ |
 | `:feature:settings` | `SettingsConformanceTest` / `LogoRenderConformanceTest` | 6 ✅ / 2 ✅ |
 | `:app` | 5 classes via `am instrument` | 21 declared, 15 ✅, **6 skipped** |
 
-**Both failures are stale tests rather than app bugs, and they have one cause between them:** the
-2026-08-10 change that gave S2's rows an overflow `⋮` and made the filter chip rows scroll. Neither
-test had run on a device since, because these never run on CI.
-
-- `EpisodeListScreenInstrumentedTest.aLostFolderGrantOffersChooseFolderRatherThanRetry` asserts
-  *Choose folder* is **displayed** on a `FOLDER_UNAVAILABLE` row. That label moved out of an inline
-  `TextButton` and into the row overflow menu, so it is now a tap away rather than on screen. The
-  rule it protects — a folder failure offers *Choose folder*, never a *Retry* that cannot work
-  (`docs/decisions/0011`) — still holds in `labelFor`; the test looks in the wrong place.
-- `PodcastListConformanceTest.aPopulatedListCanBePulledToRefresh` does
-  `onNode(hasScrollAction())`, which now matches **two** nodes: the horizontally scrolling chip row
-  and the vertical list. It fails as an ambiguous-match error, not a refresh failure.
-
 The 6 skips are the documented `SafDownloadTargetInstrumentedTest` opt-out — a fresh install has no
 SAF grant, and the set's own uninstall is what removes it. The runner reports skips as `OK`, which is
-why `device-test.sh` counts them and refuses to call a run with skips green.
+why `device-test.sh` counts them and refuses to call a run with skips green. **That is why this is
+not a clean bill of health:** the six tests covering the actual SAF write are the six that did not
+run, and granting a folder by hand before the run is the only way to change that.
+
+#### The two stale tests this run found, and their fix
+
+The earlier run the same day failed two conformance tests. **Neither was an app bug** — both asserted
+a UI shape the 2026-08-10 change deliberately replaced, and neither had run on a device since,
+because these never run on CI.
+
+- `aLostFolderGrantOffersChooseFolderRatherThanRetry` asserted *Choose folder* was **displayed** on a
+  `FOLDER_UNAVAILABLE` row. That label moved out of an inline `TextButton` and into the row overflow,
+  so it is a tap away now. It opens the overflow first — which is the better assertion anyway, since
+  §12.1 makes that menu the mandatory non-gesture equivalent of the swipes — and it now also asserts
+  no bare *Retry* is offered, the half `docs/decisions/0011` actually promises and the original name
+  claimed without checking.
+- `aPopulatedListCanBePulledToRefresh` used `onNode(hasScrollAction())`, which began matching **two**
+  nodes once S1's chip row scrolled: an ambiguous-match error, not a refresh failure. It now swipes
+  the feed row by an explicit distance, letting nested scroll carry the gesture to the
+  `PullToRefreshBox`.
+
+The second fix is a **verbatim copy of a correction `PodcastListScreenTest` already carried** — the
+Robolectric suite hit the identical problem on 2026-08-10, fixed it, and recorded why in a comment.
+The device test was not updated alongside it because nothing runs it automatically. That is the
+sharpest illustration so far of what this tier costs: the same bug had to be found twice, a day
+apart, and the second time by hand.
 
 ⚠ **`scripts/device-test.sh` cannot run over wireless debugging as written.** It gates on
 `adb-connect-host.sh`, which aborts when an adb server is running inside the container — correct for

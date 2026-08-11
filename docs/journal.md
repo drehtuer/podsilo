@@ -3776,3 +3776,54 @@ have found a stale file. And `adb install` of that 41 MB APK took seconds over W
 documented in §8 is a usbip problem specifically, not an APK-size one.
 
 60 device tests: 52 passed, 2 failed, 6 skipped (the SAF opt-out, on a fresh install with no grant).
+
+---
+
+## 2026-08-11 (later) — fixing the two stale tests, and what the second one turned out to be
+
+Both device conformance failures from this morning's run, repaired and verified on the phone.
+60 device tests: 54 passed, 0 failed, 6 skipped.
+
+### The second fix already existed
+
+`aPopulatedListCanBePulledToRefresh` now swipes the feed row by an explicit distance instead of
+`onNode(hasScrollAction())`. That is not a fix I designed — it is a **verbatim copy of one
+`PodcastListScreenTest` has carried since 2026-08-10**, comment and all, naming the same two causes:
+the chip row became scrollable so the matcher finds two nodes, and the default `swipeDown()` travels
+a node's own height so the gesture depends on row geometry.
+
+So the Robolectric suite hit this exact problem, solved it, and wrote down why — and the device copy
+of the same test sat broken for a day, because nothing runs it. The bug had to be found twice. That
+is a sharper argument for the cost of this tier than anything in the earlier entry, and it is the
+kind of thing only running the tests reveals.
+
+Worth noticing as a pattern: when a device test fails, **check whether its Robolectric twin already
+knows the answer** before reasoning from scratch.
+
+### The first fix was an under-assertion
+
+`aLostFolderGrantOffersChooseFolderRatherThanRetry` asserted only that *Choose folder* was displayed.
+The name promises two things and it checked one — a screen offering both *Choose folder* and a bare
+*Retry* would have passed. Now it opens the overflow (where §12.1 says the actions must live),
+asserts the remedy, and asserts no *Retry*. Fixing a stale test was a good moment to notice the
+assertion had always been half of what it claimed.
+
+### Nothing lints the device tests
+
+An over-length line I wrote in a device test passed `./gradlew ktlintCheck detekt` cleanly. Checking
+why: `runKtlintCheckOverAndroidTestDebugSourceSet` reports `NO-SOURCE`, and detekt's default source
+roots are `src/main` + `src/test`, which the root build file never extends. **`src/androidTest/` is
+the only Kotlin in the repo with no style or complexity checking** — and it is also the only Kotlin
+with no CI. The same files, unprotected twice over. Noted in `docs/backlog.md` rather than fixed;
+adding the source dirs is small, but it will surface existing violations and that is its own change.
+
+### Two process notes
+
+A device run failed after **nine minutes** with `Connected device with serial ... not found!` — the
+adb server had restarted and dropped the phone while the port stayed open, so Gradle built the whole
+module before discovering it had nowhere to install. The author's correction: check the far side is
+reachable *before* starting anything long. Every device command since gates on
+`adb devices | grep -q "^<serial>[[:space:]]*device$"` first, which fails in under a second.
+
+Also: `./gradlew … | tail -60` reports tail's exit status, which is how a `BUILD FAILED` got called
+green this morning. Every run since writes to a log and echoes `$?` directly.
