@@ -306,7 +306,7 @@ Seven, and **all of them are settled**. D2 and D7 were answered on 2026-08-14 an
 
 | # | Question | Settled as | Consequence |
 |---|---|---|---|
-| **D4** | Does *"apply Nextcloud's state"* ever **un**-mark an episode here? | **No.** It only ever marks episodes as played; it never marks one available again. | The ledger stays append-only — no delete, for the third time. The row's subtitle has to say so, because the button's name promises more. |
+| **D4** | Does *"apply Nextcloud's state"* ever **un**-mark an episode here? | **No**, and still no. | The ledger stays append-only — no delete. Note the half that changed: since `docs/decisions/0024` the *user* can un-mark an episode with a button, which writes an `UNPLAYED` state rather than deleting a row. A remote action still cannot. |
 | **D5** | Does *"apply Nextcloud's state"* overwrite a local **`DOWNLOADED`** row? | **No.** The author's rule: *a remote play means the episode was played on another device, so no additional download is necessary here.* A `DOWNLOADED` row already guarantees that, so there is nothing for the remote action to add — and the server cannot restore what overwriting would destroy (§5). | The download record survives. See the note below: this is the reading of the author's rule, not a quote of it. |
 | **D6** | Is a *force push* allowed to re-assert decisions Nextcloud has already seen? | **Yes**, chunked, behind the counted confirmation ADR 0013 established. | §7.2 trap 3 and 4 stand as written. |
 

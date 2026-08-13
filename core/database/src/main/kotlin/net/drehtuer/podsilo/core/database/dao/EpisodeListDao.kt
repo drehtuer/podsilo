@@ -41,8 +41,13 @@ interface EpisodeListDao {
     fun observeAllEpisodes(feedUrl: String?): Flow<List<EpisodeWithLedger>>
 
     /**
-     * The `To decide` tab: episodes with **no** ledger row at all (CLAUDE.md §9). That is the whole
-     * predicate — no date clause.
+     * The `To decide` tab: episodes with no ledger row **that expresses a decision** (CLAUDE.md §9).
+     * Still one predicate and still no date clause.
+     *
+     * `UNPLAYED` is the exception, and it is the whole reason the sub-select has a `WHERE`
+     * (`docs/decisions/0024`): that state means the user withdrew a decision, so the episode is
+     * undecided again while its row — and with it `writtenFileName` and the history — survives. The
+     * ledger still has no delete.
      *
      * The `pubDate >= Feed.firstSeenAt` cutoff this query used to carry is **retired**
      * (`docs/decisions/0013`), removed rather than left behind a flag: old episodes are hidden by
@@ -59,7 +64,7 @@ interface EpisodeListDao {
             "NULL AS l_lastErrorCause, NULL AS l_lastErrorRetryable, " +
             "NULL AS l_writtenFileName, NULL AS l_durationSeconds " +
             "FROM episodes e " +
-            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
+            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger WHERE state != 'UNPLAYED') " +
             "AND (:feedUrl IS NULL OR e.feedUrl = :feedUrl) " +
             "ORDER BY e.pubDate DESC",
     )
@@ -157,7 +162,7 @@ interface EpisodeListDao {
      */
     @Query(
         "SELECT e.feedUrl AS feedUrl, COUNT(*) AS count FROM episodes e " +
-            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
+            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger WHERE state != 'UNPLAYED') " +
             "AND (:feedUrl IS NULL OR e.feedUrl = :feedUrl) " +
             "AND (:olderThanMillis IS NULL OR (e.pubDate IS NOT NULL AND e.pubDate < :olderThanMillis)) " +
             "GROUP BY e.feedUrl ORDER BY count DESC, e.feedUrl ASC",
@@ -176,7 +181,7 @@ interface EpisodeListDao {
      */
     @Query(
         "SELECT e.feedUrl AS feedUrl, COUNT(*) AS count FROM episodes e " +
-            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
+            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger WHERE state != 'UNPLAYED') " +
             "GROUP BY e.feedUrl",
     )
     fun observeUndecidedCounts(): Flow<List<FeedUndecidedCountRow>>
@@ -184,7 +189,7 @@ interface EpisodeListDao {
     /** The rows [countUndecidedByFeed] counts. Same predicate, verbatim — see that KDoc. */
     @Query(
         "SELECT e.* FROM episodes e " +
-            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger) " +
+            "WHERE e.episodeKey NOT IN (SELECT episodeKey FROM episode_ledger WHERE state != 'UNPLAYED') " +
             "AND (:feedUrl IS NULL OR e.feedUrl = :feedUrl) " +
             "AND (:olderThanMillis IS NULL OR (e.pubDate IS NOT NULL AND e.pubDate < :olderThanMillis)) " +
             "ORDER BY e.pubDate DESC",

@@ -210,7 +210,7 @@ erDiagram
         string episodeKey PK "same value-space as EPISODE.episodeKey, not an enforced FK"
         string feedUrl "denormalised from EPISODE at write time"
         string enclosureUrl "denormalised from EPISODE at write time"
-        string state "QUEUED / DOWNLOADING / DOWNLOADED / SKIPPED / ERROR / HANDLED_REMOTELY"
+        string state "QUEUED / DOWNLOADING / DOWNLOADED / SKIPPED / ERROR / HANDLED_REMOTELY / UNPLAYED"
         long actionedAt "epoch millis"
         boolean syncedToServer "outbox flag"
         int attempts
@@ -835,6 +835,11 @@ stateDiagram-v2
 
     DOWNLOADED --> QUEUED : user taps "Download again"
     SKIPPED --> QUEUED : user taps "Download"
+    DOWNLOADED --> UNPLAYED : user taps "Mark as unplayed"
+    SKIPPED --> UNPLAYED : user taps "Mark as unplayed"
+    HANDLED_REMOTELY --> UNPLAYED : user taps "Mark as unplayed"
+    UNPLAYED --> QUEUED : user taps "Download"
+    UNPLAYED --> SKIPPED : user taps "Mark as played"
     HANDLED_REMOTELY --> QUEUED : user taps "Download"
     QUEUED --> DOWNLOADED : target file already exists (aborted, informational)
 
@@ -842,6 +847,11 @@ stateDiagram-v2
     SKIPPED --> [*]
     HANDLED_REMOTELY --> [*]
 ```
+
+**`UNPLAYED` is the one state that means "no decision"** (`docs/decisions/0024`). The user reached it
+by withdrawing a decision, so the list treats it exactly as a row-less episode while the row itself
+survives — which is what keeps the ledger free of a delete. It is never reached by reconciliation: a
+remote unread mark does not re-open a decision made here.
 
 `DOWNLOADED`, `SKIPPED`, and `HANDLED_REMOTELY` are terminal **with respect to automatic logic** —
 sync never revisits them. A later remote action arriving for an already-`DOWNLOADED` episode is a
@@ -1005,6 +1015,7 @@ and deleted (2026-08-13).
 | [0020](decisions/0020-the-login-poll-runs-only-in-the-foreground.md) | The Login Flow v2 poll runs only while S5 is on screen — a backgrounded process could not resolve the host at all | `docs/UI.md` §8, §B5 |
 | [0022](decisions/0022-play-is-an-ended-marker-in-both-directions.md) | A `PLAY` means *ended*, both ways: a duration-less skip sends `1/1`, and an inbound `PLAY` is only terminal when `position >= total > 0` — which is how a client says *unread* | §6 — settles #60's two interop halves |
 | [0023](decisions/0023-a-download-also-marks-the-episode-played.md) | A completed download emits `DOWNLOAD` **and** `PLAY` — reverses CLAUDE.md §5's prohibition, because the server discards `DOWNLOAD` and the episode stayed new everywhere else | §6, CLAUDE.md §1/§5 |
+| [0024](decisions/0024-mark-as-unplayed-is-a-state-not-a-delete.md) | *Mark as unplayed* is a new `UNPLAYED` ledger state, not a row deletion — the row outlives the decision, so the dedup authority is untouched | §4, §9 |
 
 ### Decisions folded into this document
 

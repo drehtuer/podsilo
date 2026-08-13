@@ -57,6 +57,33 @@ class TriageWriter(
     }
 
     /**
+     * Puts [episodes] back into *To decide* — the inverse of [markAsPlayed] (`docs/decisions/0024`).
+     *
+     * **Writes a row rather than deleting one.** "Undecided" is normally the absence of a row, so the
+     * obvious implementation is a delete — and that is exactly what CLAUDE.md §11 forbids, because
+     * the row is the only thing that stops an episode being downloaded twice. `UNPLAYED` keeps
+     * `writtenFileName` and the history while the list treats the episode as undecided again.
+     *
+     * It reaches Nextcloud like any other decision: `PLAY` with `position = 0`, which is how the API
+     * expresses *unread* (`docs/decisions/0022`).
+     */
+    suspend fun markAsUnplayed(episodes: List<Episode>) {
+        if (episodes.isEmpty()) return
+        val now = clock.millis()
+        val existing = episodes.associate { it.episodeKey to ledgerRepository.get(it.episodeKey) }
+        ledgerRepository.upsertAll(
+            episodes.map { episode ->
+                episode.toRow(
+                    state = LedgerState.UNPLAYED,
+                    now = now,
+                    writtenFileName = existing[episode.episodeKey]?.writtenFileName,
+                )
+            },
+        )
+        syncTrigger.requestSyncNow()
+    }
+
+    /**
      * Marks [episodes] `QUEUED` so the list reflects the decision immediately, before any worker
      * runs. The download itself is enqueued by the caller through `WorkScheduler` — this class never
      * touches WorkManager (`docs/UI.md` §B0.2).

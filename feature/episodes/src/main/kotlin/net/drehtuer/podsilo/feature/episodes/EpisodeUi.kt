@@ -76,6 +76,14 @@ enum class EpisodeUiAction {
     CANCEL,
     OPEN_IN_BROWSER,
     COPY_LINK,
+
+    /**
+     * Puts a decided episode back into *To decide* (`docs/decisions/0024`).
+     *
+     * Offered wherever the app currently claims the episode is finished — `DOWNLOADED`, `SKIPPED`
+     * and `HANDLED_REMOTELY` — because those are exactly the three the user might disagree with.
+     */
+    MARK_AS_UNPLAYED,
 }
 
 private val TERMINAL_STATES = setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY)
@@ -103,11 +111,18 @@ internal fun actionsFor(
 
     val triage =
         when (state) {
-            null -> setOf(EpisodeUiAction.DOWNLOAD, EpisodeUiAction.MARK_AS_PLAYED)
+            // An UNPLAYED row is undecided again, so it offers exactly what a row-less episode does.
+            null, LedgerState.UNPLAYED -> setOf(EpisodeUiAction.DOWNLOAD, EpisodeUiAction.MARK_AS_PLAYED)
             LedgerState.QUEUED, LedgerState.DOWNLOADING -> setOf(EpisodeUiAction.CANCEL)
-            LedgerState.DOWNLOADED -> setOf(EpisodeUiAction.DOWNLOAD_AGAIN, EpisodeUiAction.MARK_AS_PLAYED)
+            LedgerState.DOWNLOADED ->
+                setOf(
+                    EpisodeUiAction.DOWNLOAD_AGAIN,
+                    EpisodeUiAction.MARK_AS_PLAYED,
+                    EpisodeUiAction.MARK_AS_UNPLAYED,
+                )
             // "Download anyway": the user may override a decision made here or on another client.
-            LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY -> setOf(EpisodeUiAction.DOWNLOAD)
+            LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY ->
+                setOf(EpisodeUiAction.DOWNLOAD, EpisodeUiAction.MARK_AS_UNPLAYED)
             LedgerState.ERROR -> setOf(EpisodeUiAction.RETRY, EpisodeUiAction.MARK_AS_PLAYED)
         }
     return triage + browse

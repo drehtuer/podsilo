@@ -4266,3 +4266,61 @@ what this app must guarantee is that the two fields agree, and that is what the 
 The remaining half of step 5 is a device round trip, which no JVM test can stand in for.
 
 **721 tests, 0 failures, 3 skipped** across the three steps.
+
+---
+
+## 2026-08-14 (later still) — two reports from the round trip, both of them rules being reversed
+
+The author tested the device round trip and came back with three things: marking played works;
+downloading does not mark anything on Nextcloud; and there is no way to mark an episode unplayed.
+
+**Both of the last two contradict rules this project wrote down deliberately**, and both are now
+reversed with the documents amended rather than worked around. That is the interesting part of the
+session, so it is worth being precise about *why* each rule fell.
+
+### A download now emits `PLAY` too (`docs/decisions/0023`)
+
+CLAUDE.md §5 forbade this in terms: a `PLAY` the user did not perform "asserts something untrue and
+can trigger auto-delete in other clients". The reasoning was sound and the conclusion was wrong,
+because of a fact discovered *after* the rule was written: gpoddersync discards every non-`PLAY`
+action and still answers 200 (ADR 0008). So the honest signal the rule insisted on is, on the
+author's server, **no signal at all** — a downloaded episode stayed new everywhere else for ever.
+
+The rule was written when `DOWNLOAD` was believed to work. It is not that the author overruled a good
+argument; it is that the argument's premise stopped being true and nobody had gone back to it. Worth
+watching for: a rule justified by a mechanism is only as good as the mechanism.
+
+The auto-delete risk is real and is now accepted knowingly, in the ADR rather than in a shrug.
+
+### *Mark as unplayed* exists (`docs/decisions/0024`)
+
+Declined three times — issue #46, D4, and a backlog entry — and every decline was **the same
+objection, which was never about the feature**: "undecided" is the absence of a ledger row, so
+un-marking means deleting one, and CLAUDE.md §11 calls that row "the only dedup authority, and it
+must outlive the file".
+
+Separating those two sentences is the whole change. A new `UNPLAYED` state means the row survives —
+`writtenFileName`, `attempts`, history intact — while the *To decide* predicate treats the episode as
+undecided again: `NOT IN (SELECT episodeKey FROM episode_ledger WHERE state != 'UNPLAYED')`. There is
+still no delete anywhere in the repository.
+
+It also only became expressible today. `docs/decisions/0022` established that `PLAY` with
+`position = 0` is how the API says *unread*; before that there was no way to tell Nextcloud about it
+even if the local side had worked.
+
+**D4 survives in the half that matters**: a *remote* unread mark still cannot re-open a decision made
+here. This device's user pressing a button is a decision; a row arriving over the wire is not.
+
+### What the tools caught, and what they could not
+
+- **The compiler enumerated every `when`** that had to answer for a new enum value — five of them,
+  across three modules, each a real question about what the state means there.
+- **It could not see the SQL.** Adding `UNPLAYED` compiles perfectly while the feature silently does
+  nothing, because *To decide* is four hand-written queries. That is why the DAO test is the
+  load-bearing one, and why it was checked against the unfixed predicate.
+- **detekt asked for a split** of `EpisodeListViewModel.triage` when the new action pushed it past the
+  complexity ceiling, and the seam it wanted is genuine: actions that *write a decision* carry
+  durability rules, actions that only move the user around do not. Fifth time that ceiling has found
+  a boundary rather than a nuisance.
+
+730 tests, 0 failures, 3 skipped.

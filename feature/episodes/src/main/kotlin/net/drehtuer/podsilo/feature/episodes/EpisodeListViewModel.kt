@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.port.BulkScope
 import net.drehtuer.podsilo.core.model.port.BulkScopeKind
@@ -396,12 +397,40 @@ class EpisodeListViewModel(
         val episodes = episodeKeys.mapNotNull { episodeRepository.get(it) }
         if (episodes.isEmpty()) return
 
+        // Split along the line that matters: the first group *writes a decision* and therefore has
+        // durability rules, the second only moves the user around. detekt asked for the split when
+        // `MARK_AS_UNPLAYED` arrived, and it is a real seam rather than a threshold to suppress.
+        when (action) {
+            EpisodeUiAction.MARK_AS_PLAYED,
+            EpisodeUiAction.MARK_AS_UNPLAYED,
+            EpisodeUiAction.DOWNLOAD,
+            EpisodeUiAction.DOWNLOAD_AGAIN,
+            EpisodeUiAction.RETRY,
+            -> decide(episodes, action, notify)
+
+            EpisodeUiAction.CANCEL,
+            EpisodeUiAction.OPEN_IN_BROWSER,
+            EpisodeUiAction.COPY_LINK,
+            -> navigate(episodes, action)
+        }
+    }
+
+    /** The half that writes a ledger row, and therefore the half with rules about it. */
+    private suspend fun decide(
+        episodes: List<Episode>,
+        action: EpisodeUiAction,
+        notify: Boolean,
+    ) {
         when (action) {
             EpisodeUiAction.MARK_AS_PLAYED -> {
                 triageWriter.markAsPlayed(episodes)
                 if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.BulkApplied(episodes.size)))
             }
-            EpisodeUiAction.DOWNLOAD, EpisodeUiAction.DOWNLOAD_AGAIN, EpisodeUiAction.RETRY -> {
+            EpisodeUiAction.MARK_AS_UNPLAYED -> {
+                triageWriter.markAsUnplayed(episodes)
+                if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.MarkedUnplayed(episodes.size)))
+            }
+            else -> {
                 triageWriter.queue(episodes)
                 // userRequested only for a re-decision: it is the sole way past DownloadWorker's
                 // terminal-row refusal, and setting it unconditionally would erase that guarantee
@@ -410,11 +439,21 @@ class EpisodeListViewModel(
                 episodes.forEach { scheduler.enqueueDownload(it.episodeKey, userRequested) }
                 if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.Queued(episodes.size)))
             }
+        }
+    }
+
+    /** The half that writes nothing: cancelling work, or leaving the screen with a link. */
+    private suspend fun navigate(
+        episodes: List<Episode>,
+        action: EpisodeUiAction,
+    ) {
+        when (action) {
             EpisodeUiAction.CANCEL -> episodes.forEach { scheduler.cancelDownload(it.episodeKey) }
-            EpisodeUiAction.OPEN_IN_BROWSER -> episodes.firstOrNull()?.link?.let { emit(EpisodeListEffect.OpenUrl(it)) }
+            EpisodeUiAction.OPEN_IN_BROWSER ->
+                episodes.firstOrNull()?.link?.let { emit(EpisodeListEffect.OpenUrl(it)) }
             // Copying is not opening. Both used to emit OpenUrl, so *Copy episode link* launched a
             // browser and the "Link copied" snackbar was unreachable.
-            EpisodeUiAction.COPY_LINK ->
+            else ->
                 episodes.firstOrNull()?.link?.let {
                     emit(EpisodeListEffect.CopyLink(it))
                     emit(EpisodeListEffect.ShowMessage(SnackbarText.LinkCopied))

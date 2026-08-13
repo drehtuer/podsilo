@@ -52,6 +52,9 @@ fun EpisodeLedgerRow.toOutboundActions(): List<EpisodeAction> =
         // and on a server that keeps both, the later one wins.
         LedgerState.DOWNLOADED -> listOf(downloadAction(), playedAction())
         LedgerState.SKIPPED -> listOf(playedAction())
+        // The one action that *withdraws* a claim rather than making one, and the API's only way of
+        // saying it (`docs/decisions/0024`).
+        LedgerState.UNPLAYED -> listOf(unplayedAction())
         LedgerState.QUEUED, LedgerState.DOWNLOADING, LedgerState.ERROR, LedgerState.HANDLED_REMOTELY ->
             emptyList()
     }
@@ -63,6 +66,25 @@ private fun EpisodeLedgerRow.downloadAction() =
         guid = guid,
         action = EpisodeActionType.DOWNLOAD,
         timestamp = actionedAt.toGpodderTimestamp(),
+    )
+
+/**
+ * `position = 0` with the duration left intact — the encoding every gpodder client already uses for
+ * *unread*, and the only one the API offers: it cannot delete an action and has no `UNPLAYED` type.
+ *
+ * `total` keeps the real duration rather than being zeroed, matching what other clients write and
+ * leaving the row readable if the same episode is marked played again later.
+ */
+private fun EpisodeLedgerRow.unplayedAction(): EpisodeAction =
+    EpisodeAction(
+        podcast = feedUrl,
+        episode = enclosureUrl,
+        guid = guid,
+        action = EpisodeActionType.PLAY,
+        timestamp = actionedAt.toGpodderTimestamp(),
+        started = SKIP_STARTED_SECONDS,
+        position = 0,
+        total = durationSeconds ?: UNKNOWN_DURATION_SECONDS,
     )
 
 /** `position == total > 0` — the encoding every reader treats as *finished* (`docs/decisions/0022`). */
