@@ -50,6 +50,7 @@ import java.time.ZoneOffset
 class SyncWorkerTest {
     private lateinit var context: Context
     private val settings = FakeSettingsRepository()
+    private val log = RecordingLogRepository()
     private val client = FakeGpodderClient()
 
     @Before
@@ -75,6 +76,7 @@ class SyncWorkerTest {
                                 episodeLedgerRepository = FakeEpisodeLedgerRepository(),
                                 syncStateRepository = FakeSyncStateRepository(),
                                 gpodderClientFactory = { client },
+                                logRepository = log,
                                 clock = Clock.fixed(Instant.ofEpochMilli(0), ZoneOffset.UTC),
                             ),
                     )

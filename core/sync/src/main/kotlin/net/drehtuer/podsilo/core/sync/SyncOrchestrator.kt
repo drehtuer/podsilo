@@ -12,6 +12,9 @@ import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.GpodderClient
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 import net.drehtuer.podsilo.core.model.port.LedgerFilterState
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.LogRepository
+import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.SyncStateRepository
 import java.io.IOException
 import java.time.Clock
@@ -27,15 +30,17 @@ import java.time.Clock
  * with hand-written in-memory fakes, not a real database or `MockWebServer`.
  *
  * Exception classification (network `IOException` -> retryable, anything else -> non-retryable) is
- * provisional: it's based on what a pure-JVM port can throw in principle, not on `:core:gpodder`'s
- * actual Retrofit/OkHttp exception types, since that adapter doesn't exist yet (Tier 3). Revisit
- * once it does.
+ * still coarser than the adapter it now runs against: a failed GET surfaces as Retrofit's own
+ * `HttpException`, which is not an `IOException`, so an expired app password lands in the
+ * non-retryable branch and in the log as a plain SYNC failure. Typing that failure in the port is
+ * tracked in `docs/TODO.md`.
  */
 class SyncOrchestrator(
     private val feedRepository: FeedRepository,
     private val episodeLedgerRepository: EpisodeLedgerRepository,
     private val syncStateRepository: SyncStateRepository,
     private val gpodderClient: GpodderClient,
+    private val logRepository: LogRepository,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun sync(): SyncOutcome =
@@ -51,6 +56,10 @@ class SyncOrchestrator(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (network: IOException) {
+            record(
+                message = "Sync with Nextcloud failed: the server could not be reached.",
+                failure = network,
+            )
             SyncOutcome.Retry(network.message ?: "network error during sync")
         } catch (
             @Suppress("TooGenericExceptionCaught") unexpected: RuntimeException,
@@ -59,8 +68,40 @@ class SyncOrchestrator(
             // "worth retrying" (network-shaped) and "not" (everything else), not a swallowed bug --
             // see the class KDoc's note that this classification is provisional pending
             // :core:gpodder's real exception types.
+            record(
+                message = "Sync with Nextcloud failed.",
+                failure = unexpected,
+            )
             SyncOutcome.Failure(unexpected.message ?: "unexpected error during sync")
         }
+
+    /**
+     * Every failure ends up in the error log (S8) as well as in the returned [SyncOutcome], because
+     * the outcome reaches WorkManager and no further: a pass that fails on every attempt for four
+     * hours used to leave no trace a user could see, which is why issue #60 had to be diagnosed by
+     * reading source instead of by reading the app.
+     *
+     * Plain sentence first, technical half separate (`docs/UI.md` §11). The exception's own message
+     * is [detail] and never the headline — "unable to resolve host" is not a sentence the user asked
+     * for. Credentials are stripped by the store, not here ([LogRepository.record]).
+     *
+     * Every sync failure is [LogCategory.SYNC], including an expired app password. Distinguishing
+     * `AUTH` needs a typed failure from the GPodder port — the client currently throws Retrofit's
+     * own `HttpException` for a failed `GET` — and sniffing "401" out of a message string is the
+     * kind of thing that works until a server rewords it. Noted in `docs/TODO.md`.
+     */
+    private suspend fun record(
+        message: String,
+        failure: Throwable,
+    ) {
+        logRepository.record(
+            NewLogEntry(
+                category = LogCategory.SYNC,
+                message = message,
+                detail = "${failure::class.simpleName}: ${failure.message}",
+            ),
+        )
+    }
 
     /**
      * Full current set, not a delta -- CLAUDE.md section 5: a read-only follower doesn't need to
@@ -103,7 +144,17 @@ class SyncOrchestrator(
                 episodeLedgerRepository.markSynced(outbox.map { it.first.episodeKey })
                 null
             },
-            onFailure = { failure -> SyncOutcome.Retry(failure.message ?: "failed to push episode actions") },
+            onFailure = { failure ->
+                // Named separately from the generic sync failure because the reassurance is the
+                // point: nothing was lost, the rows are still unsynced, and the next pass sends them.
+                record(
+                    message =
+                        "${outbox.size} decision(s) could not be sent to Nextcloud. " +
+                            "They are kept here and will be sent again.",
+                    failure = failure,
+                )
+                SyncOutcome.Retry(failure.message ?: "failed to push episode actions")
+            },
         )
     }
 

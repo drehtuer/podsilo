@@ -29,7 +29,15 @@ class SyncOrchestratorTest {
         ledgerRepository: FakeEpisodeLedgerRepository = FakeEpisodeLedgerRepository(),
         syncStateRepository: FakeSyncStateRepository = FakeSyncStateRepository(),
         gpodderClient: FakeGpodderClient = FakeGpodderClient(),
-    ) = SyncOrchestrator(feedRepository, ledgerRepository, syncStateRepository, gpodderClient, fixedClock)
+        logRepository: RecordingLogRepository = RecordingLogRepository(),
+    ) = SyncOrchestrator(
+        feedRepository,
+        ledgerRepository,
+        syncStateRepository,
+        gpodderClient,
+        logRepository,
+        fixedClock,
+    )
 
     private fun downloadedRow(episodeKey: String = "guid-1") =
         EpisodeLedgerRow(

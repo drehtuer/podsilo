@@ -4,6 +4,7 @@ package net.drehtuer.podsilo.core.gpodder
 
 import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.port.EpisodeAction
+import net.drehtuer.podsilo.core.model.port.EpisodeActionPage
 import net.drehtuer.podsilo.core.model.port.EpisodeActionType
 import net.drehtuer.podsilo.core.model.port.LoginResult
 import net.drehtuer.podsilo.core.sync.parseGpodderTimestamp
@@ -37,6 +38,7 @@ import kotlin.time.Duration.Companion.seconds
  * log file.
  */
 private const val POLL_TIMEOUT_MINUTES = 15L
+private const val MILLIS_PER_SECOND = 1_000L
 
 fun main(args: Array<String>) {
     val host = args.firstOrNull() ?: error("usage: nextcloudProbe <host>  (e.g. cloud.example.org)")
@@ -46,6 +48,9 @@ fun main(args: Array<String>) {
     // by whoever is signed in to the browser, so without this the probe would happily post actions
     // to a real account if the wrong session approved the link.
     val writeAs = args.getOrNull(2)?.takeIf { it.isNotBlank() }
+
+    // Read-only detail dump: the newest N actions, with RePod's reading and ours side by side.
+    val recent = args.getOrNull(3)?.toIntOrNull() ?: 0
 
     // Generous timeouts: the poll deliberately blocks until a human acts.
     val http =
@@ -98,7 +103,7 @@ fun main(args: Array<String>) {
             return@runBlocking
         }
 
-        listSubscriptions(http, result)
+        listSubscriptions(http, result, recent)
         if (writeAs != null) {
             verifyActionWrites(http, result)
             realDataSyncPass(http, result)
@@ -115,6 +120,7 @@ fun main(args: Array<String>) {
 private suspend fun listSubscriptions(
     http: OkHttpClient,
     result: LoginResult,
+    recent: Int,
 ) {
     val client = RetrofitGpodderClientFactory(http).create(result.credentials)
 
@@ -135,8 +141,59 @@ private suspend fun listSubscriptions(
         .forEach { (action, count) -> println("  $action: $count") }
 
     reportTimestamps(actions.actions.map { it.timestamp })
+    if (recent > 0) reportRecent(actions, recent)
     println()
     println("Nothing was written. No episode actions were posted.")
+}
+
+/**
+ * The newest [count] actions in full, with the two readings of each one printed side by side.
+ *
+ * This exists because the whole of issue #60 lives in the gap between them. **RePod decides "played"
+ * from `position`/`total`** (`position > 0 && total > 0 && position >= total`, `src/utils/status.ts`)
+ * and writes *mark as unread* as a `PLAY` with `position = 0`. **Podsilo's `reconcile` reads the
+ * action type alone** and treats every `PLAY` as terminal. If those two columns ever disagree, an
+ * episode is in one state on the server and another on the phone, and no amount of syncing fixes it.
+ *
+ * The `since` column is the other half: the server selects `timestamp_epoch > since` on the
+ * *client-authored* timestamp, while the value it hands back — and that Podsilo stores as the next
+ * `since` — is the server's own clock. An action whose authored time is older than the cursor is
+ * invisible for ever, so printing both is what turns that from an argument into a fact.
+ */
+private fun reportRecent(
+    page: EpisodeActionPage,
+    count: Int,
+) {
+    val serverNowMillis = page.timestamp * MILLIS_PER_SECOND
+    val newest =
+        page.actions
+            .sortedByDescending { parseGpodderTimestamp(it.timestamp) ?: 0L }
+            .take(count)
+
+    println()
+    println("NEWEST $count ACTIONS (RePod's reading vs. Podsilo's)")
+    newest.forEach { action ->
+        val authored = parseGpodderTimestamp(action.timestamp)
+        val rePod = if (action.isEndedByRePodsRule()) "played" else "NOT played"
+        // Every DOWNLOAD/PLAY/DELETE is terminal to reconcile() — the type alone decides.
+        val podsilo = "HANDLED_REMOTELY"
+        val skew = authored?.let { (it - serverNowMillis) / MILLIS_PER_SECOND }
+        println("  ${action.timestamp}  ${action.action}")
+        println(
+            "    guid=${action.guid ?: "(none)"}  started=${action.started} " +
+                "position=${action.position} total=${action.total}",
+        )
+        println("    RePod: $rePod   |   Podsilo: $podsilo${if (rePod == "NOT played") "  ← DISAGREE" else ""}")
+        skew?.let { println("    authored ${it}s relative to the server clock") }
+    }
+}
+
+/** RePod's `hasEnded`, transcribed from `src/utils/status.ts` so the comparison is theirs, not mine. */
+private fun EpisodeAction.isEndedByRePodsRule(): Boolean {
+    if (action == EpisodeActionType.DELETE) return true
+    val at = position ?: 0
+    val end = total ?: 0
+    return at > 0 && end > 0 && at >= end
 }
 
 /**

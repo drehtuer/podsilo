@@ -4,6 +4,7 @@ package net.drehtuer.podsilo.core.gpodder
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
@@ -14,7 +15,11 @@ import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.FeedRefreshMetadata
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.LogEntry
+import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.LoginResult
+import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.SyncStateRepository
 import net.drehtuer.podsilo.core.sync.SyncOrchestrator
 import okhttp3.OkHttpClient
@@ -46,7 +51,7 @@ internal suspend fun realDataSyncPass(
     val feeds = InMemoryFeeds()
     val ledger = InMemoryLedger()
     val syncState = InMemorySyncState()
-    val orchestrator = SyncOrchestrator(feeds, ledger, syncState, client)
+    val orchestrator = SyncOrchestrator(feeds, ledger, syncState, client, PrintingLog())
 
     println()
     println("REAL-DATA SYNC PASS")
@@ -231,4 +236,21 @@ private class InMemorySyncState : SyncStateRepository {
     override suspend fun save(state: SyncState) {
         this.state = state
     }
+}
+
+/**
+ * The probe prints failures as it goes, so the log is a passthrough rather than a store — but the
+ * orchestrator now requires one, and printing what it would have recorded is genuinely useful here:
+ * it shows the sentence a user would see for a real server's real failure.
+ */
+private class PrintingLog : LogRepository {
+    override fun observe(category: LogCategory?): Flow<List<LogEntry>> = flowOf(emptyList())
+
+    override suspend fun record(entry: NewLogEntry) {
+        println("   log[${entry.category}] ${entry.message}${entry.detail?.let { " — $it" }.orEmpty()}")
+    }
+
+    override suspend fun clear() = Unit
+
+    override suspend fun exportPlainText(): String = ""
 }

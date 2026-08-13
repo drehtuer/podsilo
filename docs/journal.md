@@ -3917,3 +3917,221 @@ against `main` in a way that a branch changing code does not. Two of main's own 
 `docs/decisions/0011`, `docs/logo.md` and `docs/UI_interface.md` — documents this branch deletes —
 which is not a mistake on either side, just what happens when a rename lands late. All four
 citations were repointed in the merge.
+
+---
+
+## 2026-08-13 (later) — issue #60, step 0: making the failure visible before fixing it
+
+**Attempted:** the first step of `docs/TODO.md`'s plan for #60 — wire the two missing error-log
+write points, and with them the test that no entry ever carries a credential. Deliberately *not* the
+fix: the point of doing this first is that three of the candidate faults are indistinguishable from
+outside the app, and two of them are cheap to "fix" wrongly.
+
+697 tests (+13), 0 failures, 3 skipped; `ktlintCheck detekt test` green.
+
+### What was built
+
+`SyncOrchestrator` now records every failed pass, and the push failure gets its own sentence because
+the reassurance is the useful half: *"2 decision(s) could not be sent to Nextcloud. They are kept
+here and will be sent again."* — with a test that the rows really do stay unsynced, since a message
+promising that while `markSynced` had already run would be worse than silence.
+
+`DownloadWorker` records every failed **attempt**, not only the last. The DAO collapses repeats onto
+one entry with a count, so logging each attempt is what turns "it failed three times overnight" from
+an inference into a `×3` the user can read. A failure caused by a lost folder or a full disk is filed
+under `STORAGE` rather than `DOWNLOAD`, and its sentence names the fix rather than offering a retry
+that cannot work.
+
+### The test was supposed to be a test, and became a design change
+
+The plan called for *"the test that no entry ever contains the app password, the Basic-auth header,
+or a URL with credentials"*. Writing it made the shape of the problem obvious: an assertion at five
+write points across four modules is a rule that the sixth forgets. So redaction moved **into the
+store** — `LogRepositoryImpl.record` applies `redactSecrets` — and the test asserts the store, not
+the callers.
+
+Only free text is redacted. `feedUrl` and `episodeKey` are left intact deliberately: the UI navigates
+by them, and a feed URL is already displayed on S1 as the title fallback, so scrubbing it in the log
+alone would break *tap an entry to reach the episode* in exchange for nothing.
+
+### Two things worth keeping
+
+**The first regex left the credential in the log.** `(authorization\s*[:=]\s*)\S+` looks right and
+is not: `\S+` stops at the space after `Basic`, so the header became `Authorization: <redacted>
+dXNlcjpwYXNzd29yZA==` — a redaction marker with the secret still sitting next to it, which is worse
+than no redaction because it looks handled. The table caught it on the first run. Review would not
+have; I had already read that line twice.
+
+**An existing test was weaker than its own comment claimed.** `LogRepositoryTest` had a case saying
+the store "cannot scrub what it is handed — the invariant is enforced at the *write points*
+(asserted in `:app`)". Nothing in `:app` asserted it, and the test itself only checked that a clean
+entry stayed clean, which is true of any implementation including a broken one. That is the third
+time this project has found a test whose comment described an intention rather than the assertion
+underneath it, and the pattern is always the same: the comment names something *elsewhere* that
+turns out not to exist.
+
+### Not done, and deliberately
+
+`ManualNextcloudProbe` against the author's real server is step 0's third item and needs a human at a
+browser. It is the thing that turns §4 and §6 of the plan from suspicions into facts, so it stays
+open rather than being quietly dropped.
+
+Also noted while in there: a failed `GET` surfaces as Retrofit's own `HttpException`, which is not an
+`IOException`, so an expired app password lands in the orchestrator's *non-retryable* branch and in
+the log as a plain `SYNC` failure rather than `AUTH`. Sniffing "401" out of a message string works
+until a server rewords it, so the fix is a typed failure in the port — recorded in `docs/TODO.md`
+rather than done here.
+
+---
+
+## 2026-08-13 (later still) — a phone over Wi-Fi, and a probe that answered half the question
+
+**Attempted:** run the device test set against a real phone, and close step 0's last item — the
+read-only probe against the author's Nextcloud, which needs a human at a browser.
+
+Both ran. **Device set: 60 declared, 54 passed, 0 failed, 6 skipped** — identical to the 2026-08-11
+USB run, which is the useful part, because this one went over wireless. **Probe: full round trip
+verified** against the real server on the `podsilo` test account.
+
+### Four ways to not have a device attached, in one session
+
+1. **I walked into §9.3 on the first command.** `adb devices` in the container started a USB-blind
+   server that, because the network namespace is shared, also answers for WSL — the exact failure the
+   docs open with. Killed it. Then the author said *wireless*, which **inverts** the rule, so the
+   container-local server was correct after all and I started one again deliberately. Both moves were
+   right; what was wrong was doing the first one before knowing the transport.
+2. **`adb connect` was refused although the port was open.** A raw TCP connect to the phone's port
+   succeeded and a scan of the whole ephemeral range found that port and nothing else — so the phone
+   was listening and simply would not talk to us. Wireless debugging requires pairing *per adb key*,
+   and the container's key had never been paired.
+3. **The pairing port closes faster than a human relay.** The first attempt failed with
+   `protocol fault (couldn't read status message)`, and by the time I checked, the port was refusing
+   connections. §9.4 documents that the pairing port is not the connect port; it does not say that
+   the window is short enough to lose a round trip to, which is a real cost when the person reading
+   the code is not the person holding the phone. The second attempt, run as a single
+   pair-then-connect command, worked first time.
+4. **An orphaned test package blocked every install.** `net.drehtuer.podsilo.test` was still on the
+   phone from 2026-08-11 — the app itself was not — signed with a different debug keystore, so
+   `INSTALL_FAILED_UPDATE_INCOMPATIBLE` killed `:app`. Uninstalling it printed
+   `Failure [DELETE_FAILED_INTERNAL_ERROR]` and *worked anyway*; the package was gone on the next
+   query. Trusting adb's own success report there would have been the wrong move in both directions.
+
+There was no backup to take before any of this, which is worth recording because it inverted a
+decision: the author chose "export a backup first", and the phone turned out not to have the app
+installed at all. Checking what is actually on the device beat asking what to preserve.
+
+### `connectedDebugAndroidTest` at the root is not the device set
+
+Running the raw Gradle task instead of `scripts/device-test.sh` — because the script's guard refuses
+on wireless (a known backlog item) — crashed in `:core:feed`, a module with **no** instrumented tests
+at all: it still builds an empty test APK, and that APK has no `AndroidJUnitRunner` in it, so
+instantiation fails and the whole run stops. The script's curated module list is not decoration; it
+is the list of modules where the task means something. Bypassing a script is fine, but bypassing it
+without reading it costs a run.
+
+### What the probe settled, and what it did not
+
+**Settled, live, against a real server:**
+
+- **ADR 0008 holds.** A posted `DOWNLOAD` is discarded and the response is still 2xx; the `PLAY`
+  posted beside it is kept. All 68 pre-existing actions in the account are `PLAY` — there is no
+  `DOWNLOAD` in there, and there never will be.
+- **The wire path is not the bug.** Mark played locally → push → echo back → still `SKIPPED`, still
+  synced, and a third pass changes nothing. Timestamps all arrive as `+00:00` and all 68 parse.
+- So issue #60 is what the plan says it is: the mechanism works and almost nothing triggers it.
+
+**Not settled, and I nearly claimed otherwise.** The probe's output shows `position=1800 total=1800`
+for the episode it marked, which looks like evidence that real episodes carry usable durations. It is
+not: **`1800` is the probe's own hardcoded constant.** Checked before writing it up rather than
+after. What *is* real evidence sits beside it — two actions written by another client on 2026-08-03
+carry `2398` and `1854`, odd numbers that came from a feed — so third-party marks do carry durations.
+D2 (what to send when a feed declares none) is still open and still needs the author.
+
+**Also not settled: the `since` cursor (§4 of the plan).** That needs an action authored by RePod
+*after* our cursor advanced, and no one marked anything in RePod during the window. Asked for; the
+approval came without it. Worth one more attempt before Step 4 is designed.
+
+### A tool that reported success for a failed run
+
+The harness reported the first device run as "completed (exit code 0)" while the build had failed.
+The command was `… > log 2>&1; echo "EXIT=$?"` — the shell's own status is `echo`'s, not Gradle's.
+The log said `EXIT=1`. Same shape as the `| tail -60` mistake recorded on 2026-08-11: **the exit
+status of a pipeline or a sequence is the last thing in it**, and the last thing is rarely the thing
+under test. Later runs write `REALEXIT=` from the command itself.
+
+### The probe found a bug that reading two codebases had not
+
+The author marked one episode **unread** and five **played** in RePod, and the probe's new
+`-Precent=N` dump — RePod's reading of each action beside ours — printed this:
+
+```
+2026-08-13T23:23:34+00:00  PLAY
+  guid=69af61b1b58ea3074ddfc173  started=0 position=0 total=1800
+  RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+```
+
+**A *mark as unread* is a `PLAY` with `position = 0`.** It does not delete an action and does not use
+a different type, because the API has no way to express either. RePod reads it back as unplayed;
+`reconcile` reads the action type alone and files it as `HANDLED_REMOTELY`, which is terminal, so the
+one episode the author explicitly said they had *not* listened to is the one Podsilo hides from *To
+decide* for ever.
+
+I had read both codebases and predicted the *outbound* half of this (D2: our `position = total = 0`
+renders as unplayed in RePod). I did not predict the inbound mirror image, and I would not have: it
+needs the observation that "unread" is a *write*, not an absence, which is obvious in one line of
+`markAs` and invisible in the shape of the API. Six lines of read-only probe output beat two careful
+source reads.
+
+The two are one decision, which is now **D7**: the same field pair, read from both sides, and the
+answers have to agree.
+
+### And the timestamp skew is real, in the harmless direction
+
+Every RePod-authored action came back **~6 980 seconds — an hour and 56 minutes — ahead of the
+server's own clock**. That is `formatEpisodeTimestamp` writing local time with no offset while
+gpoddersync parses it as UTC, exactly as predicted from source, for an author at UTC+2.
+
+Ahead is the survivable direction: a future-dated action is always newer than our cursor, so it
+arrives (and keeps arriving for two hours). A client *behind* the server's clock would be dropped
+silently and permanently. Step 4's overlap window is now justified by a measurement rather than by an
+argument.
+
+Also worth recording: only **three** of the five played marks reached the server. Three arrived
+within twelve seconds of each other and the fourth is the unread flip; the other two are not in the
+log at all. Not investigated — it may be RePod, it may be a mis-tap — but a claim of "five marked,
+five synced" would have been wrong, and the probe is the only reason I know.
+
+### The flip made the bug bigger, and explained the two "missing" marks
+
+The author then reversed it — latest episode to *read*, the previous five to *unread* — and the
+second probe is the one that matters:
+
+```
+position=0 total=2838   RePod: NOT played  ← DISAGREE
+position=0 total=2398   RePod: NOT played  ← DISAGREE
+position=0 total=2766   RePod: NOT played  ← DISAGREE
+position=0 total=3082   RePod: NOT played  ← DISAGREE
+position=0 total=1854   RePod: NOT played  ← DISAGREE
+position=1800 total=1800  RePod: played
+```
+
+**`total` is real on every unread mark.** RePod's `markAs` reuses the stored `total` and zeroes only
+`position`, so "unread" for any episode with a history is `position = 0, total = <duration>`. Five of
+the six actions in that window disagree with Podsilo. This is not an edge case at the boundary of a
+missing duration — it is the normal shape, and I had described it in the plan as if it were narrow.
+
+Two things fell out that I would not have got from the source:
+
+- **The two "missing" played marks were never missing.** Both were already played from 2026-08-03, so
+  RePod's toggle had nothing to post — its button offers *unread* for an episode already read. The
+  proof is that flipping all five to unread produced exactly five writes: all five were in the played
+  state, three freshly and two since August. Yesterday's "only three of five arrived" was a correct
+  observation and a wrong implication, and it is worth noticing that I flagged it as unexplained
+  rather than asserting a lost write — that is the only reason it cost nothing.
+- **The two shapes are distinguishable on the wire**, which the first probe could not show. An
+  explicit unread is `position = 0, total > 0`; our own duration-less skip is `position = 0,
+  total = 0`. D7 therefore turns from a knot into a choice: settle D2 and adopt RePod's rule
+  verbatim, or special-case `total == 0` now and delete the branch when D2 lands.
+
+Also: the row count stayed at 72 across both flips. One row per episode, updated in place, exactly as
+`EpisodeActionSaver` reads.

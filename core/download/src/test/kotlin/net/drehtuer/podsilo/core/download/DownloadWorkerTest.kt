@@ -13,6 +13,7 @@ import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.model.port.LogCategory
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
@@ -52,6 +53,7 @@ class DownloadWorkerTest {
     private lateinit var target: FakeDownloadTarget
     private val ledger = FakeEpisodeLedgerRepository()
     private val syncTrigger = RecordingSyncTrigger()
+    private val log = RecordingLogRepository()
     private val progressUpdater = RecordingProgressUpdater()
     private val clock = Clock.fixed(Instant.ofEpochMilli(NOW_MILLIS), ZoneId.of("Europe/Berlin"))
 
@@ -143,6 +145,7 @@ class DownloadWorkerTest {
                             ),
                         notifications = DownloadNotifications(appContext),
                         syncTrigger = syncTrigger,
+                        logRepository = log,
                         clock = clock,
                     )
             }
@@ -313,6 +316,71 @@ class DownloadWorkerTest {
             assertEquals(LedgerState.ERROR, ledger.get(EPISODE_KEY)?.state)
         }
 
+    /**
+     * The row's `lastError` is the *current* state; the log is the history. Before this, a download
+     * that failed every night left nothing S8 could show, which is half of issue #60's diagnosis
+     * problem.
+     */
+    @Test
+    fun `a failed download is written to the error log, naming the episode it belongs to`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(503))
+            ledger.upsert(queuedRow())
+
+            buildWorker().doWork()
+
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.DOWNLOAD, entry.category)
+            assertEquals(EPISODE_KEY, entry.episodeKey)
+            assertEquals(FEED_URL, entry.feedUrl)
+            assertTrue("the sentence is plain language", entry.message.startsWith("This episode could not"))
+            assertTrue("the attempt count belongs in the detail", checkNotNull(entry.detail).contains("attempt 1"))
+        }
+
+    /**
+     * Every attempt records, not only the last: the DAO collapses repeats into one entry with a
+     * count, and that count is the only way a user can tell "it failed once" from "it has been
+     * failing all night" (`docs/UI.md` §11).
+     */
+    @Test
+    fun `each attempt records, so the store can collapse them into a count`() =
+        runBlocking {
+            repeat(2) {
+                server.enqueue(MockResponse().setResponseCode(503))
+                buildWorker().doWork()
+            }
+
+            assertEquals(2, log.recorded.size)
+            assertEquals(
+                "the identity has to match for the store to collapse them",
+                1,
+                log.recorded
+                    .map { it.category to it.message }
+                    .toSet()
+                    .size,
+            )
+        }
+
+    /**
+     * A lost folder is a storage problem the user fixes elsewhere, so it is filed under `STORAGE`
+     * and its sentence names the fix rather than offering a retry that cannot work
+     * (`docs/architecture.md` §11).
+     */
+    @Test
+    fun `a lost download folder is a storage entry that names the fix`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(200).setBody(mp3Body()))
+            target.unavailable = DownloadFolderUnavailableException("tree uri revoked")
+            ledger.upsert(queuedRow())
+
+            buildWorker().doWork()
+
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.STORAGE, entry.category)
+            assertTrue(entry.message.contains("Choose it again"))
+            assertFalse("retrying cannot work until the folder is back", entry.message.contains("Retry"))
+        }
+
     @Test
     fun `a retry reuses the file name the ledger recorded`() =
         runBlocking {
@@ -365,6 +433,7 @@ class DownloadWorkerTest {
                                     ),
                                     DownloadNotifications(appContext),
                                     syncTrigger,
+                                    log,
                                     clock,
                                 )
                         },

@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package net.drehtuer.podsilo.core.sync
+
+import kotlinx.coroutines.runBlocking
+import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.LedgerState
+import net.drehtuer.podsilo.core.model.SyncOutcome
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.IOException
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+
+/**
+ * A failed sync pass has to leave a trace the user can read. Before this, the only record of a
+ * failure was the [SyncOutcome] handed to WorkManager, which reaches no screen — so a pass failing
+ * on every attempt for four hours was indistinguishable from one that never ran (issue #60).
+ *
+ * These assert the *contract* of the entries, not their wording: a category, a plain sentence that
+ * is not the exception's own text, and the technical half kept separate (`docs/UI.md` §11).
+ */
+class SyncFailureLoggingTest {
+    private val fixedClock: Clock = Clock.fixed(Instant.parse("2026-08-13T10:00:00Z"), ZoneOffset.UTC)
+    private val log = RecordingLogRepository()
+
+    private fun orchestrator(
+        gpodderClient: FakeGpodderClient,
+        ledgerRepository: FakeEpisodeLedgerRepository = FakeEpisodeLedgerRepository(),
+    ) = SyncOrchestrator(
+        FakeFeedRepository(),
+        ledgerRepository,
+        FakeSyncStateRepository(),
+        gpodderClient,
+        log,
+        fixedClock,
+    )
+
+    @Test
+    fun aSuccessfulPassRecordsNothing() =
+        runBlocking {
+            val outcome = orchestrator(FakeGpodderClient()).sync()
+
+            assertEquals(SyncOutcome.Success, outcome)
+            assertTrue("a failure log is not a journal (`docs/UI.md` §11)", log.recorded.isEmpty())
+        }
+
+    @Test
+    fun anUnreachableServerIsRecordedAsSync() =
+        runBlocking {
+            val failure = IOException("Unable to resolve host \"cloud.example.org\"")
+
+            val outcome = orchestrator(FakeGpodderClient(subscriptionsFailure = failure)).sync()
+
+            assertTrue(outcome is SyncOutcome.Retry)
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.SYNC, entry.category)
+            assertEquals("Sync with Nextcloud failed: the server could not be reached.", entry.message)
+            assertTrue("the exception text belongs in the detail", entry.detail.orEmpty().contains("resolve host"))
+        }
+
+    @Test
+    fun anUnexpectedFailureIsRecordedToo() =
+        runBlocking {
+            val failure = IllegalStateException("malformed response body")
+
+            val outcome = orchestrator(FakeGpodderClient(episodeActionsFailure = failure)).sync()
+
+            assertTrue(outcome is SyncOutcome.Failure)
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.SYNC, entry.category)
+            assertEquals("Sync with Nextcloud failed.", entry.message)
+            assertTrue(entry.detail.orEmpty().contains("IllegalStateException"))
+        }
+
+    /**
+     * The push failure gets its own sentence because the reassurance is the useful part: the rows
+     * are still in the outbox, so nothing was lost. A test pins that they really are.
+     */
+    @Test
+    fun aFailedPushSaysNothingWasLostAndLeavesTheRowsUnsynced() =
+        runBlocking {
+            val ledger = FakeEpisodeLedgerRepository()
+            ledger.upsert(skippedRow("guid-1"))
+            ledger.upsert(skippedRow("guid-2"))
+
+            val outcome =
+                orchestrator(
+                    FakeGpodderClient(postResult = Result.failure(IOException("HTTP 503"))),
+                    ledger,
+                ).sync()
+
+            assertTrue(outcome is SyncOutcome.Retry)
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.SYNC, entry.category)
+            assertTrue("the count is what tells the user how much is waiting", entry.message.startsWith("2 decision"))
+            assertTrue(entry.message.contains("will be sent again"))
+            assertEquals("nothing may be marked synced without a 2xx", 2, ledger.getUnsynced().size)
+        }
+
+    /** No message may carry the exception's own text as the headline — that is what `detail` is for. */
+    @Test
+    fun thePlainSentenceIsNeverTheExceptionMessage() =
+        runBlocking {
+            val raw = "failed to connect to cloud.example.org/10.0.0.1:443 after 30000ms"
+
+            orchestrator(FakeGpodderClient(subscriptionsFailure = IOException(raw))).sync()
+
+            val entry = log.recorded.single()
+            assertFalse("the raw failure belongs in the detail, not the headline", entry.message.contains(raw))
+            assertTrue(entry.detail.orEmpty().contains(raw))
+        }
+
+    private fun skippedRow(episodeKey: String) =
+        EpisodeLedgerRow(
+            episodeKey = episodeKey,
+            feedUrl = "https://example.com/feed.xml",
+            enclosureUrl = "https://example.com/$episodeKey.mp3",
+            state = LedgerState.SKIPPED,
+            actionedAt = fixedClock.millis(),
+            syncedToServer = false,
+            attempts = 0,
+            lastError = null,
+            writtenFileName = null,
+            durationSeconds = 1_800,
+        )
+}
