@@ -1,0 +1,96 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+# 0022 — A `PLAY` means *ended*, in both directions
+
+**Status:** Accepted (2026-08-14). Amends the outbound encoding in `docs/architecture.md` §6 and the
+inbound reconciliation rule in the same section. Settles **D2** and **D7** of `docs/TODO.md`.
+
+## Context
+
+Issue #60 reported that state did not move between Podsilo and Nextcloud. Most of that was triggers
+that had never been wired, fixed in #63. Underneath it were two defects in *what we write and how we
+read*, and they turned out to be the same field pair seen from opposite sides.
+
+`position`/`total` on a `PLAY` action are not decoration. **gpoddersync stores and interprets
+nothing**; every judgement about whether an episode counts as played belongs to the reading client.
+RePod — the Nextcloud web app the author actually looks at — decides it in `src/utils/status.ts`:
+
+```js
+export function hasEnded(action) {
+	return action
+		&& (action.action.toLowerCase() === 'delete'
+			|| (action.position > 0 && action.total > 0 && action.position >= action.total))
+}
+```
+
+Two consequences, both measured against the author's own server on 2026-08-13 rather than reasoned
+about:
+
+1. **Outbound.** Our skip encoding sent `total = durationSeconds ?: 0` with `position = total`. For a
+   feed that declares no `itunes:duration` that is `0/0`, which the rule above can never read as
+   played. The action was stored, returned by the API, and rendered as unplayed for ever.
+2. **Inbound.** The API has no way to delete an action and no *unread* action type, so **that is how
+   a client says unread**: RePod's `markAs(read = false)` writes a `PLAY` with `position = 0`,
+   keeping whatever `total` the row already had. `reconcile` looked at the action *type* alone, so an
+   episode the author had explicitly marked **not listened to** became `HANDLED_REMOTELY` — terminal,
+   never revisited, and hidden from *To decide*.
+
+The probe printed both readings side by side. After the author flipped five episodes back to unread,
+five of the six actions in that window disagreed:
+
+```
+position=0 total=2838   RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+position=0 total=2398   RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+position=0 total=2766   RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+position=0 total=3082   RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+position=0 total=1854   RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+position=1800 total=1800  RePod: played     |   Podsilo: HANDLED_REMOTELY
+```
+
+`total` is real and non-zero on every unread mark, because `markAs` reuses the stored duration. This
+is not a corner case near a missing duration — it is *the* representation of unread for any episode
+with a history.
+
+## Decision
+
+**One rule, applied on both sides: a `PLAY` asserts that the episode is finished, and it says so with
+`position >= total > 0`.**
+
+- **Outbound**, when the feed declared no usable duration, a skip sends `position = total = 1`
+  instead of `0`.
+- **Inbound**, a `PLAY` counts as *handled elsewhere* only when it reads as ended by the rule above.
+  `DOWNLOAD` and `DELETE` are unchanged and remain terminal on type alone.
+
+### Why `1` is not the fabricated duration CLAUDE.md §6 forbids
+
+That rule exists to stop us inventing a *plausible* value — a guessed 45 minutes that another client
+would display as fact. One second is the opposite of plausible: it is a marker, it claims nothing
+about length, and no interface will show it as a duration worth reading. What it does carry is the
+only claim a skip actually makes, which is *finished*.
+
+The alternative was accepting that every episode from a duration-less feed stays visibly unplayed in
+Nextcloud for ever. That is not a neutral default; it is the app failing at the one job CLAUDE.md §1
+calls central.
+
+### Why RePod's rule verbatim, rather than one of our own
+
+It is the client the author reads the state in. Two nearly-identical rules that disagree at one edge
+are worse than one shared rule, and the edge here is exactly where the bug was. `DOWNLOAD` is the one
+addition, and it does not conflict: their question is "was this played", ours is "has another client
+handled this", and CLAUDE.md §5 says a remote `DOWNLOAD` means do not download it here.
+
+## Consequences
+
+- **A legacy `0/0` action stops counting as handled.** Skips this app posted before today sit in the
+  server's log in a shape that now reads as *not* ended, so a device that has never seen them would
+  offer those episodes for triage again. The device that made each decision is unaffected — its local
+  row is terminal and reconciliation never revisits it — so this costs a re-decision only on a fresh
+  install or a second device. Accepted knowingly: the alternative is a permanent special case for our
+  own past output, and D2 exists precisely so that shape stops being produced.
+- **A partial listen is not a decision**, which it never should have been: an episode someone stopped
+  halfway through on another device now stays in *To decide* here rather than vanishing.
+- **`DOWNLOAD` remains invisible on a real Nextcloud** (`docs/decisions/0008`) — unchanged and
+  unrelated, but worth restating because it is the other half of #60's title.
+- The tests use the measured shapes rather than invented ones: `0/2838` (RePod unread), `1800/1800`
+  (RePod played), `1/1` (ours, duration-less), `0/0` (ours, legacy), `900/1800` (partial), and a
+  `PLAY` with no playback values at all.

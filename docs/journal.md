@@ -4201,3 +4201,46 @@ Two lessons, one specific and one not:
 
 A fourth test was wrong in a more ordinary way: it awaited a preview dialog that an empty scope never
 opens, and hung for three seconds before Turbine gave up. Rewritten to test the reachable path.
+
+---
+
+## 2026-08-14 (later) — issue #60, steps 3 and 3b: one field pair, two sides
+
+**Attempted:** the two encoding defects, unblocked by the author settling D2 (`position = total = 1`
+for a duration-less skip) and D7 (follow the reading client's rule verbatim). Done as one change
+because they are the same two fields read from opposite ends — shipping half would have shipped half
+a rule. `docs/decisions/0022`.
+
+714 tests (+9), 0 failures, 3 skipped; `ktlintCheck detekt test` green. Both halves verified red
+without their fix.
+
+### Three existing tests failed, and all three were right to
+
+- `skipped with unknown duration sends 0, not a fabricated value` — a test that asserted the *old*
+  encoding and was correct about the code while the code was wrong about the world.
+- `remote PLAY and DELETE also mark handled remotely` — its `PLAY` carried no playback values, so
+  under the new rule it is an *unread* mark. Fixed by giving the test builder an ended default, with
+  a comment saying why, because the next reader will otherwise "simplify" it back.
+- `NoAutoDownloadInvariantTest`'s 500-action inbound log — same cause.
+
+Worth noticing: none of the three was a false alarm. A decision that changes an encoding *should*
+turn tests red, and the useful question when it happens is whether each failure is the decision
+landing or a mistake. All three were the decision landing.
+
+### The cost of adopting the rule verbatim, stated rather than discovered later
+
+A `0/0` action this app posted before today now reads as *not* handled. On the device that made the
+decision nothing changes — the local row is terminal and reconciliation never revisits it — but a
+fresh install or a second device would offer those episodes for triage again. That is in the ADR's
+consequences rather than in a comment, because it is the kind of thing that gets rediscovered as a
+bug report in six months.
+
+The alternative was a permanent special case (`total == 0` means "ours, handled") that would exist
+solely to interpret our own past output, and which D2 makes dead the moment it is written.
+
+### A self-inflicted five minutes
+
+A speculative `perl -0777 -i -pe` I fired with `/ne` flags — meant as a dry run, written without
+thinking about what `e` does — evaluated its replacement as code and wrote the string `ne` into the
+middle of a KDoc. The compiler caught it immediately, so it cost nothing but the correction; the
+lesson is that `-i` and "let me just try this" do not belong in the same command.
