@@ -202,13 +202,26 @@ RePod's *mark as unread* does not delete an action and does not send a different
 `hasEnded` requires `position > 0`. `reconcile` looks at the action **type** alone —
 `TERMINAL_ACTION_TYPES = {DOWNLOAD, PLAY, DELETE}` — so it files that as `HANDLED_REMOTELY`.
 
-Probed against the author's own server, with the two readings side by side:
+Probed against the author's own server, with the two readings side by side. The second probe — five
+episodes flipped from played back to unread — is the one that settles the shape:
 
 ```
-2026-08-13T23:23:34+00:00  PLAY
-  guid=69af61b1b58ea3074ddfc173  started=0 position=0 total=1800
-  RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+2026-08-13T23:33:15  PLAY  guid=68e584b0…  position=0 total=2838   RePod: NOT played  ← DISAGREE
+2026-08-13T23:33:13  PLAY  guid=690f68fc…  position=0 total=2398   RePod: NOT played  ← DISAGREE
+2026-08-13T23:33:12  PLAY  guid=691a4895…  position=0 total=2766   RePod: NOT played  ← DISAGREE
+2026-08-13T23:33:10  PLAY  guid=694c09de…  position=0 total=3082   RePod: NOT played  ← DISAGREE
+2026-08-13T23:33:09  PLAY  guid=699d915a…  position=0 total=1854   RePod: NOT played  ← DISAGREE
+2026-08-13T23:33:05  PLAY  guid=69af61b1…  position=1800 total=1800  RePod: played
 ```
+
+**`total` is real and non-zero on every one of them.** Marking something unread that has ever been
+played keeps the stored duration and zeroes only `position` (`markAs` reuses `action?.total`), so
+this is not a corner case near an unset duration — it is *the* representation of "unread" for any
+episode with a history, and five of the six actions in that window disagree with us.
+
+It also means the two shapes are **distinguishable on the wire**, which the first probe could not
+show: an explicit unread is `position = 0, total > 0`, while our own duration-less skip is
+`position = 0, total = 0`.
 
 **The consequence is the worst kind: it is silent and it is backwards.** An episode the user
 deliberately marked *unread* in Nextcloud is the one Podsilo removes from *To decide* and files as
@@ -216,10 +229,16 @@ already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ev
 
 - [ ] `reconcile` must read `position`/`total` for a `PLAY`, using RePod's rule, so a `PLAY` that is
       not *ended* is **not** terminal. `DOWNLOAD` and `DELETE` are unaffected.
-- [ ] **This cannot be decided separately from D2.** Our own skip encoding sends
-      `position = total = 0` when a feed declares no duration — which, under the rule above, a second
-      Podsilo device would read as *not* handled, and the skip would not propagate. The inbound rule
-      and the outbound encoding are one decision with two halves; see **D7**.
+- [ ] **How it interacts with D2 is now a choice rather than a knot.** Our own skip encoding sends
+      `position = total = 0` when a feed declares no duration, and RePod's rule reads that as *not*
+      handled — so a second Podsilo device would not see the skip. Two ways out, and the measurement
+      above says both work:
+      - **Settle D2 first** (give a duration-less skip a non-zero encoding), then adopt RePod's rule
+        **verbatim**, with no special case on either side. Preferred.
+      - **Or special-case the ambiguous shape**: `total == 0` means "handled, duration unknown" —
+        ours — and stays terminal, while `position == 0 && total > 0` is an explicit unread and is
+        not. Works today without touching the outbound encoding, at the cost of a branch that exists
+        only because of our own past output, and which D2 would later make dead.
 - [ ] Test both directions with the real shapes: `position=0 total=1800` (RePod unread),
       `position=2838 total=2838` (RePod played), `position=0 total=0` (our own duration-less skip).
 

@@ -4100,3 +4100,38 @@ Also worth recording: only **three** of the five played marks reached the server
 within twelve seconds of each other and the fourth is the unread flip; the other two are not in the
 log at all. Not investigated — it may be RePod, it may be a mis-tap — but a claim of "five marked,
 five synced" would have been wrong, and the probe is the only reason I know.
+
+### The flip made the bug bigger, and explained the two "missing" marks
+
+The author then reversed it — latest episode to *read*, the previous five to *unread* — and the
+second probe is the one that matters:
+
+```
+position=0 total=2838   RePod: NOT played  ← DISAGREE
+position=0 total=2398   RePod: NOT played  ← DISAGREE
+position=0 total=2766   RePod: NOT played  ← DISAGREE
+position=0 total=3082   RePod: NOT played  ← DISAGREE
+position=0 total=1854   RePod: NOT played  ← DISAGREE
+position=1800 total=1800  RePod: played
+```
+
+**`total` is real on every unread mark.** RePod's `markAs` reuses the stored `total` and zeroes only
+`position`, so "unread" for any episode with a history is `position = 0, total = <duration>`. Five of
+the six actions in that window disagree with Podsilo. This is not an edge case at the boundary of a
+missing duration — it is the normal shape, and I had described it in the plan as if it were narrow.
+
+Two things fell out that I would not have got from the source:
+
+- **The two "missing" played marks were never missing.** Both were already played from 2026-08-03, so
+  RePod's toggle had nothing to post — its button offers *unread* for an episode already read. The
+  proof is that flipping all five to unread produced exactly five writes: all five were in the played
+  state, three freshly and two since August. Yesterday's "only three of five arrived" was a correct
+  observation and a wrong implication, and it is worth noticing that I flagged it as unexplained
+  rather than asserting a lost write — that is the only reason it cost nothing.
+- **The two shapes are distinguishable on the wire**, which the first probe could not show. An
+  explicit unread is `position = 0, total > 0`; our own duration-less skip is `position = 0,
+  total = 0`. D7 therefore turns from a knot into a choice: settle D2 and adopt RePod's rule
+  verbatim, or special-case `total == 0` now and delete the branch when D2 lands.
+
+Also: the row count stayed at 72 across both flips. One row per episode, updated in place, exactly as
+`EpisodeActionSaver` reads.
