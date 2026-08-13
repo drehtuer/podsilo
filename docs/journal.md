@@ -4058,3 +4058,45 @@ The command was `… > log 2>&1; echo "EXIT=$?"` — the shell's own status is `
 The log said `EXIT=1`. Same shape as the `| tail -60` mistake recorded on 2026-08-11: **the exit
 status of a pipeline or a sequence is the last thing in it**, and the last thing is rarely the thing
 under test. Later runs write `REALEXIT=` from the command itself.
+
+### The probe found a bug that reading two codebases had not
+
+The author marked one episode **unread** and five **played** in RePod, and the probe's new
+`-Precent=N` dump — RePod's reading of each action beside ours — printed this:
+
+```
+2026-08-13T23:23:34+00:00  PLAY
+  guid=69af61b1b58ea3074ddfc173  started=0 position=0 total=1800
+  RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+```
+
+**A *mark as unread* is a `PLAY` with `position = 0`.** It does not delete an action and does not use
+a different type, because the API has no way to express either. RePod reads it back as unplayed;
+`reconcile` reads the action type alone and files it as `HANDLED_REMOTELY`, which is terminal, so the
+one episode the author explicitly said they had *not* listened to is the one Podsilo hides from *To
+decide* for ever.
+
+I had read both codebases and predicted the *outbound* half of this (D2: our `position = total = 0`
+renders as unplayed in RePod). I did not predict the inbound mirror image, and I would not have: it
+needs the observation that "unread" is a *write*, not an absence, which is obvious in one line of
+`markAs` and invisible in the shape of the API. Six lines of read-only probe output beat two careful
+source reads.
+
+The two are one decision, which is now **D7**: the same field pair, read from both sides, and the
+answers have to agree.
+
+### And the timestamp skew is real, in the harmless direction
+
+Every RePod-authored action came back **~6 980 seconds — an hour and 56 minutes — ahead of the
+server's own clock**. That is `formatEpisodeTimestamp` writing local time with no offset while
+gpoddersync parses it as UTC, exactly as predicted from source, for an author at UTC+2.
+
+Ahead is the survivable direction: a future-dated action is always newer than our cursor, so it
+arrives (and keeps arriving for two hours). A client *behind* the server's clock would be dropped
+silently and permanently. Step 4's overlap window is now justified by a measurement rather than by an
+argument.
+
+Also worth recording: only **three** of the five played marks reached the server. Three arrived
+within twelve seconds of each other and the fourth is the unread flip; the other two are not in the
+log at all. Not investigated — it may be RePod, it may be a mis-tap — but a claim of "five marked,
+five synced" would have been wrong, and the probe is the only reason I know.

@@ -43,5 +43,7 @@ tasks.register<JavaExec>("nextcloudProbe") {
             project.findProperty("handoff")?.toString().orEmpty(),
             // Writes are opt-in and name the account they may touch: -Pwrite=<loginName>
             project.findProperty("write")?.toString().orEmpty(),
+            // Read-only: dump the newest N actions in full — see reportRecent().
+            project.findProperty("recent")?.toString().orEmpty(),
         )
 }

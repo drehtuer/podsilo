@@ -135,14 +135,19 @@ is called done, and every fix carries a regression test that **fails against the
         stops at the space after `Basic` — which the table caught and review would not have. And the
         existing test asserting this rule was **weaker than its own comment claimed**: it said the
         invariant was "enforced at the write points (asserted in `:app`)", where nothing asserted it.
-- [ ] **Read what the server actually holds.** `:core:gpodder`'s `ManualNextcloudProbe`
-      (`./gradlew :core:gpodder:nextcloudProbe -Phost=…`) already runs the production client against
-      a real Nextcloud, read-only. Use it to dump the stored action for one episode the author has
-      marked played in Podsilo and one marked in RePod. That single output settles §4 and §6 as
-      facts instead of as suspicions, and it costs nothing to run.
+- [x] **Read what the server actually holds.** Done twice on 2026-08-13 against `cloud.drehtuer.net`
+      on the `podsilo` account: a read+write pass, then a read-only pass after the author marked
+      episodes in RePod. It confirmed ADR 0008 live (a posted `DOWNLOAD` is discarded, the `PLAY`
+      beside it kept; all 72 stored actions are `PLAY`), confirmed the full round trip, and turned up
+      **step 3b**, which no amount of source reading had suggested.
 
-**Do not skip this step.** Three of the candidate faults below are indistinguishable from the
-outside, and two of them are cheap to "fix" wrongly.
+      The probe grew a read-only `-Precent=N` dump that prints RePod's reading of each action beside
+      ours, flagged where they disagree. That is what made step 3b visible in one line rather than in
+      an argument about two source files.
+
+**Step 0 earned its place.** It was written as "make the failure visible before fixing anything",
+and what it actually did was find a bug the plan did not contain — and disprove nothing, which is the
+other half of why it goes first.
 
 ### Step 1 — A decision must reach the server when it is made
 
@@ -186,6 +191,38 @@ report. Everything below is what stays broken afterwards.
       this — it may be the whole of the remaining symptom or none of it. `ManualNextcloudProbe` and
       the parsed episode rows answer it.
 
+### Step 3b — A remote *mark as unread* is currently read as "handled elsewhere"
+
+**Found on 2026-08-13, live, and it is the mirror image of step 3.** Step 3 is about what our
+*outbound* encoding puts in `position`/`total`. This is about the fact that our *inbound*
+reconciliation ignores those fields entirely.
+
+RePod's *mark as unread* does not delete an action and does not send a different type. It writes a
+`PLAY` with `position = 0` (`markAs` in `src/utils/status.ts`), and reads it back as unplayed because
+`hasEnded` requires `position > 0`. `reconcile` looks at the action **type** alone —
+`TERMINAL_ACTION_TYPES = {DOWNLOAD, PLAY, DELETE}` — so it files that as `HANDLED_REMOTELY`.
+
+Probed against the author's own server, with the two readings side by side:
+
+```
+2026-08-13T23:23:34+00:00  PLAY
+  guid=69af61b1b58ea3074ddfc173  started=0 position=0 total=1800
+  RePod: NOT played   |   Podsilo: HANDLED_REMOTELY  ← DISAGREE
+```
+
+**The consequence is the worst kind: it is silent and it is backwards.** An episode the user
+deliberately marked *unread* in Nextcloud is the one Podsilo removes from *To decide* and files as
+already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ever revisits it.
+
+- [ ] `reconcile` must read `position`/`total` for a `PLAY`, using RePod's rule, so a `PLAY` that is
+      not *ended* is **not** terminal. `DOWNLOAD` and `DELETE` are unaffected.
+- [ ] **This cannot be decided separately from D2.** Our own skip encoding sends
+      `position = total = 0` when a feed declares no duration — which, under the rule above, a second
+      Podsilo device would read as *not* handled, and the skip would not propagate. The inbound rule
+      and the outbound encoding are one decision with two halves; see **D7**.
+- [ ] Test both directions with the real shapes: `position=0 total=1800` (RePod unread),
+      `position=2838 total=2838` (RePod played), `position=0 total=0` (our own duration-less skip).
+
 ### Step 4 — The `since` cursor compares two different clocks
 
 - [ ] The server selects `timestamp_epoch > since` on **client-authored** timestamps; we persist the
@@ -219,7 +256,7 @@ report. Everything below is what stays broken afterwards.
 
 ## 4. Decisions needed from the author
 
-Six. Steps 3 and 5 are blocked on D2; §7 is blocked on D4 and D5.
+Seven. Steps 3, 3b and 5 are blocked on D2/D7; §7 is blocked on nothing, since D4 and D5 are settled.
 
 | # | Question | Why it is not mine to decide |
 |---|---|---|
@@ -233,6 +270,8 @@ Six. Steps 3 and 5 are blocked on D2; §7 is blocked on D4 and D5.
 | **D4** | Does *"apply Nextcloud's state"* ever **un**-mark an episode here? | **No.** It only ever marks episodes as played; it never marks one available again. | The ledger stays append-only — no delete, for the third time. The row's subtitle has to say so, because the button's name promises more. |
 | **D5** | Does *"apply Nextcloud's state"* overwrite a local **`DOWNLOADED`** row? | **No.** The author's rule: *a remote play means the episode was played on another device, so no additional download is necessary here.* A `DOWNLOADED` row already guarantees that, so there is nothing for the remote action to add — and the server cannot restore what overwriting would destroy (§5). | The download record survives. See the note below: this is the reading of the author's rule, not a quote of it. |
 | **D6** | Is a *force push* allowed to re-assert decisions Nextcloud has already seen? | **Yes**, chunked, behind the counted confirmation ADR 0013 established. | §7.2 trap 3 and 4 stand as written. |
+
+| **D7** | What is a `PLAY` with `position = 0, total = 0` — ours, sent when a feed declares no duration? | It is the same field pair from both sides, and the two answers have to agree. If it means *not handled* (RePod's reading), step 3b is a clean rule and our duration-less skips stop propagating to a second device until D2 gives them a non-zero encoding. If it means *handled* (our current reading), an explicit **unread** from RePod keeps being swallowed unless the rule special-cases `total > 0`. Recommendation: settle D2 first — give a duration-less skip a non-zero encoding — and then RePod's rule can be adopted verbatim, with no special case on either side. |
 
 **One line of interpretation, flagged rather than buried.** D5's answer states what a remote `PLAY`
 *means* — no download needed here — rather than what it does to a `DOWNLOADED` row. Both states are
