@@ -160,13 +160,17 @@ class SyncOrchestrator(
 
     /** Returns a [SyncOutcome.Retry] on a failed push, or `null` if there was nothing to push or it succeeded. */
     private suspend fun pushUnsyncedLedgerRows(): SyncOutcome.Retry? {
+        // One row can produce more than one action -- a completed download emits both `DOWNLOAD` and
+        // `PLAY` (`docs/decisions/0023`) -- so the row and its actions are kept paired: the actions
+        // are what gets posted, the rows are what gets marked synced.
         val outbox =
-            episodeLedgerRepository.getUnsynced().mapNotNull { row ->
-                row.toOutboundAction()?.let { action -> row to action }
-            }
+            episodeLedgerRepository
+                .getUnsynced()
+                .map { row -> row to row.toOutboundActions() }
+                .filter { (_, actions) -> actions.isNotEmpty() }
         if (outbox.isEmpty()) return null
 
-        val result = gpodderClient.postEpisodeActions(outbox.map { it.second })
+        val result = gpodderClient.postEpisodeActions(outbox.flatMap { it.second })
         return result.fold(
             onSuccess = {
                 episodeLedgerRepository.markSynced(outbox.map { it.first.episodeKey })

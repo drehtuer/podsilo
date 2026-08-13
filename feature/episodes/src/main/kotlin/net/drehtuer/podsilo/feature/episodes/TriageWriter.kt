@@ -62,7 +62,7 @@ class TriageWriter(
      * touches WorkManager (`docs/UI.md` §B0.2).
      *
      * **No sync is requested here, and that is not an omission.** `QUEUED` has no outbound action —
-     * `toOutboundAction` returns `null` for it, because "I intend to download this" is local state
+     * `toOutboundActions` returns nothing for it, because "I intend to download this" is local state
      * the API cannot express. The `DOWNLOAD` action exists only once the file has landed, and
      * `DownloadWorker` asks for the pass then.
      *

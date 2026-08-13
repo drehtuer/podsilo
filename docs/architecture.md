@@ -632,6 +632,7 @@ sequenceDiagram
 |---|---|---|---|---|
 | `DOWNLOADED` | `DOWNLOAD` | — | — | — |
 | `SKIPPED` | `PLAY` | `0` | equal to `total` | `EpisodeLedgerRow.durationSeconds` if known, else **`1`** |
+| `DOWNLOADED` | **also** `PLAY`, posted after the `DOWNLOAD` | `0` | equal to `total` | as above — `docs/decisions/0023` |
 
 Resolved per AntennaPod's own convention: verified against `SynchronizationQueueImpl.enqueueEpisodePlayed`, not guessed.
 Implemented in `net.drehtuer.podsilo.core.sync.toOutboundAction()` (`:core:sync`).
@@ -1003,6 +1004,7 @@ and deleted (2026-08-13).
 | [0017](decisions/0017-pure-jvm-modules-need-one-android-test.md) | A pure-JVM module that ships in the app gets **one** test on a real Android runtime — the JVM and ICU do not agree | §2, `docs/dev-environment.md` §6 |
 | [0020](decisions/0020-the-login-poll-runs-only-in-the-foreground.md) | The Login Flow v2 poll runs only while S5 is on screen — a backgrounded process could not resolve the host at all | `docs/UI.md` §8, §B5 |
 | [0022](decisions/0022-play-is-an-ended-marker-in-both-directions.md) | A `PLAY` means *ended*, both ways: a duration-less skip sends `1/1`, and an inbound `PLAY` is only terminal when `position >= total > 0` — which is how a client says *unread* | §6 — settles #60's two interop halves |
+| [0023](decisions/0023-a-download-also-marks-the-episode-played.md) | A completed download emits `DOWNLOAD` **and** `PLAY` — reverses CLAUDE.md §5's prohibition, because the server discards `DOWNLOAD` and the episode stayed new everywhere else | §6, CLAUDE.md §1/§5 |
 
 ### Decisions folded into this document
 
