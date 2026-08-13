@@ -3981,3 +3981,80 @@ Also noted while in there: a failed `GET` surfaces as Retrofit's own `HttpExcept
 the log as a plain `SYNC` failure rather than `AUTH`. Sniffing "401" out of a message string works
 until a server rewords it, so the fix is a typed failure in the port — recorded in `docs/TODO.md`
 rather than done here.
+
+---
+
+## 2026-08-13 (later still) — a phone over Wi-Fi, and a probe that answered half the question
+
+**Attempted:** run the device test set against a real phone, and close step 0's last item — the
+read-only probe against the author's Nextcloud, which needs a human at a browser.
+
+Both ran. **Device set: 60 declared, 54 passed, 0 failed, 6 skipped** — identical to the 2026-08-11
+USB run, which is the useful part, because this one went over wireless. **Probe: full round trip
+verified** against the real server on the `podsilo` test account.
+
+### Four ways to not have a device attached, in one session
+
+1. **I walked into §9.3 on the first command.** `adb devices` in the container started a USB-blind
+   server that, because the network namespace is shared, also answers for WSL — the exact failure the
+   docs open with. Killed it. Then the author said *wireless*, which **inverts** the rule, so the
+   container-local server was correct after all and I started one again deliberately. Both moves were
+   right; what was wrong was doing the first one before knowing the transport.
+2. **`adb connect` was refused although the port was open.** A raw TCP connect to the phone's port
+   succeeded and a scan of the whole ephemeral range found that port and nothing else — so the phone
+   was listening and simply would not talk to us. Wireless debugging requires pairing *per adb key*,
+   and the container's key had never been paired.
+3. **The pairing port closes faster than a human relay.** The first attempt failed with
+   `protocol fault (couldn't read status message)`, and by the time I checked, the port was refusing
+   connections. §9.4 documents that the pairing port is not the connect port; it does not say that
+   the window is short enough to lose a round trip to, which is a real cost when the person reading
+   the code is not the person holding the phone. The second attempt, run as a single
+   pair-then-connect command, worked first time.
+4. **An orphaned test package blocked every install.** `net.drehtuer.podsilo.test` was still on the
+   phone from 2026-08-11 — the app itself was not — signed with a different debug keystore, so
+   `INSTALL_FAILED_UPDATE_INCOMPATIBLE` killed `:app`. Uninstalling it printed
+   `Failure [DELETE_FAILED_INTERNAL_ERROR]` and *worked anyway*; the package was gone on the next
+   query. Trusting adb's own success report there would have been the wrong move in both directions.
+
+There was no backup to take before any of this, which is worth recording because it inverted a
+decision: the author chose "export a backup first", and the phone turned out not to have the app
+installed at all. Checking what is actually on the device beat asking what to preserve.
+
+### `connectedDebugAndroidTest` at the root is not the device set
+
+Running the raw Gradle task instead of `scripts/device-test.sh` — because the script's guard refuses
+on wireless (a known backlog item) — crashed in `:core:feed`, a module with **no** instrumented tests
+at all: it still builds an empty test APK, and that APK has no `AndroidJUnitRunner` in it, so
+instantiation fails and the whole run stops. The script's curated module list is not decoration; it
+is the list of modules where the task means something. Bypassing a script is fine, but bypassing it
+without reading it costs a run.
+
+### What the probe settled, and what it did not
+
+**Settled, live, against a real server:**
+
+- **ADR 0008 holds.** A posted `DOWNLOAD` is discarded and the response is still 2xx; the `PLAY`
+  posted beside it is kept. All 68 pre-existing actions in the account are `PLAY` — there is no
+  `DOWNLOAD` in there, and there never will be.
+- **The wire path is not the bug.** Mark played locally → push → echo back → still `SKIPPED`, still
+  synced, and a third pass changes nothing. Timestamps all arrive as `+00:00` and all 68 parse.
+- So issue #60 is what the plan says it is: the mechanism works and almost nothing triggers it.
+
+**Not settled, and I nearly claimed otherwise.** The probe's output shows `position=1800 total=1800`
+for the episode it marked, which looks like evidence that real episodes carry usable durations. It is
+not: **`1800` is the probe's own hardcoded constant.** Checked before writing it up rather than
+after. What *is* real evidence sits beside it — two actions written by another client on 2026-08-03
+carry `2398` and `1854`, odd numbers that came from a feed — so third-party marks do carry durations.
+D2 (what to send when a feed declares none) is still open and still needs the author.
+
+**Also not settled: the `since` cursor (§4 of the plan).** That needs an action authored by RePod
+*after* our cursor advanced, and no one marked anything in RePod during the window. Asked for; the
+approval came without it. Worth one more attempt before Step 4 is designed.
+
+### A tool that reported success for a failed run
+
+The harness reported the first device run as "completed (exit code 0)" while the build had failed.
+The command was `… > log 2>&1; echo "EXIT=$?"` — the shell's own status is `echo`'s, not Gradle's.
+The log said `EXIT=1`. Same shape as the `| tail -60` mistake recorded on 2026-08-11: **the exit
+status of a pipeline or a sequence is the last thing in it**, and the last thing is rarely the thing
+under test. Later runs write `REALEXIT=` from the command itself.
