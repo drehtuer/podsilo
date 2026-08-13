@@ -6,7 +6,7 @@ import net.drehtuer.podsilo.core.model.port.LogCategory
 import net.drehtuer.podsilo.core.model.port.LogEntry
 
 /**
- * S8 — the error log (`docs/UI_interface.md` §6b).
+ * S8 — the error log (`docs/UI.md` §B6b).
  *
  * A chronological, read-only failure log, so a single-user self-hosted setup can be debugged without
  * a laptop, `adb`, or a bug report. Successes are never here — S7's *recently downloaded* covers

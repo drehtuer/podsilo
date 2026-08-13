@@ -41,7 +41,7 @@ dependencies {
     // drawables, so every consumer needs it on the compile classpath.
     api(libs.lucide.icons)
     // Artwork comes from the network in every screen that has a slot, so the loader belongs here
-    // beside the icons rather than in each feature module (ADR 0015).
+    // beside the icons rather than in each feature module (UI.md §18).
     api(libs.coil.compose)
 
     // The mark is a VectorDrawable, and whether it still reads once rasterised is a question only a

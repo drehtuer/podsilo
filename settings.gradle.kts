@@ -14,7 +14,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         // Only for com.github.Adonai:jaudiotagger (Android-compatible fork, not on Maven
-        // Central) — see docs/decisions/0006. JitPack builds straight from GitHub source,
+        // Central) — see `docs/architecture.md` §11. JitPack builds straight from GitHub source,
         // a different trust model than a registry-reviewed release; don't add other
         // dependencies through it without the same scrutiny.
         maven { url = uri("https://jitpack.io") }

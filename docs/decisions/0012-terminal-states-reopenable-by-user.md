@@ -2,7 +2,7 @@
 
 ## Status
 
-**Accepted 2026-08-01.** Drafted from the UI design work (`docs/UI_interface.md` §8.2,
+**Accepted 2026-08-01.** Drafted from the UI design work (`docs/UI.md` §B8.2,
 `docs/UI.md` §12.3/§14.1); the four points it left open were settled by the author on that date and
 are folded into the [Decision](#decision) below. The guiding answer to all four was **consistency**:
 a re-opened episode behaves exactly like a first decision, with no special cases.
@@ -39,7 +39,7 @@ returns success without doing anything if the state is terminal. There is exactl
 file: an explicit per-episode enqueue. `DownloadWorkerTest` covers both halves — the trigger fires
 once on a delivery, never on a failure, and a terminal row is refused.
 
-`DownloadTarget.existingNames(folder)` exists (ADR 0011) for collision suffixing, and its KDoc says
+`DownloadTarget.existingNames(folder)` exists (architecture §11) for collision suffixing, and its KDoc says
 explicitly that it is **not** a de-duplication check — whether a file is in the folder says nothing
 about whether the episode was handled. The ledger is the only authority (CLAUDE.md §11).
 
@@ -113,7 +113,7 @@ it honest:
 > unconditionally.
 
 A first-time download (no `writtenFileName`) performs **no** existence check at all. Collision
-suffixing is untouched and keeps doing what ADR 0011 says it is for — stopping two *different*
+suffixing is untouched and keeps doing what architecture §11 says it is for — stopping two *different*
 episodes fighting over one name.
 
 ### 5. Not a state-machine relaxation for sync
@@ -145,9 +145,9 @@ The four new edges in §9's diagram are all user-initiated; none are reachable f
   download work at all, which is already close to what it proves.
 - `EpisodeDownloader` gains one branch and one new outcome value (the informational "already
   present" case, distinct from both success and failure). Its 11 existing cases stay valid.
-- The UI must render that third outcome. `docs/UI_interface.md`'s `SnackbarText.AlreadyInFolder(fileName)`
+- The UI must render that third outcome. `docs/UI.md` §B13.s `SnackbarText.AlreadyInFolder(fileName)`
   exists for it.
-- ADR 0011's KDoc on `existingNames` should be amended to name this one licensed caller, so a future
+- architecture §11's KDoc on `existingNames` should be amended to name this one licensed caller, so a future
   reader does not find the guard and conclude the rule was abandoned.
 
 ## The four open points, as settled (2026-08-01)

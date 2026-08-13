@@ -46,7 +46,7 @@ So against a current Nextcloud:
 - Podsilo POSTs `DOWNLOAD` → 200 OK → `syncedToServer = true` → **the server stored nothing**.
 - `GET /episode_action` will never return that action, to Podsilo or to any other client.
 - `DELETE` is dropped identically. `PLAY` — and therefore Podsilo's skip-as-`PLAY` encoding
-  (`docs/decisions/0002`) — works normally.
+  (`docs/architecture.md` §6) — works normally.
 
 `kd2org/opodsync` does **not** filter, and stores `DOWNLOAD` fine. That's a trap for our own
 testing: the disposable opodsync container CLAUDE.md §4 specifies for integration tests will happily

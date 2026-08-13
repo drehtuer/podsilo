@@ -156,7 +156,7 @@ class EpisodeDetailViewModelTest {
         }
 
     /**
-     * `docs/UI_interface.md` §7's first row, which nothing in the app could satisfy before issue
+     * `docs/UI.md` §B7's first row, which nothing in the app could satisfy before issue
      * #47: `DownloadWorker` never published progress and no screen observed any, so a running
      * download drew the indeterminate bar from start to finish.
      */

@@ -118,7 +118,7 @@ class PodcastListScreenTest {
 
     @Test
     fun `the first screen introduces the app by name, not with a server glyph`() {
-        // `docs/logo.md` §4.2: the one large, unhurried appearance of the lockup. It replaced the
+        // `docs/UI.md` §C4.2: the one large, unhurried appearance of the lockup. It replaced the
         // `server` glyph, which described the missing configuration rather than the app.
         render(PodcastListUiState(content = PodcastListUiState.Content.NotConfigured))
 

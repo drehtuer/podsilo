@@ -183,7 +183,7 @@ private fun String.describeShape(): String =
  * downstream — the outbox, `syncedToServer`, mark-on-download — behaves differently depending on
  * whether it is true.
  *
- * It also checks the mark-as-played encoding from `docs/decisions/0002`
+ * It also checks the mark-as-played encoding from `docs/architecture.md` §6
  * (`started = 0, position = total`) survives a round trip.
  *
  * Both actions name a **synthetic feed and episode** that no real subscription uses, so nothing the
@@ -220,7 +220,7 @@ private suspend fun verifyActionWrites(
                     guid = "probe-$marker-play",
                     action = EpisodeActionType.PLAY,
                     timestamp = stamp,
-                    // docs/decisions/0002: "done with this episode" is a full-length PLAY.
+                    // `docs/architecture.md` §6: "done with this episode" is a full-length PLAY.
                     started = 0,
                     position = 1800,
                     total = 1800,
@@ -246,6 +246,6 @@ private suspend fun verifyActionWrites(
     } else {
         println("  CONFIRMED: discarded, exactly as the PHP said.")
     }
-    println("ADR 0002 — does the mark-as-played PLAY survive?")
+    println("architecture §6 — does the mark-as-played PLAY survive?")
     println(if (keptPlay) "  CONFIRMED: kept." else "  UNEXPECTED: the PLAY was dropped too.")
 }

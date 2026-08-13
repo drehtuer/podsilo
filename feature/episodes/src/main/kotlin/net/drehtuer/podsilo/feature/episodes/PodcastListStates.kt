@@ -111,7 +111,7 @@ internal fun PodcastLoadingState() {
 private const val SHIMMER_ROWS = 3
 
 /**
- * The one place the app introduces itself (`docs/logo.md` §4.2).
+ * The one place the app introduces itself (`docs/UI.md` §C4.2).
  *
  * This state led with the `server` glyph, which said "a server is missing" — true, and not what a
  * user seeing the app for the first time needs. The stacked lockup goes here instead: it is the
@@ -145,7 +145,7 @@ internal fun NoSubscriptionsState(onEvent: (PodcastListEvent) -> Unit) {
 /**
  * @param leading a glyph for a momentary, local state — or, in exactly one case, the brand lockup.
  *   A slot rather than an icon id because the not-configured state is the app introducing itself and
- *   the others are not (`docs/logo.md` §4.2); two parameters for the two cases would be one more way
+ *   the others are not (`docs/UI.md` §C4.2); two parameters for the two cases would be one more way
  *   to say the same thing.
  */
 @Composable

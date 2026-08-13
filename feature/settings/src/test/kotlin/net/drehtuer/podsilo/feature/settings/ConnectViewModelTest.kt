@@ -65,13 +65,13 @@ class ConnectViewModelTest {
             viewModel.effect.test {
                 viewModel.onEvent(ConnectEvent.Submit)
 
-                // The browser is opened by the host, not by :core:gpodder (docs/decisions/0007).
+                // The browser is opened by the host, not by :core:gpodder (`docs/architecture.md` §2).
                 assertEquals(
                     ConnectEffect.OpenBrowser("https://cloud.example.org/login/flow"),
                     awaitItem(),
                 )
                 // A granted flow no longer connects on its own: the account is confirmed first
-                // (docs/decisions/0019).
+                // (`docs/UI.md` §8).
                 assertNull(settings.storedCredentials)
                 viewModel.onEvent(ConnectEvent.ConfirmAccount)
                 assertEquals(ConnectEffect.Connected, awaitItem())
@@ -358,7 +358,7 @@ class ConnectViewModelTest {
         }
 
     /**
-     * The reported bug, as a test (`docs/decisions/0019`).
+     * The reported bug, as a test (`docs/UI.md` §8).
      *
      * Login Flow v2 returns whichever account the *browser* was signed into and offers no chooser,
      * so the app's only defence is to name it and stop. This asserts the stopping: the flow is fully

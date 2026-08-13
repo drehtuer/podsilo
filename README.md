@@ -60,8 +60,8 @@ Retrofit/OkHttp underneath. Feeds are parsed with
 [rssparser](https://github.com/prof18/RSS-Parser), audio tags rewritten with the Android-compatible
 [jaudiotagger fork](https://github.com/Kaned1as/jaudiotagger), and downloads written through the
 Storage Access Framework so you can point them at an SD card. Both library choices deviate from the
-first pick and say why in `docs/decisions/`; so does the decision to add no date-time library at
-all.
+first pick, and [`docs/architecture.md`](docs/architecture.md) §7 and §11 say why — as does the
+decision to add no date-time library at all.
 
 The codebase is split into small modules (`:core:model`, `:core:feed`, `:core:naming`,
 `:core:download`, `:core:gpodder`, `:core:sync`, `:feature:*`) so the interesting logic — sync
@@ -79,11 +79,16 @@ Sync is tested against a disposable [opodsync](https://codeberg.org/kd2/opodsync
 against a real Nextcloud.
 
 Setup instructions are in [`docs/dev-environment.md`](docs/dev-environment.md), which is also honest
-about which tiers have actually been run (tier 1 has; the two emulator tiers have not). The module
-design, schema and sync semantics are in [`docs/architecture.md`](docs/architecture.md), the screen
-design in [`docs/UI.md`](docs/UI.md). Architecture decisions land in `docs/decisions/`, and
-`docs/journal.md` keeps a running log — this project doubles as an experiment in agent-driven
-development, so the process is recorded alongside the result.
+about which tiers have actually been run. The module design, schema and sync semantics are in
+[`docs/architecture.md`](docs/architecture.md); the whole of the UI — the screen design, the
+Compose seam it binds to, and the brand mark — is in [`docs/UI.md`](docs/UI.md).
+
+Five documents, and that is deliberate: `architecture.md` and `UI.md` are the two references,
+[`docs/backlog.md`](docs/backlog.md) holds what is not being built, `docs/third-party.md` tracks
+licences, and `docs/journal.md` keeps a running log — this project doubles as an experiment in
+agent-driven development, so the process is recorded alongside the result. `docs/decisions/` keeps
+only the decisions that still constrain the code and cannot be re-derived from the two references;
+everything else was folded into the section that governs it.
 
 ## Licence
 

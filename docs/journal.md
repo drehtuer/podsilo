@@ -3712,3 +3712,79 @@ detekt asked for two splits along the way (`EpisodeRowText.kt`, `EpisodeListFeed
 real seams. That is the fifth and sixth time.
 
 684 tests, 0 failures, 3 skipped.
+
+---
+
+## 2026-08-13 — the documentation gets the same treatment the code keeps getting
+
+**Attempted:** a documentation consolidation, asked for as four things — work out which files are
+still needed, merge the three UI documents, delete finished tasks, and prune the decision record —
+with the constraint that the repository root holds nothing but `README.md`.
+
+No code behaviour changed. What changed is where the rules live, and the interesting part is how
+much the answer cost.
+
+### `TODO.md` and `HANDOVER.md` are gone
+
+`HANDOVER.md` was a reading order for an implementation that finished a fortnight ago; every claim
+in it lived somewhere canonical by its own admission. `TODO.md` was 604 lines of which one item was
+still open: the two error-log write points. That item is now in `docs/backlog.md`, which is where an
+unbuilt thing belongs; everything else in the file was a record of work done, which is what this
+journal is for. Two files claiming to say what is left to do, neither of them right, is worse than
+none.
+
+### Three UI documents became one
+
+`docs/UI.md`, `docs/UI_interface.md` and `docs/logo.md` are now Parts A, B and C of `docs/UI.md`.
+The B and C sections keep their own numbering with a letter prefix (`§B7`, `§C4.1`) so that every
+existing reference could be mechanically repointed rather than re-read, and so a bare `§12.3` still
+unambiguously means Part A.
+
+The merge was worth doing for a reason visible only once they were adjacent: **all three had drifted
+against each other in the same places.** `logo.md` §4.1 recorded an amendment to `UI.md` §17;
+`UI_interface.md` §17 explained how the icons in `UI.md` §18 ship; `UI.md` §18 pointed at both.
+Three files, one rule, three chances to update two of them.
+
+### Fourteen ADRs deleted, and the cost was not the deleting
+
+The rule applied: an ADR that restates a rule already written in `architecture.md` or `UI.md` is a
+second place for that rule to go stale. Seven survive — a server limitation (0008), a wire contract
+nobody else documents (0009), three rules that amend CLAUDE.md (0012–0014), a platform trap (0017),
+and a bug whose cause no reader would guess (0020).
+
+The bill came from the pointers, not the prose. **95 references to those ADRs live in KDoc**, across
+about fifty source files, plus the version catalog and `settings.gradle.kts`. Deleting the files
+without repointing them would have left the code citing documents that do not exist — so the change
+touched 77 files to move 14. That is a real measurement of what a cross-reference costs to maintain,
+and an argument for citing the *section that owns a rule* rather than the *decision that made it*:
+sections get renamed, decisions get deleted.
+
+Three things the pruning found, none of them the point of the exercise:
+
+- **`architecture.md` line 1 was corrupted.** A sentence about `PodsiloArtwork` had been prepended
+  to the `# Podsilo Architecture` heading, on the same line, at some earlier edit. It had been
+  rendering as a stray paragraph above the title for days.
+- **`architecture.md` §12 claimed `SafDownloadTarget`, `KeystoreAppPasswordCipher` and the
+  foreground-service notification had "never run".** `dev-environment.md` §10 has recorded all three
+  as verified since 2026-08-02. The two documents had been contradicting each other for eleven days,
+  and the pessimistic one was the one I had been quoting.
+- **Four decisions had no home outside their ADR.** The backup format, the account confirmation, the
+  naming engine's injected `ZoneId`, the jaudiotagger fork's rationale — each was cited from a dozen
+  places and written down once. They are now in the sections that govern them, which is where the
+  citations were already pointing readers.
+
+### What is left
+
+`docs/` holds six things: the two references (`architecture.md`, `UI.md`), what is not being built
+(`backlog.md`), the licence register (`third-party.md`), the environment (`dev-environment.md`), and
+this journal. `docs/decisions/` holds seven ADRs.
+
+`docs/journal.md` was deliberately **not** rewritten. It refers throughout to `TODO.md`, to
+`HANDOVER.md` and to ADRs that no longer exist, and those references were correct when they were
+written — a log that gets edited to match the present is not a log. Anything it cites can be found
+in this repository's history.
+
+**Lesson worth keeping:** the instinct that produced three UI documents was a good one — design, seam
+and brand really are three subjects. The mistake was letting each of them hold amendments to the
+others. A document should be split when its *readers* differ, not when its *topics* do; the readers
+here were always the same person, working on one screen.

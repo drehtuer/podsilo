@@ -213,7 +213,7 @@ enum class OlderThan(
      *
      * Calendar arithmetic, not `now - 90 days`: "3 months" has to mean three calendar months or the
      * cutoff drifts against what the label says. [zone] is passed in rather than read from the
-     * device mid-calculation, for the same reason `:core:naming` takes one (`docs/decisions/0004`).
+     * device mid-calculation, for the same reason `:core:naming` takes one (`docs/architecture.md` §11).
      */
     fun cutoffMillis(
         now: Instant,

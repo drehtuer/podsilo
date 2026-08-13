@@ -202,7 +202,7 @@ private fun ConnectBody(
             // Shown after *Use a different account*, next to the address field the user is about to
             // resubmit — because the useful instruction is what to do in the browser tab that just
             // opened, and repeating the request from here without logging out returns the same
-            // account (docs/decisions/0019).
+            // account (`docs/UI.md` §8).
             Text(
                 "Log out of Nextcloud in the browser that just opened, then request authorization " +
                     "again to sign in as someone else.",

@@ -27,7 +27,7 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
  * S5 — the Nextcloud connection dialog (`docs/UI.md` §8).
  *
  * **Login Flow v2 exclusively.** The app never sees, asks for, or stores a user password; what it
- * persists is the app password the flow hands back (CLAUDE.md §5, `docs/decisions/0010`). There is
+ * persists is the app password the flow hands back (CLAUDE.md §5, `docs/architecture.md` §2). There is
  * no username/password form in this module and there must never be one.
  *
  * The order below is load-bearing: **success is claimed only after the authenticated
@@ -36,7 +36,7 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
  * password is discarded rather than stored.
  *
  * And even then it is not stored: **the user confirms the account first**
- * ([ConnectUiState.Phase.ConfirmingAccount], `docs/decisions/0019`). The flow returns whichever
+ * ([ConnectUiState.Phase.ConfirmingAccount], `docs/UI.md` §8). The flow returns whichever
  * account the *browser* was signed into, which is not a choice the app gets to make or even
  * influence — so the one thing it can do is show the name before acting on it.
  */
@@ -321,7 +321,7 @@ private fun String.withoutScheme(): String = removePrefix("https://").removePref
 
 /**
  * Enqueues the first sync once credentials land, so S1 fills in without the user doing anything
- * else. A port because `:feature:settings` must not see WorkManager (`docs/UI_interface.md` §0.2).
+ * else. A port because `:feature:settings` must not see WorkManager (`docs/UI.md` §B0.2).
  */
 fun interface ConnectSyncTrigger {
     fun requestSyncNow()

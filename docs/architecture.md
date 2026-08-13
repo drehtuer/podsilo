@@ -1,4 +1,4 @@
- Also `PodsiloArtwork`, the artwork slot with its monogram fallback (ADR 0015).# Podsilo Architecture
+# Podsilo Architecture
 
 This document is the implementation reference for Podsilo. It turns CLAUDE.md's requirements (§5, §6)
 into a concrete module design, database schema, interface contracts, and sequence diagrams. Follow
@@ -20,7 +20,7 @@ Diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders natively i
 9. [Episode ledger state machine](#9-episode-ledger-state-machine)
 10. [Key flows](#10-key-flows)
 11. [Naming & tagging pipeline](#11-naming--tagging-pipeline)
-12. [Decision record — resolved, and still open](#12-decision-record--resolved-and-still-open)
+12. [Decision record](#12-decision-record)
 13. [Build-order checklist](#13-build-order-checklist)
 
 ---
@@ -88,8 +88,8 @@ follows from it.
 | `:core:sync` | JVM | Reconciliation logic + `SyncOrchestrator` (order-of-operations per CLAUDE.md §5). Depends on `:core:model` only — receives repository/client implementations via constructor injection. |
 | `:core:database` | Android library | Room entities, DAOs, migrations; **implements** `FeedRepository`, `EpisodeRepository`, `EpisodeLedgerRepository`, `SyncStateRepository` from `:core:model`. |
 | `:core:datastore` | Android library | Settings storage (Nextcloud URL/credentials, folder URI, sync interval, naming templates) via Jetpack DataStore + Keystore-backed encryption for the app password. Implements `SettingsRepository`. |
-| `:core:feed` | Android library | Wraps rssparser (docs/decisions/0005, not Stalla); fetches + parses feed XML into `Feed`/`Episode`. Hosts `FeedRefreshWorker`. |
-| `:core:gpodder` | **JVM** (converted from Android library — `docs/decisions/0007`) | Retrofit client for the three GPodder endpoints Podsilo calls; **implements** `GpodderClient` from `:core:model`. |
+| `:core:feed` | Android library | Wraps rssparser, not Stalla (§7); fetches + parses feed XML into `Feed`/`Episode`. Hosts `FeedRefreshWorker`. |
+| `:core:gpodder` | **JVM** (converted from Android library — §2) | Retrofit client for the three GPodder endpoints Podsilo calls; **implements** `GpodderClient` from `:core:model`. |
 | `:core:download` | Android library | Download queue (`DownloadWorker`), cache→tag→SAF-copy pipeline, WorkManager state. Depends on `:core:model`, `:core:naming`. |
 | `:core:ui` | Android library (Compose) | The shared Compose vocabulary: the icon allow-list (`docs/UI.md` §18) and the spacing invariants (§17). No state, no ports, no screens — it exists so those cannot drift between modules. |
 | `:feature:episodes` | Android library (Compose) | S1 (podcast list), S2 (episode list), S3 (detail sheet) — the triage surface. Depends on `:core:model` (ports only) and `:core:ui`; view models are built by `:app`'s factory from its graph. |
@@ -208,15 +208,15 @@ erDiagram
     }
     EPISODE_LEDGER {
         string episodeKey PK "same value-space as EPISODE.episodeKey, not an enforced FK"
-        string feedUrl "denormalised from EPISODE at write time — see docs/decisions/0001"
-        string enclosureUrl "denormalised from EPISODE at write time — see docs/decisions/0001"
+        string feedUrl "denormalised from EPISODE at write time"
+        string enclosureUrl "denormalised from EPISODE at write time"
         string state "QUEUED / DOWNLOADING / DOWNLOADED / SKIPPED / ERROR / HANDLED_REMOTELY"
         long actionedAt "epoch millis"
         boolean syncedToServer "outbox flag"
         int attempts
         string lastError "nullable"
         string writtenFileName "nullable, retry idempotency only"
-        int durationSeconds "nullable, snapshot from EPISODE at write time — see docs/decisions/0001"
+        int durationSeconds "nullable, snapshot from EPISODE at write time"
     }
     SYNC_STATE {
         int id PK "always 1 — single row"
@@ -279,15 +279,15 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 | Field | Type | Nullable | Written by | Notes |
 |---|---|---|---|---|
 | `episodeKey` | `String` | No (PK) | — | Shares key space with `Episode.episodeKey`; see FK note above. `guid` is **not** a separate column — it's derived (`episodeKey.takeIf { it != enclosureUrl }`). |
-| `feedUrl` | `String` | No | Snapshot of `Episode.feedUrl` at write time | Denormalised, not looked up via `Episode` — see `docs/decisions/0001-episode-ledger-row-denormalized-fields.md`. Needed so a POST retry after the feed is unsubscribed can still build a valid outbound action. |
+| `feedUrl` | `String` | No | Snapshot of `Episode.feedUrl` at write time | Denormalised, not looked up via `Episode`. Needed so a POST retry after the feed is unsubscribed can still build a valid outbound action. |
 | `enclosureUrl` | `String` | No | Snapshot of `Episode.enclosureUrl` at write time | Same rationale as `feedUrl`. |
 | `state` | `String`/enum | No | UI (QUEUED/SKIPPED), `DownloadWorker` (DOWNLOADING/DOWNLOADED/ERROR), `SyncOrchestrator` (HANDLED_REMOTELY) | See [§9](#9-episode-ledger-state-machine) for the full transition table. There is **no persisted "NEW" value** — new means no row exists at all. |
-| `actionedAt` | `Long` | No | Whoever writes `state` | Epoch millis. For rows created from a remote action, parsed from the action's ISO-8601 `timestamp` field, interpreted as UTC — see `docs/decisions/0003-gpodder-action-timestamp-as-utc.md`. |
+| `actionedAt` | `Long` | No | Whoever writes `state` | Epoch millis. For rows created from a remote action, parsed from the action's ISO-8601 `timestamp` field, interpreted as UTC (§6). |
 | `syncedToServer` | `Boolean` | No | `false` on local write, `true` only on confirmed 2xx POST | This is literally the outbox flag — `getUnsynced()` is `WHERE syncedToServer = 0`. |
 | `attempts` | `Int` | No | `DownloadWorker` / outbox push | Retry counter. |
 | `lastError` | `String` | Yes | `DownloadWorker` / outbox push | Human-readable, for the error state UI. |
 | `writtenFileName` | `String` | Yes | `DownloadWorker`, after a successful SAF copy | Retry idempotency **only** — never used as an existence check (CLAUDE.md §11's single most important invariant). |
-| `durationSeconds` | `Int` | Yes | Snapshot of `Episode.durationMs` (converted to seconds) at write time | Used only to encode a skip's `PLAY` `total`/`position` — see `docs/decisions/0001-...` and `docs/decisions/0002-skip-as-play-encoding.md`. `null` when the feed never supplied a usable duration. |
+| `durationSeconds` | `Int` | Yes | Snapshot of `Episode.durationMs` (converted to seconds) at write time | Used only to encode a skip's `PLAY` `total`/`position` (§6). `null` when the feed never supplied a usable duration. |
 
 **SyncState** — single row, `id = 1` always
 
@@ -307,18 +307,21 @@ survives — `SubscriptionMirroringTest` proves a re-subscribe doesn't re-downlo
 uses `@Upsert` (not `@Insert(REPLACE)`, whose delete-then-insert would fire the episodes' cascade
 and wipe an existing feed's cache on every refresh). Tests are Robolectric in-memory-DB (headless, no
 emulator — CLAUDE.md §4). `:core:datastore` implements `SettingsRepository` over DataStore
-Preferences, app password encrypted via `AppPasswordCipher` (`docs/decisions/0010`).
+Preferences, app password encrypted via `AppPasswordCipher` — an interface, so the store/serialise
+plumbing stays JVM-testable with a fake while the real `KeystoreAppPasswordCipher` keeps the key in
+the Android Keystore. Robolectric has no `AndroidKeyStore` provider, so that implementation is
+device-only and is verified by an instrumented test rather than by the unit suite.
 
 **Built (Tier 4c, first step):** the DAO layer was split — `EpisodeLedgerDao` owns the ledger table
 and the outbox, `EpisodeListDao` owns the joins against `episodes` that the UI list and its count
 badges read. Keeping the list queries and `countUndecidedByFeed` together is what guarantees a badge,
 its list, and a bulk-confirmation dialog all resolve the same "no ledger row" predicate. `:core:model`
-also gained `EpochTime` (`docs/decisions/0016`) and the four settings S4 persists.
+also gained `EpochTime` (§5 below) and the four settings S4 persists.
 
 **Built (Tier 4b):** all three workers (`DownloadWorker`, `FeedRefreshWorker`, `:app`'s
 `SyncWorker`) and the Hilt graph that constructs them — `:app`'s `di/` package provides every port
 its adapter, so the repositories stay plain constructor-injectable classes with no DI annotations
-of their own. Hilt arrived a tier earlier than TODO.md scheduled it because a `@HiltWorker` is the
+of their own. Hilt arrived a tier earlier than planned because a `@HiltWorker` is the
 only way to give a worker its dependencies without hand-rolling the service locator CLAUDE.md §3
 forbids.
 
@@ -413,15 +416,15 @@ fun episodeKey(guid: String?, enclosureUrl: String): String = guid ?: enclosureU
 
 data class EpisodeLedgerRow(
     val episodeKey: String,
-    val feedUrl: String, // denormalised from Episode at write time — docs/decisions/0001
-    val enclosureUrl: String, // denormalised from Episode at write time — docs/decisions/0001
+    val feedUrl: String, // denormalised from Episode at write time — §4
+    val enclosureUrl: String, // denormalised from Episode at write time — §4
     val state: LedgerState,
     val actionedAt: Long,
     val syncedToServer: Boolean,
     val attempts: Int,
     val lastError: String?,
     val writtenFileName: String?,
-    val durationSeconds: Int? = null, // snapshot from Episode at write time — docs/decisions/0001
+    val durationSeconds: Int? = null, // snapshot from Episode at write time — §4
 ) {
     val guid: String? get() = episodeKey.takeIf { it != enclosureUrl } // derived, not stored
 }
@@ -434,8 +437,8 @@ sealed interface SyncOutcome {
 
 data class SyncState(val lastEpisodeActionSyncTs: Long, val deviceId: String)
 
-// Every stored timestamp above is a Long. The UI renders java.time values (docs/UI_interface.md
-// §0.6), and this is the ONLY conversion between the two — see docs/decisions/0016. Its value is
+// Every stored timestamp above is a Long. The UI renders java.time values (docs/UI.md
+// §0.6), and this is the ONLY conversion between the two. Its value is
 // the function names: everything here is epoch MILLIS except SyncState.lastEpisodeActionSyncTs,
 // which is Unix SECONDS verbatim from the server and must never be computed locally (CLAUDE.md §11).
 // No now(): a Clock is injected where the current time is needed (CLAUDE.md §7).
@@ -489,7 +492,7 @@ interface LogRepository {
 interface ConnectivityMonitor { fun observe(): Flow<Connectivity> }
 data class Connectivity(val online: Boolean, val metered: Boolean)
 
-// Nextcloud Login Flow v2. Implemented in :core:gpodder, which stays a JVM module (ADR 0007) —
+// Nextcloud Login Flow v2. Implemented in :core:gpodder, which stays a JVM module (§2) —
 // nothing here touches an Android API; the browser launch is the UI's concern.
 interface NextcloudLoginFlowClient {
     suspend fun start(baseUrl: String): Result<LoginFlow>
@@ -515,7 +518,7 @@ data class EpisodeAction(
     val episode: String,
     val guid: String?,
     val action: EpisodeActionType,
-    val timestamp: String, // ISO-8601, no offset, interpreted as UTC — see §6 and docs/decisions/0003
+    val timestamp: String, // ISO-8601, no offset, interpreted as UTC — see below
     val started: Int? = null,
     val position: Int? = null,
     val total: Int? = null,
@@ -630,7 +633,7 @@ sequenceDiagram
 | `DOWNLOADED` | `DOWNLOAD` | — | — | — |
 | `SKIPPED` | `PLAY` | `0` | equal to `total` | `EpisodeLedgerRow.durationSeconds` if known, else `0` |
 
-Resolved per AntennaPod's own convention — see `docs/decisions/0002-skip-as-play-encoding.md`.
+Resolved per AntennaPod's own convention: verified against `SynchronizationQueueImpl.enqueueEpisodePlayed`, not guessed.
 Implemented in `net.drehtuer.podsilo.core.sync.toOutboundAction()` (`:core:sync`).
 
 ### Remote `EpisodeAction` → ledger state mapping (inbound)
@@ -653,7 +656,7 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 
 ### RSS → `Episode`/`Feed` field mapping
 
-| Local field | RSS/Atom source (via rssparser -- docs/decisions/0005) | Fallback chain |
+| Local field | RSS/Atom source (via rssparser) | Fallback chain |
 |---|---|---|
 | `Feed.title` | `<channel><title>` | — |
 | `Feed.imageUrl` | `<itunes:image>` or `<image><url>` | none → `null` |
@@ -665,9 +668,17 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 | `Episode.durationMs` | `<itunes:duration>` | none → `null`, never invented |
 | `Episode.link` | `<item><link>` / Atom `<link rel="alternate">` | none → `null` |
 
+**Why rssparser and not Stalla.** CLAUDE.md §3 names `dev.stalla:stalla` first and
+`com.prof18.rssparser` as the fallback to evaluate. Stalla's last release is 1.1.0 from 2021 with no
+cut version since, which fails CLAUDE.md's own "prefer the boring, *maintained* option" bar, so the
+fallback won — put to the author as a question first, not swapped quietly. It costs one thing worth
+knowing: rssparser's Android target resolves `org.xmlpull.v1.XmlPullParserFactory` at runtime, which
+only a device or Robolectric provides, so `:core:feed`'s **parser** tests run under Robolectric while
+its fetch tests run on the plain JVM runner. Still headless, still no emulator.
+
 **Built (Tier 2):** `FeedXmlParser`/`decodeFeedXml`/`RssMapping.kt` in `:core:feed` implement
-this table's mapping from raw bytes to `ParsedFeed` (episodes + feed title/image) — see
-`docs/decisions/0005` for why rssparser, not Stalla. The one row **not** yet mapped is
+this table's mapping from raw bytes to `ParsedFeed` (episodes + feed title/image). The one row
+**not** yet mapped is
 `Episode.link`, which needs schema v2 (§4). `decodeFeedXml` also rewrites the XML prolog's
 declared encoding to `UTF-8` after decoding, not just the characters — rssparser re-serialises the
 string as UTF-8 bytes before re-parsing it, so a stale non-UTF-8 declaration left in the text causes
@@ -905,9 +916,22 @@ belong entirely inside `NamingTemplateEngine` (`:core:naming`) — `:core:downlo
 `resolve()` and uses whatever comes back; it should contain zero string-sanitisation logic of its
 own.
 
+**`{date}`'s timezone is injected, not looked up.** `DefaultNamingTemplateEngine` takes a `ZoneId`
+constructor parameter (defaulting to `ZoneId.systemDefault()`), so the same episode formats to the
+same date on every attempt — a retry after the device has travelled cannot rename it. A missing or
+unparseable `pubDate` formats as the sortable `"00000000"` rather than an empty segment: CLAUDE.md §6
+forbids degrading to `_Title.mp3`, and a filename that sorts to the top of the folder is a visible,
+diagnosable value rather than a silent one. No date is ever invented from another field.
+
+**Why the `com.github.Adonai:jaudiotagger` fork.** The canonical `net.jthink:jaudiotagger` has not
+been released since 2021 and references desktop-only JDK APIs that do not exist on Android; the
+Adonai/Kaned1as fork exists precisely to strip those. It comes from JitPack, which is the one
+dependency in this project not served from Maven Central — and the reason F-Droid submission would
+need it built from source or vendored (`docs/backlog.md`).
+
 **Built (Tier 2 + Tier 4b):** the whole flowchart. `EnclosureDownloader` does A/B (resumable HTTP
 into the app cache, `Range` continuation, truncated-body detection), `EpisodeDownloader` sequences
-C→F, `AudioTagWriter` is step D (see `docs/decisions/0006` for why the Adonai/Kaned1as Android
+C→F, `AudioTagWriter` is step D (the Adonai/Kaned1as Android
 fork), and `DownloadWorker` writes G. Tag writes are per-field best-effort
 (`TagWriteOutcome.PartialSuccess` lists any `FieldKey` the container wouldn't accept) with a
 container-level `Failure` for an unreadable file — never an exception, matching CLAUDE.md §6's
@@ -937,39 +961,53 @@ Two things the flowchart doesn't show, both discovered by building it:
   extension") and every download would have arrived untagged. The download keeps the stable
   `.partial` name so a resume knows what to look for; step D renames it to the extension the file
   is about to be delivered under. Caught by a test, not by review.
-- **Step E goes through the `DownloadTarget` port** (`docs/decisions/0011`), not `DocumentFile`
+- **Step E goes through the `DownloadTarget` port**, not `DocumentFile`
   directly — a test seam, since a SAF write needs a real `DocumentsProvider`. `SafDownloadTarget`
   is the only implementation and is itself untested.
 
 ---
 
-## 12. Decision record — resolved, and still open
+## 12. Decision record
 
-Every architectural choice this project has had to make is either an accepted ADR in
-`docs/decisions/` or one of the four open items at the end. Nothing lives only in prose here: this
-section is the index, the ADR is the record.
+`docs/decisions/` holds the decisions that still constrain the code and cannot be re-derived from
+this document — a server limitation, a wire contract, a rule that amends CLAUDE.md, a platform trap.
+Everything else this project decided is *in* this document, in the section that governs it: an ADR
+restating a rule already written here is a second place for it to go stale, so those were folded in
+and deleted (2026-08-13).
 
-### Accepted ADRs
+### The ADRs that remain
 
 | # | Decision | Where it bites |
 |---|---|---|
-| [0001](decisions/0001-episode-ledger-row-denormalized-fields.md) | `EpisodeLedgerRow` denormalises `feedUrl`, `enclosureUrl`, `durationSeconds` at write time | §4 schema; keeps `:core:sync` free of `EpisodeRepository` |
-| [0002](decisions/0002-skip-as-play-encoding.md) | Skip is `PLAY(started=0, position=total, total=duration ?: 0)` — AntennaPod's own convention | §6 outbound mapping |
-| [0003](decisions/0003-gpodder-action-timestamp-as-utc.md) | Per-action timestamps: emit bare UTC, parse bare/`+HH:MM`/`Z`, always via `OffsetDateTime` | §6 timestamp table |
-| [0004](decisions/0004-naming-date-timezone-and-missing-date-fallback.md) | `ZoneId` injected into the naming engine; a missing `pubDate` formats as the sortable `"00000000"` | §11 |
-| [0005](decisions/0005-rssparser-over-stalla-for-feed-parsing.md) | `com.prof18.rssparser`, not Stalla (unmaintained since 2021) — and why `:core:feed` needs Robolectric | §7 |
-| [0006](decisions/0006-jaudiotagger-android-fork-via-jitpack.md) | `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact | §11 |
-| [0007](decisions/0007-core-gpodder-is-a-jvm-module.md) | `:core:gpodder` is `kotlin("jvm")`, so "no Android" is compiled in rather than review-enforced | §2 |
 | [0008](decisions/0008-nextcloud-gpodder-discards-download-actions.md) | `nextcloud-gpodder` ≥ 3.13.3 silently discards `DOWNLOAD` on POST and still returns 200 — we emit it anyway | §6 — **a real limitation, not a choice** |
 | [0009](decisions/0009-gpodder-api-wire-contract.md) | The verified wire contract: `add − remove`, action-name casing, the `-1` sentinel, bare-array POST, Basic auth, `since` inclusivity | §6 |
-| [0010](decisions/0010-app-password-cipher-behind-interface.md) | The app password is encrypted behind `AppPasswordCipher`, keeping the Keystore out of the JVM test path | §2 `:core:datastore` |
-| [0011](decisions/0011-download-target-port-for-the-saf-write.md) | `DownloadTarget` in front of the SAF write — a test seam, not a portability layer | §8, §11 |
 | [0012](decisions/0012-terminal-states-reopenable-by-user.md) | Terminal states re-open **only** on a UI event (`KEY_USER_REQUESTED`); a re-decision behaves exactly like a first one | §9, §10 |
 | [0013](decisions/0013-backlog-cutoff-is-written-skipped-rows.md) | The backlog cutoff is **written `SKIPPED` rows**, not a read-time `firstSeenAt` filter — amends CLAUDE.md §5 | §4, §5 |
 | [0014](decisions/0014-bulk-user-initiated-download-is-allowed.md) | Bulk download is allowed as a *command*, never as a *rule* — amends CLAUDE.md §1 and README | §10 |
-| [0015](decisions/0015-coil-and-lucide-compose-for-the-ui.md) | Coil for image loading, Lucide's Compose artifact for icons | `docs/UI.md` §18 |
-| [0016](decisions/0016-time-is-java-time-behind-an-epochtime-seam.md) | Storage stays `Long` epoch millis; UI state is `java.time`; `EpochTime` is the only seam | §5 |
 | [0017](decisions/0017-pure-jvm-modules-need-one-android-test.md) | A pure-JVM module that ships in the app gets **one** test on a real Android runtime — the JVM and ICU do not agree | §2, `docs/dev-environment.md` §6 |
+| [0020](decisions/0020-the-login-poll-runs-only-in-the-foreground.md) | The Login Flow v2 poll runs only while S5 is on screen — a backgrounded process could not resolve the host at all | `docs/UI.md` §8, §B5 |
+
+### Decisions folded into this document
+
+Each of these was an ADR until the rule it recorded was written into the section named beside it.
+The rule is unchanged; only its address is.
+
+| Decision | Now lives in |
+|---|---|
+| `EpisodeLedgerRow` denormalises `feedUrl`, `enclosureUrl`, `durationSeconds` at write time | §4 |
+| Skip is `PLAY(started=0, position=total, total=duration ?: 0)` — AntennaPod's own convention | §6 |
+| Per-action timestamps: emit bare UTC, parse bare/`+HH:MM`/`Z`, always via `OffsetDateTime` | §6 |
+| `ZoneId` injected into the naming engine; a missing `pubDate` formats as the sortable `00000000` | §11 |
+| `com.prof18.rssparser`, not Stalla — and why `:core:feed` needs Robolectric | §7 |
+| `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact | §11 |
+| `:core:gpodder` is `kotlin("jvm")`, so "no Android" is compiled in rather than review-enforced | §2 |
+| The app password is encrypted behind `AppPasswordCipher`, keeping the Keystore out of the JVM test path | §2 |
+| `DownloadTarget` in front of the SAF write — a test seam, not a portability layer | §8, §11 |
+| Storage stays `Long` epoch millis; UI state is `java.time`; `EpochTime` is the only seam | §5 |
+| Coil for image loading, Lucide's Compose artifact for icons | `docs/UI.md` §18, `docs/third-party.md` |
+| The database backup is a zipped SQLite file, restored row by row into the live database | `docs/UI.md` §7 |
+| The Nextcloud account is confirmed before it is stored | `docs/UI.md` §8 |
+| Undo for a swipe is a *deferred write*, not a reverted one | `docs/UI.md` §12.3 |
 
 Four further decisions were made while building and are recorded here rather than as ADRs, because
 each follows from an accepted one rather than being a choice with live alternatives:
@@ -987,9 +1025,9 @@ each follows from an accepted one rather than being a choice with live alternati
 
 ### Still open
 
-**Nothing.** The four items that blocked Tier 4c were settled by the author on 2026-08-01 and are
-ADRs 0012–0016 above. Three of them changed a rule rather than filling a hole, so the documents
-holding those rules were amended in the same pass rather than left to contradict the ADR:
+**Nothing.** The four items that blocked the UI build were settled by the author on 2026-08-01.
+Three of them changed a rule rather than filling a hole, so the documents holding those rules were
+amended in the same pass rather than left to contradict the decision:
 
 | Rule that changed | Was | Is | Amended in |
 |---|---|---|---|
@@ -997,9 +1035,10 @@ holding those rules were amended in the same pass rather than left to contradict
 | Bulk download | "no download all" | no download *rules*; a scoped, confirmed *command* is allowed | CLAUDE.md §1, README |
 | UI scope | "two destinations is the target" | eight screens, each covering a state the app can be in | CLAUDE.md §10 step 8 |
 
-Three things remain **unverified rather than undecided**, and are not blockers — they are what the
-first device run will test: `SafDownloadTarget` (ADR 0011), `KeystoreAppPasswordCipher` (ADR 0010),
-and the foreground-service notification. None has ever run.
+The three pieces that were unverified rather than undecided — `SafDownloadTarget` (§11),
+`KeystoreAppPasswordCipher` (§2) and the foreground-service notification — have all since run:
+instrumented, on the emulator, on 2026-08-02, and then against a real Nextcloud on a real phone.
+`docs/dev-environment.md` §10 is the register of what has actually been executed and where.
 
 When the next open decision appears, it goes here, and the section stops saying "nothing".
 
@@ -1020,12 +1059,12 @@ implemented and tested, per the Definition of Done (CLAUDE.md §12).
 | 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
-| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`, `:core:ui`) | ✅ done — all eight screens, navigable and icon-complete | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md`, `docs/UI_interface.md` |
+| 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`, `:core:ui`) | ✅ done — all eight screens, navigable and icon-complete | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md` (Parts A and B) |
 | 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
 **The UI is complete** (502 tests, 3 skipped as of 2026-08-02). All eight screens render, every route
 between them exists, and the app has been installed, launched and driven through all of them on the
-in-container emulator. Every port in `docs/UI_interface.md` §8 is implemented, not just declared.
+in-container emulator. Every port in `docs/UI.md` §B8 is implemented, not just declared.
 
 `:core:ui` joined the module list with the icon allow-list (`docs/UI.md` §18) and the spacing
 invariants (§17), both of which are shared by every screen and were starting to drift.

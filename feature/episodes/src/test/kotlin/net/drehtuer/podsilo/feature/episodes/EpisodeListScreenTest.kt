@@ -199,7 +199,7 @@ class EpisodeListScreenTest {
 
     @Test
     fun `a lost folder grant shows Choose folder instead of Retry`() {
-        // The rendered half of `docs/decisions/0011`: a Retry button here cannot possibly work, so
+        // The rendered half of `docs/architecture.md` §11: a Retry button here cannot possibly work, so
         // the row must offer the action that can.
         render(
             listOf(
@@ -247,7 +247,7 @@ class EpisodeListScreenTest {
 
     @Test
     fun `a downloading row with no live progress says resuming, not zero percent`() {
-        // UI_interface §7: a percentage is only ever drawn from an update seen in this process, so
+        // `docs/UI.md` §B7: a percentage is only ever drawn from an update seen in this process, so
         // after process death the row must not imply it knows how far along it is.
         render(listOf(row(ledgerState = LedgerState.DOWNLOADING, progress = null)))
 
@@ -359,7 +359,7 @@ class EpisodeListScreenTest {
 
     /**
      * Artwork was specified in `docs/UI.md` §5's row anatomy and never drawn — Coil was approved
-     * (ADR 0015), added to the catalog, and depended on by no module at all.
+     * (UI.md §18), added to the catalog, and depended on by no module at all.
      */
     @Test
     fun `an episode row draws its artwork`() {

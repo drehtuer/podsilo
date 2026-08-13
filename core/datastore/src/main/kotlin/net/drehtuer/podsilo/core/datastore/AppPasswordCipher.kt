@@ -7,7 +7,7 @@ package net.drehtuer.podsilo.core.datastore
  * (CLAUDE.md §5). Abstracted behind an interface so the [DataStoreSettingsRepository] serialisation
  * logic is unit-testable with an in-memory fake, while the production [KeystoreAppPasswordCipher]
  * (Android Keystore, only meaningfully exercisable on a real device/emulator) stays out of the
- * Robolectric path. See `docs/decisions/0010`.
+ * Robolectric path. See `docs/architecture.md` §2.
  */
 interface AppPasswordCipher {
     /** Returns an opaque, storable ciphertext string for [plaintext]. */

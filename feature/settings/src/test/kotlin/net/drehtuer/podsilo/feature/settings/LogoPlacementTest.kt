@@ -13,7 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 
 /**
- * Where the brand mark appears across S4, S5 and S6 (`docs/logo.md` §4 and §5).
+ * Where the brand mark appears across S4, S5 and S6 (`docs/UI.md` §C4 and §5).
  *
  * One placement in this module — the About lockup — and two screens that must stay clear of it. The
  * companion tests are `LogoPlacementTest` in `:feature:episodes` (S1–S3) and `:app` (S7–S8).

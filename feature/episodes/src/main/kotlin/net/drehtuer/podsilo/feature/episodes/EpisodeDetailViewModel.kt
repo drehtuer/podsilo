@@ -24,7 +24,7 @@ import net.drehtuer.podsilo.core.model.port.FeedRepository
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * S3 — the detail sheet (`docs/UI_interface.md` §4).
+ * S3 — the detail sheet (`docs/UI.md` §B4).
  *
  * Shares [TriageWriter] and [EpisodeScheduler] with S2 rather than writing rows itself, which is the
  * whole reason that class exists: a decision taken in the sheet and the same decision taken in the

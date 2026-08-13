@@ -4,7 +4,7 @@
 // Nothing in this module's job (Retrofit/OkHttp client, DTOs, DTO<->domain mapping) touches an
 // Android API, so a JVM module compiles the "no Android" property in rather than relying on
 // review to catch a stray import. Its MockWebServer tests then run on the plain `test` task with
-// no Robolectric and no Android test runner. See docs/decisions/0007.
+// no Robolectric and no Android test runner. See `docs/architecture.md` §2.
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)

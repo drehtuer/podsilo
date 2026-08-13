@@ -3,7 +3,7 @@
 package net.drehtuer.podsilo.feature.episodes
 
 /**
- * S3 — the episode detail sheet (`docs/UI_interface.md` §4).
+ * S3 — the episode detail sheet (`docs/UI.md` §B4).
  *
  * A **read step inside triage**, reachable for every episode regardless of state, including the
  * de-emphasised ones (`docs/UI.md` §6). It carries the same [EpisodeUi] the row does — so the sheet

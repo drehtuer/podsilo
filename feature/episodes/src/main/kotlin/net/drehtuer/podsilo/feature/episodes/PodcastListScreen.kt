@@ -131,7 +131,7 @@ fun PodcastListScreen(
 
 /**
  * S1 is the launcher screen and the only one whose app-bar title is the product name, so it is the
- * only app bar the mark appears in (`docs/logo.md` §4.1, §5).
+ * only app bar the mark appears in (`docs/UI.md` §C4.1, §5).
  *
  * The wordmark stays live type beside the mark rather than becoming part of an image: a title has to
  * scale with the user's font setting, and a drawable will not.
@@ -246,7 +246,7 @@ private fun PodcastRow(
         horizontalArrangement = Arrangement.spacedBy(RowPadding),
     ) {
         // The row reserved `ArtworkSize` height from the day it was written and never drew anything
-        // into it — Coil was in the catalog, approved (ADR 0015), and used by no module at all.
+        // into it — Coil was in the catalog, approved (UI.md §18), and used by no module at all.
         PodsiloArtwork(url = feed.artworkUrl, title = feed.displayTitle)
         Column(modifier = Modifier.weight(1f)) {
             Text(

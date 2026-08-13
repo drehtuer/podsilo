@@ -70,7 +70,7 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
 
 /**
  * Malformed or missing `pubDate` degrades to `null` -- `:core:naming`'s sortable placeholder
- * (`docs/decisions/0004`) handles the rest. This covers the common RFC-822 form feeds use; it does
+ * (`docs/architecture.md` §11) handles the rest. This covers the common RFC-822 form feeds use; it does
  * not attempt every date variant real-world feeds are known to produce.
  */
 private fun parseRfc822Date(raw: String?): Long? {

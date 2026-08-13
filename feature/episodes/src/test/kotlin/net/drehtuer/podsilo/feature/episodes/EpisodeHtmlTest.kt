@@ -9,7 +9,7 @@ import org.junit.Test
 
 /**
  * The only place hostile feed HTML meets a renderer, so it is table-tested before the screen that
- * uses it exists (`TODO.md`'s "worth doing early"). Feeds are third-party input the author does not
+ * uses it exists (it is a pure function that hostile feed HTML meets). Feeds are third-party input the author does not
  * control; show notes routinely carry tracking pixels, and a podcast host that gets compromised
  * ships script tags to every subscriber at once.
  */

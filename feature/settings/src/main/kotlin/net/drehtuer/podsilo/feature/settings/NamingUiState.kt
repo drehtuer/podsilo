@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.feature.settings
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 
 /**
- * S6 — the naming template editor (`docs/UI_interface.md` §5).
+ * S6 — the naming template editor (`docs/UI.md` §B5).
  *
  * @property placeholders exactly the set `DefaultNamingTemplateEngine` resolves. `{ext}` is
  *   deliberately absent: the extension is appended after resolution and is not a variable, so

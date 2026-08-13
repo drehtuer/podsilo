@@ -81,7 +81,7 @@ interface EpisodeListRepository {
      *
      * Returns [Episode]s rather than keys because the caller has to build ledger rows from them, and
      * a row needs the feed URL, enclosure URL and duration snapshotted at write time
-     * (`docs/decisions/0001`). It deliberately does not write anything itself: *what* state to write
+     * (`docs/architecture.md` §4). It deliberately does not write anything itself: *what* state to write
      * is the caller's decision — `SKIPPED` for the mark-old rule, `QUEUED` for *Download all*.
      */
     suspend fun undecided(scope: BulkScope): List<Episode>

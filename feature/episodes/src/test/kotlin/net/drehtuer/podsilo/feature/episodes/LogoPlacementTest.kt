@@ -18,7 +18,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * **Where the brand mark appears, and — mostly — where it does not** (`docs/logo.md` §4 and §5).
+ * **Where the brand mark appears, and — mostly — where it does not** (`docs/UI.md` §C4 and §5).
  *
  * §4 says the mark has exactly four placements and calls that "the complete list"; §5 then names the
  * places it must never be. Those are the kind of rules that hold for a week and then quietly stop

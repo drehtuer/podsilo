@@ -48,12 +48,12 @@ below differ enormously in how well-proven they are.
 | **The foreground-service notification** | ✅ **Verified** | 2026-08-02 — after fixing the manifest crash it caused on API 34 (`docs/journal.md`) |
 | **Backup / restore with real data** | ✅ **Verified** | 2026-08-02: 9,565 episodes round-tripped; a ledger row created after the export was correctly removed by the restore |
 | **The device test set** | ◐ **Partly** | 2026-08-03: 41 declared, **35 executed, 6 skipped**. `SafDownloadTargetInstrumentedTest` opts out without a SAF grant — which the set's own uninstall removes — and `am instrument` reports those skips as `OK`. The script now fails on a skip rather than calling it green; see [§6](#6-testing-tiers) |
-| `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (ADR 0010) |
-| `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (ADR 0011) |
+| `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (architecture §2) |
+| `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (architecture §11) |
 | SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |
 | **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`) |
 | **A real Nextcloud (read)** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`) |
-| **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/decisions/0002`) |
+| **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/architecture.md` §6) |
 | **A full `SyncOrchestrator` pass on real data** | ✅ **Verified** | 2026-08-02: real subscriptions + a real episode — outbox push, the echo of our own action, and server-clock `since` all confirmed (`docs/journal.md`) |
 
 **In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
@@ -265,7 +265,7 @@ currently-executing tests are (see [§5](#5-clean-checkout-to-green-tests) for t
 Four modules need **Robolectric**:
 
 - `:core:feed` — rssparser is a Kotlin Multiplatform library whose *Android* target resolves
-  `org.xmlpull.v1.XmlPullParserFactory` at runtime (ADR 0005).
+  `org.xmlpull.v1.XmlPullParserFactory` at runtime (architecture §7).
 - `:core:database` — Room, obviously.
 - `:core:download` and `:app` — WorkManager's `TestListenableWorkerBuilder` and the
   `ContentResolver` behind the SAF grant check both need an Android `Context`.
@@ -353,7 +353,7 @@ That Windows-server variant is still **untested**; only the WSL-server variant a
 SAF grant and the episode ledger. Downloaded files are untouched (they are in the user's folder, not
 app storage). Export a backup from Settings first if the install holds anything worth keeping, and
 expect to reconnect afterwards; restoring that backup is itself gated on being connected again
-(`docs/decisions/0018`), which is the intended order.
+(`docs/UI.md` §7), which is the intended order.
 
 **It never runs on CI, and that isolation is structural rather than a matter of tagging.**
 `.github/workflows/ci.yml` runs `ktlintCheck`, `detekt`, `test` and `assembleDebug` — nothing else.
@@ -369,8 +369,8 @@ What the set covers, in rough order of what it has actually caught:
 | | `NamingOnAndroidTest` | `:core:naming` compiled by ICU — the module is pure JVM by design, so its own suite cannot reach this |
 | | `RoomOnDeviceSqliteTest` | the schema and migrations on the phone's SQLite, not Robolectric's; pins that removing a feed keeps its ledger |
 | Platform surfaces | `PlatformSurfacesTest` | the foreground-service type as installed, its permission, and that cleartext `http://` is refused |
-| | `SafDownloadTargetInstrumentedTest` | the actual SAF write (ADR 0011) |
-| | `KeystoreAppPasswordCipherTest` | the real Keystore round trip (ADR 0010) |
+| | `SafDownloadTargetInstrumentedTest` | the actual SAF write (architecture §11) |
+| | `KeystoreAppPasswordCipherTest` | the real Keystore round trip (architecture §2) |
 | UI conformance | `PodcastListConformanceTest` | S1 against `docs/UI.md` §4 / §12.5 / §17 / §18 |
 | | `SettingsConformanceTest` | S4/S5 against §7/§8 — no password field, restore gating, the bulk preview |
 | | `EpisodeListScreenInstrumentedTest` | S2 rows on a real Compose runtime |
@@ -801,7 +801,7 @@ Same failure family as the UTP installer problem in [§6](#the-device-test-set),
 
 You can't, directly. They are signed with different keys, so Android refuses the upgrade and the
 install must uninstall first — **which erases the episode ledger, the Nextcloud login and the SAF
-folder grant**. Export a backup from Settings first (`docs/decisions/0018`), and expect to reconnect
+folder grant**. Export a backup from Settings first (`docs/UI.md` §7), and expect to reconnect
 and re-grant afterwards.
 
 ---

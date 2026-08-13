@@ -36,7 +36,7 @@ import javax.inject.Inject
 private const val ZIP_MIME = "application/zip"
 
 /**
- * Single activity, as `docs/UI_interface.md` §9 specifies: one `NavHost`, S1 the start destination.
+ * Single activity, as `docs/UI.md` §B9 specifies: one `NavHost`, S1 the start destination.
  *
  * The activity owns the two things a Composable cannot do for itself — launching the SAF picker
  * (an `ActivityResultContract`) and opening a link — and hands them to the host as callbacks. The

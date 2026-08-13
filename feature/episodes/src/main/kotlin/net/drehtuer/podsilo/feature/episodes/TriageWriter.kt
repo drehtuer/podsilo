@@ -51,7 +51,7 @@ class TriageWriter(
     /**
      * Marks [episodes] `QUEUED` so the list reflects the decision immediately, before any worker
      * runs. The download itself is enqueued by the caller through `WorkScheduler` — this class never
-     * touches WorkManager (`docs/UI_interface.md` §0.2).
+     * touches WorkManager (`docs/UI.md` §B0.2).
      *
      * `attempts` resets to 0 and `lastError` clears, per `docs/decisions/0012` §3: a re-decision is a
      * new attempt chain, and a fresh download that rendered as "attempt 3 of 3" would look exhausted
@@ -88,7 +88,7 @@ class TriageWriter(
             lastError = null,
             writtenFileName = writtenFileName,
             // Snapshotted at write time so the outbox can still build a valid action if the episode
-            // row is pruned before the push (docs/decisions/0001).
+            // row is pruned before the push (`docs/architecture.md` §4).
             durationSeconds = durationMs?.let { (it / MILLIS_PER_SECOND).toInt() },
         )
 }

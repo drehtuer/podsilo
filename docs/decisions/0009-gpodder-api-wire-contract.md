@@ -55,7 +55,7 @@ timezone offset (`2009-12-12T09:00:00`). Neither server emits that form any more
 repository formats with PHP `format("c")`.
 
 `parseGpodderTimestamp` (`:core:sync`) therefore accepts **all three** forms — bare, `+HH:MM`, and
-`Z` — and `docs/decisions/0003` is updated accordingly. Podsilo still *emits* the bare form, which
+`Z` — and `docs/architecture.md` §6 is updated accordingly. Podsilo still *emits* the bare form, which
 both servers parse as UTC (`new DateTime($ts, new DateTimeZone("UTC"))`).
 
 One trap worth naming: an offset-bearing timestamp must be parsed as `OffsetDateTime`, not

@@ -3,7 +3,7 @@
 package net.drehtuer.podsilo.feature.settings
 
 /**
- * S5 — the Nextcloud connection dialog (`docs/UI_interface.md` §5).
+ * S5 — the Nextcloud connection dialog (`docs/UI.md` §B5).
  *
  * @property host what the user typed, **without a scheme**: the field renders a fixed `https://`
  *   prefix, and a pasted scheme is stripped rather than rejected.
@@ -97,7 +97,7 @@ sealed interface ConnectEvent {
 }
 
 sealed interface ConnectEffect {
-    /** A Custom Tab, opened by the host — `docs/decisions/0007` keeps `:core:gpodder` Android-free. */
+    /** A Custom Tab, opened by the host — `docs/architecture.md` §2 keeps `:core:gpodder` Android-free. */
     data class OpenBrowser(
         val url: String,
     ) : ConnectEffect

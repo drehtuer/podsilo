@@ -28,7 +28,7 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * `SafDownloadTarget` writing through a **real** `DocumentsProvider` — what `docs/decisions/0011`
+ * `SafDownloadTarget` writing through a **real** `DocumentsProvider` — what `docs/architecture.md` §11
  * says can only be checked on a device, and what `docs/dev-environment.md` listed as "never run".
  *
  * These run in the **app's own process**, so they inherit the persistable tree-URI grant the app

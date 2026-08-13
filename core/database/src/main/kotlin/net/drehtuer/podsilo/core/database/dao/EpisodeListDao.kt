@@ -115,7 +115,7 @@ interface EpisodeListDao {
      * "did it actually land?" affordance.
      *
      * Ledger rows rather than the join: the group renders `writtenFileName` and the feed, both of
-     * which the ledger row carries denormalised (`docs/decisions/0001`), so it stays correct for an
+     * which the ledger row carries denormalised (`docs/architecture.md` §4), so it stays correct for an
      * episode whose cached row was pruned by an unsubscribe.
      *
      * [since] is the *display cursor* `SettingsRepository.observeDeliveredClearedAt` holds — "stop

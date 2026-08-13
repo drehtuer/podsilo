@@ -7,7 +7,7 @@ import java.time.Instant
 
 /**
  * The single conversion between the `Long` epoch numbers every stored type uses and the
- * `java.time` values the UI renders (`docs/decisions/0016`).
+ * `java.time` values the UI renders (`docs/architecture.md` §5).
  *
  * Storage keeps `Long`s — no Room type converters, no migration. UI state classes carry [Instant]
  * and [Duration], which is free at this project's `minSdk` and is already the time vocabulary of

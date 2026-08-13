@@ -27,7 +27,7 @@ interface EpisodeRepository {
      *
      * Deliberately `suspend` and not a [Flow]: S1's order is frozen between explicit refreshes, so
      * observing this would be the exact bug that rule exists to prevent — rows moving under the
-     * user's finger (`docs/UI_interface.md` §2).
+     * user's finger (`docs/UI.md` §B2).
      */
     suspend fun latestPublicationByFeed(): Map<String, Long>
 

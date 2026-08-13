@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.feature.episodes
 import java.time.Instant
 
 /**
- * S1 — the podcast list, and the app's launcher screen (`docs/UI_interface.md` §2).
+ * S1 — the podcast list, and the app's launcher screen (`docs/UI.md` §B2).
  *
  * @property setup `null` once the app can actually complete a download. The checklist is not
  *   onboarding decoration: without it, the first time the author learns no folder is chosen is when

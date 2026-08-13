@@ -53,7 +53,7 @@ sealed interface TagWriteOutcome {
 /**
  * Rewrites audio tags on [file] in place, best-effort -- CLAUDE.md section 6: a tag-write failure
  * must never lose a successful download. Uses jaudiotagger (the Android-compatible Adonai/Kaned1as
- * fork, not the stale upstream artifact -- see `docs/decisions/0006`).
+ * fork, not the stale upstream artifact -- see `docs/architecture.md` §11).
  *
  * Needs a real [File]: tagging libraries can't write through a SAF `OutputStream`, which is why the
  * download pipeline tags in the app cache before copying into the user's SAF folder

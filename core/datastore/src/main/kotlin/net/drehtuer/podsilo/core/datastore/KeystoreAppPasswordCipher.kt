@@ -19,7 +19,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Not covered by the module's Robolectric tests — Robolectric has no real `AndroidKeyStore`
  * provider, so this class is verified on a device/emulator (Tier 4b instrumented). The serialise/
  * store/read plumbing around it is what the JVM tests exercise, via a fake cipher. See
- * `docs/decisions/0010`.
+ * `docs/architecture.md` §2.
  */
 class KeystoreAppPasswordCipher : AppPasswordCipher {
     override fun encrypt(plaintext: String): String {
