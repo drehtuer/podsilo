@@ -16,13 +16,27 @@ import java.time.ZoneOffset
 class ReconciliationTest {
     private val fixedClock: Clock = Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneOffset.UTC)
 
+    @Suppress("LongParameterList") // A builder for a wire type: its parameters are that type's fields.
     private fun action(
         action: EpisodeActionType = EpisodeActionType.DOWNLOAD,
         podcast: String = "https://example.com/feed.xml",
         episode: String = "https://example.com/ep.mp3",
         guid: String? = "guid-123",
         timestamp: String = "2026-07-14T09:00:00",
-    ) = EpisodeAction(podcast = podcast, episode = episode, guid = guid, action = action, timestamp = timestamp)
+        // A PLAY is only "handled" when it reads as ended, so the default carries an ended pair —
+        // otherwise every PLAY case here would silently be testing the unread shape instead.
+        position: Int? = 1_800,
+        total: Int? = 1_800,
+    ) = EpisodeAction(
+        podcast = podcast,
+        episode = episode,
+        guid = guid,
+        action = action,
+        timestamp = timestamp,
+        started = 0,
+        position = position,
+        total = total,
+    )
 
     private fun localRow(
         episodeKey: String,

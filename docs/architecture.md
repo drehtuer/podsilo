@@ -631,21 +631,37 @@ sequenceDiagram
 | Ledger state | Emitted `action` | `started` | `position` | `total` |
 |---|---|---|---|---|
 | `DOWNLOADED` | `DOWNLOAD` | — | — | — |
-| `SKIPPED` | `PLAY` | `0` | equal to `total` | `EpisodeLedgerRow.durationSeconds` if known, else `0` |
+| `SKIPPED` | `PLAY` | `0` | equal to `total` | `EpisodeLedgerRow.durationSeconds` if known, else **`1`** |
 
 Resolved per AntennaPod's own convention: verified against `SynchronizationQueueImpl.enqueueEpisodePlayed`, not guessed.
 Implemented in `net.drehtuer.podsilo.core.sync.toOutboundAction()` (`:core:sync`).
+
+**The `1` is not a duration** (`docs/decisions/0022`, amended 2026-08-14 — this table said `0` until
+then). A reader decides *played* from `position > 0 && total > 0 && position >= total`, so a `0/0`
+action is stored, returned by the API, and rendered as **unplayed for ever**. One second is the
+smallest value that says "there was something and it is finished" without inventing the
+plausible-looking duration CLAUDE.md §6 forbids.
 
 ### Remote `EpisodeAction` → ledger state mapping (inbound)
 
 | Incoming `action` | Effect on local ledger |
 |---|---|
-| `DOWNLOAD`, `PLAY`, or `DELETE` for an episode we don't have a terminal local state for | `state = HANDLED_REMOTELY` — do not download it here |
+| `DOWNLOAD` or `DELETE` for an episode we don't have a terminal local state for | `state = HANDLED_REMOTELY` — do not download it here |
+| `PLAY` **that reads as ended** — `position > 0 && total > 0 && position >= total` | as above |
+| `PLAY` that does **not** read as ended — including `position = 0` | **ignored**: this is how a client says *unread* |
 | Any action for an episode not in any subscribed feed | Still processed (§5 explicitly lists this as a test case) — the ledger is keyed by episode, not by current subscription |
 | Our own device's echoed-back action | Idempotent no-op (identified via `deviceId`, or simply because the local state already matches) |
 
 Identification rule for both directions: **`guid`, falling back to `episode` (enclosure URL) when
 `guid` is absent** — matches `episodeKey`'s definition exactly (§4).
+
+**A `PLAY` is not automatically "handled"** (`docs/decisions/0022`, 2026-08-14 — this table said it
+was until then). The API cannot delete an action and has no *unread* type, so a client says *unread*
+by writing a `PLAY` with `position = 0`, keeping whatever `total` the row already had. Reading the
+type alone inverted the user's intent: the episode they had just marked as **not** listened to was
+the one filed as terminal and hidden from *To decide* for ever. The rule above is the reading client's
+own, transcribed rather than approximated. `DOWNLOAD` is ours to add on top and does not conflict —
+their question is "was it played", ours is "has another client handled it" (CLAUDE.md §5).
 
 ---
 
@@ -986,6 +1002,7 @@ and deleted (2026-08-13).
 | [0014](decisions/0014-bulk-user-initiated-download-is-allowed.md) | Bulk download is allowed as a *command*, never as a *rule* — amends CLAUDE.md §1 and README | §10 |
 | [0017](decisions/0017-pure-jvm-modules-need-one-android-test.md) | A pure-JVM module that ships in the app gets **one** test on a real Android runtime — the JVM and ICU do not agree | §2, `docs/dev-environment.md` §6 |
 | [0020](decisions/0020-the-login-poll-runs-only-in-the-foreground.md) | The Login Flow v2 poll runs only while S5 is on screen — a backgrounded process could not resolve the host at all | `docs/UI.md` §8, §B5 |
+| [0022](decisions/0022-play-is-an-ended-marker-in-both-directions.md) | A `PLAY` means *ended*, both ways: a duration-less skip sends `1/1`, and an inbound `PLAY` is only terminal when `position >= total > 0` — which is how a client says *unread* | §6 — settles #60's two interop halves |
 
 ### Decisions folded into this document
 

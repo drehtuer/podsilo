@@ -193,16 +193,17 @@ report. Everything below is what stays broken afterwards.
 
 ### Step 3 — `position`/`total` must be non-zero or Nextcloud will not show it
 
-- [ ] Today: `total = durationSeconds ?: 0` and `position = total`. For any feed without a usable
+**Done 2026-08-14** (`docs/decisions/0022`), together with step 3b — D2 and D7 are the same field
+pair read from two sides, so splitting them would have shipped half a rule.
+
+- [x] A duration-less skip now sends `position = total = 1`. For any feed without a usable
       `itunes:duration` we post `0/0`, which §2 shows renders as **unplayed in RePod forever**. The
       action is stored; it is simply never read as "ended".
-- [ ] This needs **decision D2** below before it can be implemented — CLAUDE.md §6 and ADR 0002 say
+- [x] ~~Needs D2~~ — settled: `1` is a marker, not a duration — CLAUDE.md §6 and ADR 0002 say
       in terms *"do not invent a plausible-looking duration"*, and the fix is a value in that field.
-- [ ] Whatever is chosen, add a table-driven test over the encoding and state the choice in
-      `docs/architecture.md` §6's outbound-mapping table, which currently documents `0`.
-- [ ] Check how many of the author's four feeds actually declare `itunes:duration` before sizing
-      this — it may be the whole of the remaining symptom or none of it. `ManualNextcloudProbe` and
-      the parsed episode rows answer it.
+- [x] `docs/architecture.md` §6's outbound table now says `1`, and a test asserts that *every* skip
+      we emit reads as played by the reading client's own rule, duration or not.
+- [x] Sizing it turned out not to matter: the fix is one constant and it is correct for both cases.
 
 ### Step 3b — A remote *mark as unread* is currently read as "handled elsewhere"
 
@@ -240,9 +241,13 @@ show: an explicit unread is `position = 0, total > 0`, while our own duration-le
 deliberately marked *unread* in Nextcloud is the one Podsilo removes from *To decide* and files as
 already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ever revisits it.
 
-- [ ] `reconcile` must read `position`/`total` for a `PLAY`, using RePod's rule, so a `PLAY` that is
-      not *ended* is **not** terminal. `DOWNLOAD` and `DELETE` are unaffected.
-- [ ] **How it interacts with D2 is now a choice rather than a knot.** Our own skip encoding sends
+- [x] `reconcile` reads `position`/`total` for a `PLAY`, using the reading client's rule verbatim.
+      `DOWNLOAD` and `DELETE` are unaffected.
+- [x] **D7 took the first option**: D2 gives duration-less skips a non-zero encoding, so the rule is
+      adopted verbatim with **no special case on either side**. The cost is stated in the ADR — a
+      legacy `0/0` action in the server log stops counting as handled, which costs a re-decision on a
+      fresh install and nothing on the device that made it.
+- [x] ~~How it interacts with D2 is now a choice rather than a knot.~~ Our own skip encoding sends
       `position = total = 0` when a feed declares no duration, and RePod's rule reads that as *not*
       handled — so a second Podsilo device would not see the skip. Two ways out, and the measurement
       above says both work:
@@ -252,34 +257,34 @@ already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ev
         ours — and stays terminal, while `position == 0 && total > 0` is an explicit unread and is
         not. Works today without touching the outbound encoding, at the cost of a branch that exists
         only because of our own past output, and which D2 would later make dead.
-- [ ] Test both directions with the real shapes: `position=0 total=1800` (RePod unread),
-      `position=2838 total=2838` (RePod played), `position=0 total=0` (our own duration-less skip).
+- [x] Tested with the **measured** shapes rather than invented ones — the five unread marks from the
+      probe verbatim, plus played, ours-new, ours-legacy, partial, and a `PLAY` with no values at all.
 
 ### Step 4 — The `since` cursor compares two different clocks
 
-- [ ] The server selects `timestamp_epoch > since` on **client-authored** timestamps; we persist the
+**Done 2026-08-14.**
+
+- [x] Confirmed live before fixing: web-client actions arrive **6 980 s ahead** of the server clock.
+      The server selects `timestamp_epoch > since` on **client-authored** timestamps; we persist the
       **server's** `time()` as the next `since`. Any action authored before our last pass is
       invisible to us permanently. This is not theoretical: RePod's `formatEpisodeTimestamp` emits
       **local time with no offset** (`getHours()`, not `getUTCHours()`) and gpoddersync parses it as
       UTC, so on the author's UTC+2 instance every RePod action is stored two hours *ahead* — which
       happens to save us, and would silently lose every action from a client whose clock is behind
       the server's.
-- [ ] Proposed: **rewind the cursor by a fixed overlap** (a few minutes at least; a day is not
-      expensive) when sending `since`, and rely on reconciliation being idempotent — which it already
-      is, because a terminal local state ignores an incoming action. Re-delivery costs a few rows;
-      a missed action costs a re-download.
-- [ ] Test the case directly: an action whose authored timestamp is *older* than the stored cursor
-      must still be reconciled.
-- [ ] Do **not** start computing `since` from local device time. CLAUDE.md §11 forbids it and clock
-      skew is the disease, not the cure.
+- [x] **The cursor is rewound by one day when sent.** Re-delivery is free — a terminal local state
+      absorbs a replay with no write, which is asserted — while a missed action costs a re-download of
+      an episode the user already handled. The asymmetry is the whole argument for a day rather than
+      a few minutes.
+- [x] Tested directly, plus the floor at `0` for a fresh install.
+- [x] What is **persisted** is still the server's own value, verbatim — only what we *send* is
+      rewound, so the overlap cannot compound a day per pass. CLAUDE.md §11 holds.
 
 ### Step 5 — Verify identity end to end, then close
 
-- [ ] Assert that the `guid` we post is byte-identical to the feed's raw `<guid>` text — rssparser
-      gives us the parsed value and we store it untrimmed; RePod matches on `(string) $item->guid`.
-      A divergence would put a phantom ledger row under a key no episode has, which looks exactly
-      like "it did not show up in Podsilo". Cheap to assert with a fixture, and the probe from step 0
-      confirms it against the real instance.
+- [x] `GuidFidelityTest` over a fixture of the shapes a real feed produces — plain, indented on its
+      own line, a URL with a query string, and a `urn:` — pinning that `guid` and `episodeKey` are
+      always the same string. The probe already confirmed the live instance matches.
 - [ ] Re-run the device test set and check the round trip by hand on the phone: mark in Podsilo →
       appears in RePod; mark in RePod → the episode leaves *To decide* in Podsilo. **Nothing in the
       JVM suite can prove this**, and #60 is a bug that only exists on the wire.
@@ -288,12 +293,14 @@ already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ev
 
 ## 4. Decisions needed from the author
 
-Seven. Steps 3, 3b and 5 are blocked on D2/D7; §7 is blocked on nothing, since D4 and D5 are settled.
+Seven, and **all of them are settled**. D2 and D7 were answered on 2026-08-14 and became
+`docs/decisions/0022`; what remains open is D1 (the four-hour interval) and D3 (whether to close
+#60's *downloaded* half as won't-fix), neither of which blocks any step.
 
 | # | Question | Why it is not mine to decide |
 |---|---|---|
 | **D1** | Should the default sync interval stay at **4 hours**? | It is the difference between "eventually" and "in the background, usefully". 15 minutes is WorkManager's floor and Doze will stretch it anyway. But it is battery and traffic on the author's phone, and steps 1–2 already remove the *user-visible* delay, so this may be fine as it is. |
-| **D2** | What do we post as `position`/`total` when the feed declares no duration? | CLAUDE.md §6 and ADR 0002 forbid inventing a duration; RePod requires both to be `> 0`. The narrow reading is that `position = total = 1` is not a *duration claim* but an "ended" marker, and is honest in a way that a fabricated 45 minutes is not. The alternative is accepting that duration-less episodes never show as played in Nextcloud. Either way it wants an ADR, because it is a change to a documented encoding. |
+| **D2** | What do we post as `position`/`total` when the feed declares no duration? | **Settled 2026-08-14: `position = total = 1`.** A marker, not a duration — see `docs/decisions/0022`. |
 | **D3** | Do we want *downloaded* to be visible in Nextcloud at all? | We cannot have it as `DOWNLOAD` — see §5. The only mechanism that exists is emitting `PLAY` on download, which CLAUDE.md §5 forbids explicitly and for a good reason ("would assert something untrue and can trigger auto-delete in other clients"). Half of #60's title is this, and the honest answer may be to close that half as *won't fix* and say so in the issue. |
 ### Settled 2026-08-13
 
@@ -303,7 +310,7 @@ Seven. Steps 3, 3b and 5 are blocked on D2/D7; §7 is blocked on nothing, since 
 | **D5** | Does *"apply Nextcloud's state"* overwrite a local **`DOWNLOADED`** row? | **No.** The author's rule: *a remote play means the episode was played on another device, so no additional download is necessary here.* A `DOWNLOADED` row already guarantees that, so there is nothing for the remote action to add — and the server cannot restore what overwriting would destroy (§5). | The download record survives. See the note below: this is the reading of the author's rule, not a quote of it. |
 | **D6** | Is a *force push* allowed to re-assert decisions Nextcloud has already seen? | **Yes**, chunked, behind the counted confirmation ADR 0013 established. | §7.2 trap 3 and 4 stand as written. |
 
-| **D7** | What is a `PLAY` with `position = 0, total = 0` — ours, sent when a feed declares no duration? | It is the same field pair from both sides, and the two answers have to agree. If it means *not handled* (RePod's reading), step 3b is a clean rule and our duration-less skips stop propagating to a second device until D2 gives them a non-zero encoding. If it means *handled* (our current reading), an explicit **unread** from RePod keeps being swallowed unless the rule special-cases `total > 0`. Recommendation: settle D2 first — give a duration-less skip a non-zero encoding — and then RePod's rule can be adopted verbatim, with no special case on either side. |
+| **D7** | What is a `PLAY` with `position = 0, total = 0`? | **Settled 2026-08-14: follow the reading client's rule.** Not ended, therefore not handled. With D2 giving new skips `1/1`, no special case is needed on either side. |
 
 **One line of interpretation, flagged rather than buried.** D5's answer states what a remote `PLAY`
 *means* — no download needed here — rather than what it does to a `DOWNLOADED` row. Both states are

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Guid shapes that a reading client matches on verbatim.
+
+  RePod looks an action up with findByGuid((string) $item->guid) — the raw text of the element, with
+  no trimming and no normalisation. So whatever this parser produces has to be byte-identical to what
+  is between the tags, or an action we post lands under a key the other client cannot find.
+
+  The pretty-printed case is the one that matters in practice: real feeds wrap and indent, and an
+  XML parser that returned the surrounding whitespace (or one that trimmed when the other client does
+  not) would break matching silently for every episode in the feed.
+-->
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0/">
+  <channel>
+    <title>Guid Shapes</title>
+    <item>
+      <title>Plain guid</title>
+      <guid isPermaLink="false">guid-plain</guid>
+      <enclosure url="https://example.com/episodes/plain.mp3" type="audio/mpeg" length="1"/>
+    </item>
+    <item>
+      <title>Guid on its own line, indented</title>
+      <guid isPermaLink="false">
+        guid-indented
+      </guid>
+      <enclosure url="https://example.com/episodes/indented.mp3" type="audio/mpeg" length="1"/>
+    </item>
+    <item>
+      <title>Guid that is a URL</title>
+      <guid isPermaLink="true">https://example.com/episodes/2026/08/14?id=42&amp;x=1</guid>
+      <enclosure url="https://example.com/episodes/url-guid.mp3" type="audio/mpeg" length="1"/>
+    </item>
+    <item>
+      <title>Guid with a colon-shaped scheme</title>
+      <guid isPermaLink="false">urn:bbc:podcast:p08y46bf</guid>
+      <enclosure url="https://example.com/episodes/urn.mp3" type="audio/mpeg" length="1"/>
+    </item>
+  </channel>
+</rss>

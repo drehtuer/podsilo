@@ -12,8 +12,46 @@ import java.time.Clock
 /** States a remote action must never override -- see `docs/architecture.md` section 9. */
 private val TERMINAL_STATES = setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY)
 
-/** Action types that mean "this device has handled the episode" -- `NEW` does not (CLAUDE.md section 5/6). */
-private val TERMINAL_ACTION_TYPES = setOf(EpisodeActionType.DOWNLOAD, EpisodeActionType.PLAY, EpisodeActionType.DELETE)
+/**
+ * Whether a remote action means *another client has finished with this episode*, so this device must
+ * not offer it for download.
+ *
+ * **A `PLAY` is not automatically that**, which is the correction this function exists for. Until
+ * 2026-08-14 the type alone decided, and every `PLAY` was terminal — but the gpodder API has no way
+ * to delete an action or to say "unread", so **that is exactly how a client says it**: RePod's *mark
+ * as unread* writes a `PLAY` with `position = 0`, keeping whatever `total` the row already had
+ * (`markAs` in `src/utils/status.ts`). Reading the type alone therefore turned "I have *not* listened
+ * to this" into `HANDLED_REMOTELY` — terminal, never revisited, and silently the opposite of what the
+ * user asked for. Observed on the author's own server: five of six actions in one window disagreed.
+ *
+ * The rule is RePod's own `hasEnded`, transcribed rather than approximated, because it is the client
+ * the author reads the state in and one shared rule beats two nearly-identical ones:
+ *
+ * ```js
+ * action.action.toLowerCase() === 'delete'
+ *   || (action.position > 0 && action.total > 0 && action.position >= action.total)
+ * ```
+ *
+ * `DOWNLOAD` is ours to add and does not conflict: RePod's question is "was it *played*", ours is
+ * "has another client *handled* it", and CLAUDE.md §5 says a remote `DOWNLOAD` means do not download
+ * it here. `NEW` means neither.
+ *
+ * A `PLAY` with no playback values at all reads as *not* ended, since the server's own absent-value
+ * sentinel has already been normalised to `null` at the client boundary. That is the same answer
+ * RePod gives such an action, which is the point of copying the rule.
+ */
+private fun EpisodeAction.meansHandledElsewhere(): Boolean =
+    when (action) {
+        EpisodeActionType.DOWNLOAD, EpisodeActionType.DELETE -> true
+        EpisodeActionType.PLAY -> hasEnded()
+        EpisodeActionType.NEW -> false
+    }
+
+private fun EpisodeAction.hasEnded(): Boolean {
+    val at = position ?: 0
+    val end = total ?: 0
+    return at > 0 && end > 0 && at >= end
+}
 
 /**
  * Reconciles [remoteActions] against [localLedger] (keyed by episode key), returning only the rows
@@ -28,6 +66,9 @@ private val TERMINAL_ACTION_TYPES = setOf(EpisodeActionType.DOWNLOAD, EpisodeAct
  *
  * A remote action for an episode not in any currently-subscribed feed is still processed -- the
  * ledger is keyed by episode, not by subscription (CLAUDE.md section 5).
+ *
+ * **Which actions count is [meansHandledElsewhere], and it is not simply "the type".** Read its
+ * KDoc before changing anything here.
  */
 fun reconcile(
     localLedger: Map<String, EpisodeLedgerRow>,
@@ -38,7 +79,7 @@ fun reconcile(
     val winningTimestampByKey = mutableMapOf<String, Long>()
 
     for (action in remoteActions) {
-        if (action.action !in TERMINAL_ACTION_TYPES) continue
+        if (!action.meansHandledElsewhere()) continue
         val key = episodeKey(action.guid, action.episode)
         val parsedTimestamp = parseGpodderTimestamp(action.timestamp) ?: clock.millis()
         val currentBest = winningTimestampByKey[key]

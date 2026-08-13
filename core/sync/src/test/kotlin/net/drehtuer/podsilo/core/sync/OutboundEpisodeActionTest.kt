@@ -7,6 +7,7 @@ import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.EpisodeActionType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
@@ -55,14 +56,39 @@ class OutboundEpisodeActionTest {
         assertEquals(1800, action.total)
     }
 
+    /**
+     * **Changed 2026-08-14.** This asserted `0/0` and was correct against the encoding as documented
+     * — and the encoding was wrong about the world: RePod requires `position > 0 && total > 0` to
+     * call an episode played, so every `0/0` action rendered as unplayed in Nextcloud for ever.
+     *
+     * `1` is not a fabricated duration. It is the smallest value that says "there was something and
+     * it is finished", which is the claim a skip actually makes; CLAUDE.md §6's rule against
+     * inventing a plausible-looking duration is what rules out the alternative of guessing 45
+     * minutes.
+     */
     @Test
-    fun `skipped with unknown duration sends 0, not a fabricated value`() {
+    fun `skipped with unknown duration sends 1, which is a marker and not a duration`() {
         val action = row(LedgerState.SKIPPED, durationSeconds = null).toOutboundAction()
 
         requireNotNull(action)
         assertEquals(0, action.started)
-        assertEquals(0, action.position)
-        assertEquals(0, action.total)
+        assertEquals(1, action.position)
+        assertEquals(1, action.total)
+    }
+
+    /** The whole point of the value: RePod's own rule has to read it as ended. */
+    @Test
+    fun `every skip we send reads as played by RePod's rule, duration or not`() {
+        listOf(null, 1_800).forEach { duration ->
+            val action = requireNotNull(row(LedgerState.SKIPPED, durationSeconds = duration).toOutboundAction())
+            val position = requireNotNull(action.position)
+            val total = requireNotNull(action.total)
+
+            assertTrue(
+                "duration=$duration produced $position/$total, which RePod renders as unplayed",
+                position > 0 && total > 0 && position >= total,
+            )
+        }
     }
 
     @Test

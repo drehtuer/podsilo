@@ -114,6 +114,12 @@ class NoAutoDownloadInvariantTest {
                         guid = "guid-$index",
                         action = EpisodeActionType.PLAY,
                         timestamp = "2026-07-14T09:00:00",
+                        // An ended pair: since 2026-08-14 a PLAY is only "handled elsewhere" when it
+                        // reads as finished, so a bare PLAY here would be testing the *unread* shape
+                        // and this test would pass for the wrong reason.
+                        started = 0,
+                        position = 1_800,
+                        total = 1_800,
                     )
                 }
             val ledgerRepository = FakeEpisodeLedgerRepository()
