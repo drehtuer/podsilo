@@ -262,29 +262,29 @@ already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ev
 
 ### Step 4 — The `since` cursor compares two different clocks
 
-- [ ] The server selects `timestamp_epoch > since` on **client-authored** timestamps; we persist the
+**Done 2026-08-14.**
+
+- [x] Confirmed live before fixing: web-client actions arrive **6 980 s ahead** of the server clock.
+      The server selects `timestamp_epoch > since` on **client-authored** timestamps; we persist the
       **server's** `time()` as the next `since`. Any action authored before our last pass is
       invisible to us permanently. This is not theoretical: RePod's `formatEpisodeTimestamp` emits
       **local time with no offset** (`getHours()`, not `getUTCHours()`) and gpoddersync parses it as
       UTC, so on the author's UTC+2 instance every RePod action is stored two hours *ahead* — which
       happens to save us, and would silently lose every action from a client whose clock is behind
       the server's.
-- [ ] Proposed: **rewind the cursor by a fixed overlap** (a few minutes at least; a day is not
-      expensive) when sending `since`, and rely on reconciliation being idempotent — which it already
-      is, because a terminal local state ignores an incoming action. Re-delivery costs a few rows;
-      a missed action costs a re-download.
-- [ ] Test the case directly: an action whose authored timestamp is *older* than the stored cursor
-      must still be reconciled.
-- [ ] Do **not** start computing `since` from local device time. CLAUDE.md §11 forbids it and clock
-      skew is the disease, not the cure.
+- [x] **The cursor is rewound by one day when sent.** Re-delivery is free — a terminal local state
+      absorbs a replay with no write, which is asserted — while a missed action costs a re-download of
+      an episode the user already handled. The asymmetry is the whole argument for a day rather than
+      a few minutes.
+- [x] Tested directly, plus the floor at `0` for a fresh install.
+- [x] What is **persisted** is still the server's own value, verbatim — only what we *send* is
+      rewound, so the overlap cannot compound a day per pass. CLAUDE.md §11 holds.
 
 ### Step 5 — Verify identity end to end, then close
 
-- [ ] Assert that the `guid` we post is byte-identical to the feed's raw `<guid>` text — rssparser
-      gives us the parsed value and we store it untrimmed; RePod matches on `(string) $item->guid`.
-      A divergence would put a phantom ledger row under a key no episode has, which looks exactly
-      like "it did not show up in Podsilo". Cheap to assert with a fixture, and the probe from step 0
-      confirms it against the real instance.
+- [x] `GuidFidelityTest` over a fixture of the shapes a real feed produces — plain, indented on its
+      own line, a URL with a query string, and a `urn:` — pinning that `guid` and `episodeKey` are
+      always the same string. The probe already confirmed the live instance matches.
 - [ ] Re-run the device test set and check the round trip by hand on the phone: mark in Podsilo →
       appears in RePod; mark in RePod → the episode leaves *To decide* in Podsilo. **Nothing in the
       JVM suite can prove this**, and #60 is a bug that only exists on the wire.

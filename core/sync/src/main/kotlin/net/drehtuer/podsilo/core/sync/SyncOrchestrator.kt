@@ -20,6 +20,34 @@ import java.io.IOException
 import java.time.Clock
 
 /**
+ * How far back the `since` cursor is rewound on every pull, in seconds — **one day**.
+ *
+ * The cursor compares two different clocks and nothing can make them the same one. The server
+ * selects `WHERE timestamp_epoch > :since` on the **client-authored** timestamp inside each action,
+ * while the `timestamp` it hands back — the value stored as the next `since` — is the **server's own
+ * wall clock**. An action authored before our last pass is therefore invisible to us permanently,
+ * with no error and no gap anyone could notice.
+ *
+ * That is measured, not theorised. Against the author's instance on 2026-08-13, actions written by
+ * the Nextcloud web client came back **6 980 seconds ahead** of the server's clock, because it emits
+ * local time with no offset and the server parses it as UTC. Ahead is the survivable direction —
+ * those arrive, repeatedly, for two hours. A client whose clock runs *behind* the server's, or one
+ * in a timezone west of UTC, lands in the invisible half.
+ *
+ * A day of overlap costs one re-read of at most a day's actions per pass; reconciliation is
+ * idempotent, so re-delivered actions produce no writes. A missed action costs a re-download of an
+ * episode the user already handled, which is the one failure CLAUDE.md §11 calls the app's central
+ * job to prevent. The asymmetry is the whole argument.
+ *
+ * **Not** computed from local device time: CLAUDE.md §11 forbids that outright, and it would make
+ * clock skew the cure for clock skew.
+ */
+private const val CURSOR_OVERLAP_SECONDS = 24L * 60 * 60
+
+/** Never below zero — `since = 0` already means "everything", and a negative would be nonsense. */
+private fun Long.rewound(): Long = (this - CURSOR_OVERLAP_SECONDS).coerceAtLeast(0)
+
+/**
  * Runs one full sync pass in the exact order CLAUDE.md section 5 mandates: pull subscriptions
  * (full) -> push unsynced ledger rows -> pull episode actions since last timestamp -> reconcile ->
  * persist new timestamps. See `docs/architecture.md` section 6 for the sequence diagram this
@@ -160,7 +188,7 @@ class SyncOrchestrator(
 
     private suspend fun pullAndReconcileEpisodeActions() {
         val syncState = syncStateRepository.get()
-        val page = gpodderClient.fetchEpisodeActions(since = syncState.lastEpisodeActionSyncTs)
+        val page = gpodderClient.fetchEpisodeActions(since = syncState.lastEpisodeActionSyncTs.rewound())
         val localLedger =
             episodeLedgerRepository
                 .observe(LedgerFilter(state = LedgerFilterState.ALL))

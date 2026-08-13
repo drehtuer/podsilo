@@ -303,7 +303,11 @@ class SyncOrchestratorTest {
             assertEquals(LedgerState.HANDLED_REMOTELY, ledgerRepository.allRows.single().state)
             assertEquals(999L, syncStateRepository.current.lastEpisodeActionSyncTs)
             assertEquals("device-a", syncStateRepository.current.deviceId) // device id preserved, not regenerated
-            val fetchedSinceValues = gpodderClient.fetchEpisodeActionsSinceValues
-            assertEquals(listOf(500L), fetchedSinceValues) // fetched using the persisted cursor
+            // The cursor is rewound a day before it is sent (issue #60, step 4): the server filters on
+            // client-authored timestamps while handing back its own clock, so an action authored
+            // before our last pass would otherwise be invisible for ever. 500 - 86 400 floors at 0.
+            assertEquals(listOf(0L), gpodderClient.fetchEpisodeActionsSinceValues)
+            // What is *persisted* is still the server's value, verbatim and un-rewound (CLAUDE.md §11).
+            assertEquals(999L, syncStateRepository.current.lastEpisodeActionSyncTs)
         }
 }

@@ -4244,3 +4244,25 @@ A speculative `perl -0777 -i -pe` I fired with `/ne` flags — meant as a dry ru
 thinking about what `e` does — evaluated its replacement as code and wrote the string `ne` into the
 middle of a KDoc. The compiler caught it immediately, so it cost nothing but the correction; the
 lesson is that `-i` and "let me just try this" do not belong in the same command.
+
+### Steps 4 and 5, same session
+
+**Step 4 — the cursor.** `since` is now rewound by one day before it is sent. The measurement from
+yesterday is what chose the size: web-client actions arrive ~6 980 s *ahead* of the server clock, so
+the skew between two clients is hours rather than seconds, and a few minutes of overlap would not
+have covered it. Re-delivery is free (a terminal row absorbs a replay with no write, asserted), a
+missed action costs a re-download — the asymmetry is the argument.
+
+What is *persisted* stays the server's own value, un-rewound. Rewinding the stored cursor instead
+would have compounded a day every pass, which is the kind of thing that looks fine for a week.
+
+**Step 5 — identity.** `GuidFidelityTest` pins that `guid` and `episodeKey` are always the same
+string, over a fixture carrying the shapes a real feed produces: plain, indented on its own line, a
+URL with a query string, a `urn:`. The interesting one is the indented guid, since a parser that
+trimmed where the reading client does not would break the join for a whole feed silently. I recorded
+what rssparser actually does (it trims) as an observation rather than asserting it as a requirement —
+what this app must guarantee is that the two fields agree, and that is what the assertion says.
+
+The remaining half of step 5 is a device round trip, which no JVM test can stand in for.
+
+**721 tests, 0 failures, 3 skipped** across the three steps.
