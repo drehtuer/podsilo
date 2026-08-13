@@ -134,8 +134,12 @@ class SyncOrchestratorTest {
             val outcome = orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
 
             assertEquals(SyncOutcome.Success, outcome)
-            assertEquals(1, gpodderClient.postedActions.size)
-            assertEquals(EpisodeActionType.DOWNLOAD, gpodderClient.postedActions.single().action)
+            // Two actions for one row since `docs/decisions/0023`: DOWNLOAD, then the PLAY that makes
+            // it read as handled on a server which discards DOWNLOAD.
+            assertEquals(
+                listOf(EpisodeActionType.DOWNLOAD, EpisodeActionType.PLAY),
+                gpodderClient.postedActions.map { it.action },
+            )
             assertTrue(ledgerRepository.allRows.single().syncedToServer)
         }
 
@@ -151,8 +155,10 @@ class SyncOrchestratorTest {
 
             orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
 
-            assertEquals(1, gpodderClient.postedActions.size)
-            assertEquals(EpisodeActionType.DOWNLOAD, gpodderClient.postedActions.single().action)
+            // Only the DOWNLOADED row is representable; it produces two actions, and the QUEUED and
+            // ERROR rows produce none.
+            assertEquals(2, gpodderClient.postedActions.size)
+            assertTrue(gpodderClient.postedActions.all { it.guid == "guid-1" })
             val byKey = ledgerRepository.allRows.associateBy { it.episodeKey }
             assertTrue(byKey.getValue("guid-1").syncedToServer)
             val queuedMessage = "QUEUED row has no representable action, so it can't be marked synced"
@@ -229,7 +235,9 @@ class SyncOrchestratorTest {
 
             assertEquals(SyncOutcome.Success, secondPassOutcome)
             assertTrue(ledgerRepository.allRows.single().syncedToServer)
-            assertEquals(1, succeedingClient.postedActions.size) // exactly one push, never duplicated
+            // Exactly one push of one row, never duplicated -- two actions because a download emits both.
+            assertEquals(2, succeedingClient.postedActions.size)
+            assertEquals(1, succeedingClient.postEpisodeActionsCallCount)
         }
 
     @Test

@@ -26,37 +26,78 @@ private const val SKIP_STARTED_SECONDS = 0
 private const val UNKNOWN_DURATION_SECONDS = 1
 
 /**
- * Builds the outbound [EpisodeAction] for a ledger row, or `null` if [EpisodeLedgerRow.state] isn't
- * one the API can represent -- CLAUDE.md section 5: download-in-progress/retry/error state is local
- * only, so [LedgerState.QUEUED], [LedgerState.DOWNLOADING], [LedgerState.ERROR], and
- * [LedgerState.HANDLED_REMOTELY] never reach the outbox.
+ * Builds the outbound [EpisodeAction]s for a ledger row, or an empty list if
+ * [EpisodeLedgerRow.state] isn't one the API can represent -- CLAUDE.md section 5:
+ * download-in-progress/retry/error state is local only, so [LedgerState.QUEUED],
+ * [LedgerState.DOWNLOADING], [LedgerState.ERROR] and [LedgerState.HANDLED_REMOTELY] never reach the
+ * outbox.
  *
  * Skip-as-`PLAY` encoding matches AntennaPod's own convention: `started = 0` (Podsilo has no resume
  * position -- it never plays audio), `position == total`, and `total` is the duration in seconds if
  * known, else [UNKNOWN_DURATION_SECONDS] -- never a fabricated plausible-looking value.
+ *
+ * **A completed download also emits `PLAY`** (`docs/decisions/0023`, 2026-08-14). CLAUDE.md §5 used
+ * to forbid this in terms, on the grounds that it asserts something untrue and can trigger
+ * auto-delete in other clients. The author has ruled the other way, for a reason the original rule
+ * did not account for: on this setup a download *is* the end of the episode's life in Podsilo — it
+ * goes to a player that never reports back — and `DOWNLOAD` alone is invisible on Nextcloud, so a
+ * downloaded episode stayed "new" everywhere else for ever. CLAUDE.md §5 is amended to match.
  */
-fun EpisodeLedgerRow.toOutboundAction(): EpisodeAction? =
+fun EpisodeLedgerRow.toOutboundActions(): List<EpisodeAction> =
     when (state) {
-        LedgerState.DOWNLOADED ->
-            EpisodeAction(
-                podcast = feedUrl,
-                episode = enclosureUrl,
-                guid = guid,
-                action = EpisodeActionType.DOWNLOAD,
-                timestamp = actionedAt.toGpodderTimestamp(),
-            )
-        LedgerState.SKIPPED -> {
-            val total = durationSeconds ?: UNKNOWN_DURATION_SECONDS
-            EpisodeAction(
-                podcast = feedUrl,
-                episode = enclosureUrl,
-                guid = guid,
-                action = EpisodeActionType.PLAY,
-                timestamp = actionedAt.toGpodderTimestamp(),
-                started = SKIP_STARTED_SECONDS,
-                position = total,
-                total = total,
-            )
-        }
-        LedgerState.QUEUED, LedgerState.DOWNLOADING, LedgerState.ERROR, LedgerState.HANDLED_REMOTELY -> null
+        // Both, in this order. `DOWNLOAD` is the honest record that this device fetched the file, and
+        // it is what a server that keeps it (opodsync) should store. `PLAY` is what makes the episode
+        // read as handled in Nextcloud, where `DOWNLOAD` is discarded on arrival
+        // (`docs/decisions/0008`) — so on that server the second action is the only one that survives,
+        // and on a server that keeps both, the later one wins.
+        LedgerState.DOWNLOADED -> listOf(downloadAction(), playedAction())
+        LedgerState.SKIPPED -> listOf(playedAction())
+        // The one action that *withdraws* a claim rather than making one, and the API's only way of
+        // saying it (`docs/decisions/0024`).
+        LedgerState.UNPLAYED -> listOf(unplayedAction())
+        LedgerState.QUEUED, LedgerState.DOWNLOADING, LedgerState.ERROR, LedgerState.HANDLED_REMOTELY ->
+            emptyList()
     }
+
+private fun EpisodeLedgerRow.downloadAction() =
+    EpisodeAction(
+        podcast = feedUrl,
+        episode = enclosureUrl,
+        guid = guid,
+        action = EpisodeActionType.DOWNLOAD,
+        timestamp = actionedAt.toGpodderTimestamp(),
+    )
+
+/**
+ * `position = 0` with the duration left intact — the encoding every gpodder client already uses for
+ * *unread*, and the only one the API offers: it cannot delete an action and has no `UNPLAYED` type.
+ *
+ * `total` keeps the real duration rather than being zeroed, matching what other clients write and
+ * leaving the row readable if the same episode is marked played again later.
+ */
+private fun EpisodeLedgerRow.unplayedAction(): EpisodeAction =
+    EpisodeAction(
+        podcast = feedUrl,
+        episode = enclosureUrl,
+        guid = guid,
+        action = EpisodeActionType.PLAY,
+        timestamp = actionedAt.toGpodderTimestamp(),
+        started = SKIP_STARTED_SECONDS,
+        position = 0,
+        total = durationSeconds ?: UNKNOWN_DURATION_SECONDS,
+    )
+
+/** `position == total > 0` — the encoding every reader treats as *finished* (`docs/decisions/0022`). */
+private fun EpisodeLedgerRow.playedAction(): EpisodeAction {
+    val total = durationSeconds ?: UNKNOWN_DURATION_SECONDS
+    return EpisodeAction(
+        podcast = feedUrl,
+        episode = enclosureUrl,
+        guid = guid,
+        action = EpisodeActionType.PLAY,
+        timestamp = actionedAt.toGpodderTimestamp(),
+        started = SKIP_STARTED_SECONDS,
+        position = total,
+        total = total,
+    )
+}

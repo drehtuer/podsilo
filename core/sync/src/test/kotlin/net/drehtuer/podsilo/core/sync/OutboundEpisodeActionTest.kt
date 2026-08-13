@@ -30,26 +30,54 @@ class OutboundEpisodeActionTest {
         durationSeconds = durationSeconds,
     )
 
+    /**
+     * **Changed 2026-08-14** (`docs/decisions/0023`). A completed download used to emit `DOWNLOAD`
+     * and nothing else, which against a real Nextcloud means *nothing at all*: the server discards
+     * `DOWNLOAD` on arrival and still answers 200, so a downloaded episode stayed new in every other
+     * client for ever.
+     *
+     * The order matters. `DOWNLOAD` first, `PLAY` second — a server that keeps both stores one row
+     * per episode, so the later action survives, and the one worth surviving is the one that makes
+     * the episode read as handled.
+     */
     @Test
-    fun `downloaded maps to a DOWNLOAD action with no playback fields`() {
-        val action = row(LedgerState.DOWNLOADED).toOutboundAction()
+    fun `downloaded emits DOWNLOAD and then PLAY`() {
+        val actions = row(LedgerState.DOWNLOADED, durationSeconds = 1_800).toOutboundActions()
 
-        requireNotNull(action)
-        assertEquals(EpisodeActionType.DOWNLOAD, action.action)
-        assertEquals("https://example.com/feed.xml", action.podcast)
-        assertEquals("https://example.com/ep.mp3", action.episode)
-        assertEquals("guid-123", action.guid)
-        assertEquals("2026-07-14T09:00:00", action.timestamp)
-        assertNull(action.started)
-        assertNull(action.position)
-        assertNull(action.total)
+        assertEquals(listOf(EpisodeActionType.DOWNLOAD, EpisodeActionType.PLAY), actions.map { it.action })
+
+        val download = actions.first()
+        assertEquals("https://example.com/feed.xml", download.podcast)
+        assertEquals("https://example.com/ep.mp3", download.episode)
+        assertEquals("guid-123", download.guid)
+        assertEquals("2026-07-14T09:00:00", download.timestamp)
+        // A DOWNLOAD carries no playback claim of its own.
+        assertNull(download.started)
+        assertNull(download.position)
+        assertNull(download.total)
+    }
+
+    /** The `PLAY` beside a download says *finished*, on exactly the terms every reader uses. */
+    @Test
+    fun `the download's PLAY reads as ended, with or without a known duration`() {
+        listOf(null, 1_800).forEach { duration ->
+            val play = row(LedgerState.DOWNLOADED, durationSeconds = duration).toOutboundActions().last()
+            val position = requireNotNull(play.position)
+            val total = requireNotNull(play.total)
+
+            assertEquals(EpisodeActionType.PLAY, play.action)
+            assertEquals(0, play.started)
+            assertTrue(
+                "duration=$duration produced $position/$total, which reads as unplayed",
+                position > 0 && total > 0 && position >= total,
+            )
+        }
     }
 
     @Test
     fun `skipped with a known duration encodes started 0, position equals total`() {
-        val action = row(LedgerState.SKIPPED, durationSeconds = 1800).toOutboundAction()
+        val action = row(LedgerState.SKIPPED, durationSeconds = 1800).toOutboundActions().single()
 
-        requireNotNull(action)
         assertEquals(EpisodeActionType.PLAY, action.action)
         assertEquals(0, action.started)
         assertEquals(1800, action.position)
@@ -57,47 +85,25 @@ class OutboundEpisodeActionTest {
     }
 
     /**
-     * **Changed 2026-08-14.** This asserted `0/0` and was correct against the encoding as documented
-     * — and the encoding was wrong about the world: RePod requires `position > 0 && total > 0` to
-     * call an episode played, so every `0/0` action rendered as unplayed in Nextcloud for ever.
-     *
      * `1` is not a fabricated duration. It is the smallest value that says "there was something and
      * it is finished", which is the claim a skip actually makes; CLAUDE.md §6's rule against
-     * inventing a plausible-looking duration is what rules out the alternative of guessing 45
-     * minutes.
+     * inventing a plausible-looking duration is what rules out guessing 45 minutes
+     * (`docs/decisions/0022`).
      */
     @Test
     fun `skipped with unknown duration sends 1, which is a marker and not a duration`() {
-        val action = row(LedgerState.SKIPPED, durationSeconds = null).toOutboundAction()
+        val action = row(LedgerState.SKIPPED, durationSeconds = null).toOutboundActions().single()
 
-        requireNotNull(action)
         assertEquals(0, action.started)
         assertEquals(1, action.position)
         assertEquals(1, action.total)
     }
 
-    /** The whole point of the value: RePod's own rule has to read it as ended. */
     @Test
-    fun `every skip we send reads as played by RePod's rule, duration or not`() {
-        listOf(null, 1_800).forEach { duration ->
-            val action = requireNotNull(row(LedgerState.SKIPPED, durationSeconds = duration).toOutboundAction())
-            val position = requireNotNull(action.position)
-            val total = requireNotNull(action.total)
-
-            assertTrue(
-                "duration=$duration produced $position/$total, which RePod renders as unplayed",
-                position > 0 && total > 0 && position >= total,
-            )
-        }
-    }
-
-    @Test
-    fun `a guid-less row derives guid as null on the outbound action`() {
+    fun `a guid-less row derives guid as null on every action it produces`() {
         val ledgerRow = row(LedgerState.DOWNLOADED, guid = null, enclosureUrl = "https://example.com/ep.mp3")
-        val action = ledgerRow.toOutboundAction()
 
-        requireNotNull(action)
-        assertNull(action.guid)
+        assertTrue(ledgerRow.toOutboundActions().all { it.guid == null })
     }
 
     @Test
@@ -110,7 +116,7 @@ class OutboundEpisodeActionTest {
                 LedgerState.HANDLED_REMOTELY,
             )
         for (state in localOnlyStates) {
-            assertNull("state=$state", row(state).toOutboundAction())
+            assertTrue("state=$state", row(state).toOutboundActions().isEmpty())
         }
     }
 }

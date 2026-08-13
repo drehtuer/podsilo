@@ -33,8 +33,8 @@ consumed by something else entirely.
 7. **Normalised file and folder naming** — feeds name episodes inconsistently, so downloaded files
    and their audio tags are rewritten to a configurable template. See §6.
 8. **State tracking** — per episode: new / queued / downloading / downloaded / skipped / error.
-9. **Mark-on-download** — on every **successful** download, emit a `DOWNLOAD` episode action to the
-   server. Together with skip-as-`PLAY`, this is what prevents an episode reappearing later, here or
+9. **Mark-on-download** — on every **successful** download, emit `DOWNLOAD` and `PLAY` episode
+   actions to the server. Together with skip-as-`PLAY`, this is what prevents an episode reappearing later, here or
    on another client. See §5 for exact semantics — a core requirement, not a nice-to-have.
 10. **Minimal UI** — configure sync and naming, browse and filter episodes, triage them, see download
     states and errors.
@@ -424,8 +424,10 @@ which a local filter never is. The current rules:
   - On successful download completion, write the ledger row **first** (durable, `syncedToServer =
     false`), **then** attempt the POST. Never the other way round. Set `syncedToServer = true` only
     on a confirmed 2xx.
-  - The action to emit is `DOWNLOAD`. There is no "read" or "seen" flag in this API — only an action
-    log — so `DOWNLOAD` is the honest and correct signal for "this device has fetched this episode."
+  - The actions to emit are `DOWNLOAD` **and** `PLAY`, in that order (amended 2026-08-14,
+    `docs/decisions/0023`). `DOWNLOAD` is the honest signal for "this device has fetched this
+    episode"; `PLAY` is what any other client can actually read, since Nextcloud discards `DOWNLOAD`
+    and there is no "read" or "seen" flag in this API at all.
 - **Skip semantics.** "Skip" is the author's way of saying *I am done with this episode, never show it
   again.* The conventional gPodder encoding for that is a `PLAY` action with
   `started = 0, position = total, total = <duration>`.
@@ -436,12 +438,18 @@ which a local filter never is. The current rules:
     duration exists, still send `PLAY`, and document what you put in `position`/`total`. Do not block
     the skip action on missing metadata, and do not invent a plausible-looking duration.
   - Skip follows the same durability rule as download: **ledger row first, then POST.**
-- **`PLAY` is not emitted on download.** Downloading means `DOWNLOAD` and nothing else. Because the
-  author's audio player does not sync, no `PLAY` will ever be generated on their behalf by listening —
-  only by an explicit skip. There is no "also mark as played when downloading" setting; that would
-  assert something untrue and can trigger auto-delete in other clients.
-  - Incoming remote `DOWNLOAD`, `PLAY`, or `DELETE` actions for an episode all mean **do not
-    download it here.** Treat any of them as a terminal ledger state.
+- ~~**`PLAY` is not emitted on download.**~~ **Amended 2026-08-14 (`docs/decisions/0023`): a
+  successful download emits `DOWNLOAD` *and* `PLAY`.** The original rule reasoned that a `PLAY` the
+  user did not perform asserts something untrue and can trigger auto-delete elsewhere. What it did
+  not account for is that on this setup a download *is* the end of the episode's life in Podsilo —
+  the file goes to a player that never reports back — and that Nextcloud discards `DOWNLOAD` on
+  arrival (`docs/decisions/0008`), so a downloaded episode stayed new in every other client for ever.
+  The author ruled that this is a bug rather than a design property.
+  - The auto-delete risk is real and accepted knowingly: another client may remove its own copy of an
+    episode this device has downloaded. That is the intended reading — this device is done with it.
+  - Incoming remote `DOWNLOAD` or `DELETE`, and a `PLAY` **that reads as ended**, all mean **do not
+    download it here.** A `PLAY` that is not ended is how a client says *unread* and must not be
+    treated as terminal (`docs/decisions/0022`).
 - Generate and persist a stable `deviceId` so our own echoed-back actions are recognisable.
 - Timestamps are the conflict basis (last-write-wins per episode per action type). Unit-test the
   rules with canned responses: clock skew, duplicate actions, actions for episodes not in any

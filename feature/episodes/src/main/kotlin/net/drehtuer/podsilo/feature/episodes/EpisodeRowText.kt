@@ -27,6 +27,7 @@ internal fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
         EpisodeUiAction.DOWNLOAD -> "Download"
         EpisodeUiAction.DOWNLOAD_AGAIN -> "Download again"
         EpisodeUiAction.MARK_AS_PLAYED -> "Mark as played"
+        EpisodeUiAction.MARK_AS_UNPLAYED -> "Mark as unplayed"
         EpisodeUiAction.CANCEL -> "Cancel"
         EpisodeUiAction.RETRY ->
             when (episode.lastError?.remedy) {
@@ -44,7 +45,10 @@ internal fun EpisodeUi.metaLine(zone: ZoneId): String =
 
 internal fun EpisodeUi.statusLine(): String? =
     when (ledgerState) {
-        null -> null
+        // An UNPLAYED row is the user withdrawing a decision, so the row reads exactly as an
+        // undecided one: no status line, no badge, full emphasis. The row exists only so the ledger
+        // keeps its history and the state can reach other clients (`docs/decisions/0024`).
+        null, LedgerState.UNPLAYED -> null
         LedgerState.QUEUED -> "queued"
         LedgerState.DOWNLOADING -> null
         LedgerState.DOWNLOADED -> "downloaded"
@@ -64,7 +68,7 @@ internal fun EpisodeUi.statusLine(): String? =
  */
 internal fun EpisodeUi.statusIcon(): Int? =
     when (ledgerState) {
-        null, LedgerState.DOWNLOADING -> null
+        null, LedgerState.UNPLAYED, LedgerState.DOWNLOADING -> null
         LedgerState.QUEUED -> PodsiloIcons.Download
         LedgerState.DOWNLOADED -> PodsiloIcons.Check
         LedgerState.SKIPPED -> PodsiloIcons.Played

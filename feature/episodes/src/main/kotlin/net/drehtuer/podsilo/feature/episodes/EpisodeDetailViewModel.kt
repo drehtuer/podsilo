@@ -113,6 +113,10 @@ class EpisodeDetailViewModel(
                 triageWriter.markAsPlayed(listOf(episode))
                 emit(EpisodeDetailEffect.ShowMessage(SnackbarText.BulkApplied(1)))
             }
+            EpisodeUiAction.MARK_AS_UNPLAYED -> {
+                triageWriter.markAsUnplayed(listOf(episode))
+                emit(EpisodeDetailEffect.ShowMessage(SnackbarText.MarkedUnplayed(1)))
+            }
             EpisodeUiAction.DOWNLOAD, EpisodeUiAction.DOWNLOAD_AGAIN, EpisodeUiAction.RETRY -> {
                 triageWriter.queue(listOf(episode))
                 // Same rule as S2: only a re-decision carries userRequested, because that flag is

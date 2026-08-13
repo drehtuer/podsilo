@@ -253,6 +253,11 @@ sealed interface SnackbarText {
         val count: Int,
     ) : SnackbarText
 
+    /** The inverse of [BulkApplied] — a decision withdrawn (`docs/decisions/0024`). */
+    data class MarkedUnplayed(
+        val count: Int,
+    ) : SnackbarText
+
     /** Informational, **not** an error: the file was already there (`docs/decisions/0012` §4). */
     data class AlreadyInFolder(
         val fileName: String,

@@ -122,11 +122,10 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
 - **The batch actions issue #46 asked for beyond triage.** *Add to queue*, *add to playlist* and
   *remove/delete* are CLAUDE.md §1 non-goals permanently — no player, no playlists, no file lifecycle
   — recorded here so the answer does not have to be re-derived each time an issue asks for them.
-  **Declined by the author on 2026-08-09 along with *mark unplayed***, which is the interesting one:
-  it is not a non-goal, it simply has no representation. An undecided episode is one with **no**
-  ledger row, so "unmark" means *deleting* the record that stops an episode being downloaded twice
-  (CLAUDE.md §11). The ledger stays append-only, and undo (#49) was designed to need no delete
-  either — see `docs/UI.md` §12.3.
+  **Declined by the author on 2026-08-09.** *Mark unplayed* was declined with them and has since been
+  **built** (`docs/decisions/0024`, 2026-08-14): it turned out the objection was to the *delete*, not
+  to the feature, and a new `UNPLAYED` state gives the user the affordance while the row — the dedup
+  authority — stays exactly where it was.
 
 - **"Download all visible" as a prominent button.** CLAUDE.md §1 names this specifically as the kind
   of thing that looks helpful and isn't. The UI design's per-podcast *Download all (n)* overflow item

@@ -98,7 +98,12 @@ class EpisodeDetailViewModelTest {
             viewModel().state.test {
                 val state = awaitItem() ?: awaitItem()!!
                 assertEquals(LedgerState.SKIPPED, state.episode.ledgerState)
-                assertEquals(setOf(EpisodeUiAction.DOWNLOAD), state.episode.actions)
+                // Since `docs/decisions/0024` a decided episode also offers the way back out of the
+                // decision — the sheet is where a user who disagrees with a past self goes.
+                assertEquals(
+                    setOf(EpisodeUiAction.DOWNLOAD, EpisodeUiAction.MARK_AS_UNPLAYED),
+                    state.episode.actions,
+                )
             }
         }
 

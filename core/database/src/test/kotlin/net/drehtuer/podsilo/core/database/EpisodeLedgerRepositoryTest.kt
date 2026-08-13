@@ -94,6 +94,40 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
             assertTrue("NEW items carry no ledger row", new.all { it.ledger == null })
         }
 
+    /**
+     * `docs/decisions/0024`. The SQL is the half the compiler cannot check: adding `UNPLAYED` to the
+     * enum compiles everywhere without this, and the feature silently does nothing.
+     *
+     * The row is still there — that is the entire design — so this asserts both halves: the episode
+     * is offered for triage again, **and** the ledger has not forgotten it.
+     */
+    @Test
+    fun `observeEpisodes NEW includes an UNPLAYED episode, whose row still exists`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("f", firstSeenAt = 1_000)))
+            episodes.replaceForFeed("f", listOf(episode("withdrawn", "f", pubDate = 2_000)))
+            ledger.upsert(ledgerRow("withdrawn", "f", LedgerState.SKIPPED))
+
+            ledger.upsert(ledgerRow("withdrawn", "f", LedgerState.UNPLAYED))
+
+            val new = list.observeEpisodes(LedgerFilter(state = LedgerFilterState.NEW)).first()
+            assertEquals(listOf("withdrawn"), new.map { it.episode.episodeKey })
+            assertEquals(LedgerState.UNPLAYED, ledger.get("withdrawn")?.state)
+        }
+
+    /** And the count badge has to agree with the list it opens, or S1 lies about the work left. */
+    @Test
+    fun `an UNPLAYED episode is counted as undecided`() =
+        runTest {
+            feeds.replaceAll(listOf(feed("f", firstSeenAt = 1_000)))
+            episodes.replaceForFeed("f", listOf(episode("withdrawn", "f", pubDate = 2_000)))
+            ledger.upsert(ledgerRow("withdrawn", "f", LedgerState.UNPLAYED))
+
+            val counts = list.observeUndecidedCounts().first()
+
+            assertEquals(1, counts.single().count)
+        }
+
     @Test
     fun `observeEpisodes NEW does not apply a firstSeenAt cutoff`() =
         runTest {

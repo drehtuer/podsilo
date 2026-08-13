@@ -235,6 +235,8 @@ private fun SnackbarText.render(): String =
     when (this) {
         is SnackbarText.Queued -> if (count == 1) "Queued 1 episode" else "Queued $count episodes"
         is SnackbarText.BulkApplied -> if (count == 1) "Marked 1 episode as played" else "Marked $count as played"
+        is SnackbarText.MarkedUnplayed ->
+            if (count == 1) "Marked 1 episode as unplayed" else "Marked $count as unplayed"
         is SnackbarText.AlreadyInFolder -> "Already in your folder: $fileName"
         is SnackbarText.DownloadFailed -> "Download failed: ${cause.name.lowercase().replace('_', ' ')}"
         SnackbarText.LinkCopied -> "Link copied"
