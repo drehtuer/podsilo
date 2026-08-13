@@ -49,6 +49,7 @@ abstract class EpisodeListTestHarness {
     protected val folderStatus = FakeFolderStatus()
     protected val logs = FakeLogRepository()
     protected val clock: Clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC)
+    protected val syncTrigger = RecordingSyncTrigger()
 
     /**
      * `Dispatchers.setMain(UnconfinedTestDispatcher())` makes `viewModelScope` run eagerly, so an
@@ -69,7 +70,7 @@ abstract class EpisodeListTestHarness {
                 listRepository = ledger,
                 settingsRepository = settings,
                 connectivityMonitor = connectivity,
-                triageWriter = TriageWriter(ledger, clock),
+                triageWriter = TriageWriter(ledger, clock, syncTrigger),
                 scheduler = scheduler,
                 spaceProbe = spaceProbe,
                 folderStatus = folderStatus,

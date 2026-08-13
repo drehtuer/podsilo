@@ -30,6 +30,7 @@ import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
@@ -51,6 +52,7 @@ private const val MILLIS_PER_SECOND = 1_000
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val ledgerRepository: EpisodeLedgerRepository,
+    private val syncTrigger: SyncTrigger,
     private val listRepository: EpisodeListRepository,
     private val feedRepository: FeedRepository,
     private val folderStatus: SettingsFolderStatus,
@@ -259,6 +261,10 @@ class SettingsViewModel(
 
         val now = clock.millis()
         ledgerRepository.upsertAll(episodes.map { it.toSkippedRow(now) })
+        // One pass for the whole batch (issue #60). Without this the rows sat in the outbox until
+        // something else happened to ask — up to the four-hour periodic interval — and the user was
+        // looking at a screen that had just told them the state goes to Nextcloud.
+        syncTrigger.requestSyncNow()
         emit(SettingsEffect.ShowMessage("Marked ${episodes.size} episodes as played."))
     }
 

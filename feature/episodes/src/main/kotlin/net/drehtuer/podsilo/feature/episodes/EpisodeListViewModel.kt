@@ -446,8 +446,14 @@ class EpisodeListViewModel(
             // pull-to-refresh indicator would never appear.
             refreshing.value = true
             try {
-                // Suspends until the work reaches a terminal state, so the indicator is visible for the
-                // whole chain rather than for the microsecond enqueueing takes (docs/UI.md §4).
+                // Both halves, and the indicator covers both — `docs/UI.md` §4 specifies a sync pass
+                // *and* a feed refresh, and until issue #60 only the second one happened. Which is
+                // why pulling to refresh could not make a decision reach Nextcloud, nor bring one
+                // back: the gesture fetched RSS and touched the server's action log not at all.
+                //
+                // Sequential rather than parallel: the sync pulls the subscription list, and a feed
+                // refresh that starts first would be refreshing yesterday's set of feeds.
+                scheduler.syncAndAwait()
                 scheduler.requestFeedRefresh(feedUrl)
             } finally {
                 refreshing.value = false
@@ -514,6 +520,17 @@ interface EpisodeScheduler {
 
     /** Suspends until the refresh reaches a terminal state, so the UI can show it for its duration. */
     suspend fun requestFeedRefresh(feedUrl: String?)
+
+    /**
+     * A full sync pass — subscriptions, outbox, episode actions, reconcile — suspending until it
+     * finishes, for the same reason [requestFeedRefresh] does: `docs/UI.md` §4 says pull-to-refresh
+     * holds its indicator for *the whole chain*, and half a chain is what shipped until issue #60.
+     *
+     * Distinct from [SyncTrigger.requestSyncNow], which is fire-and-forget and is what a *writer*
+     * uses — a triage decision must never block on the network to be recorded. Same work underneath;
+     * the difference is whether anyone is waiting to be told it finished.
+     */
+    suspend fun syncAndAwait()
 }
 
 /**

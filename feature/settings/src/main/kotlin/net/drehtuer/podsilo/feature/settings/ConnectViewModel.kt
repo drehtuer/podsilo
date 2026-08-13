@@ -22,6 +22,7 @@ import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 
 /**
  * S5 — the Nextcloud connection dialog (`docs/UI.md` §8).
@@ -43,7 +44,7 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
 class ConnectViewModel(
     private val loginFlowClient: NextcloudLoginFlowClient,
     private val settingsRepository: SettingsRepository,
-    private val syncTrigger: ConnectSyncTrigger,
+    private val syncTrigger: SyncTrigger,
     private val logRepository: LogRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ConnectUiState())
@@ -318,14 +319,6 @@ internal fun normaliseHost(host: String): String {
 }
 
 private fun String.withoutScheme(): String = removePrefix("https://").removePrefix("http://")
-
-/**
- * Enqueues the first sync once credentials land, so S1 fills in without the user doing anything
- * else. A port because `:feature:settings` must not see WorkManager (`docs/UI.md` §B0.2).
- */
-fun interface ConnectSyncTrigger {
-    fun requestSyncNow()
-}
 
 /**
  * Maps the client's typed failure onto the message S5 shows.

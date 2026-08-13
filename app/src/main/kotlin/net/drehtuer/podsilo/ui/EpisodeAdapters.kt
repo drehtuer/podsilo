@@ -30,6 +30,7 @@ import net.drehtuer.podsilo.feature.episodes.DownloadWorkMonitor
 import net.drehtuer.podsilo.feature.episodes.EpisodeScheduler
 import net.drehtuer.podsilo.feature.episodes.FolderState
 import net.drehtuer.podsilo.feature.episodes.NamingPreview
+import net.drehtuer.podsilo.work.SyncWorker
 import net.drehtuer.podsilo.work.WorkScheduler
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -64,6 +65,21 @@ class WorkEpisodeScheduler
             workScheduler.requestFeedRefresh(feedUrl)
             workManager
                 .getWorkInfosForUniqueWorkFlow(name)
+                .first { infos -> infos.isNotEmpty() && infos.all { it.state.isFinished } }
+        }
+
+        /**
+         * The same wait, for the sync pass — see [EpisodeScheduler.syncAndAwait] for why a screen
+         * needs one and a writer does not.
+         *
+         * `SyncWorker` is enqueued as unique work with `APPEND_OR_REPLACE`, so a pull that lands
+         * while a triage-triggered pass is already running waits for both rather than starting a
+         * third: the predicate is "every info for this name is finished", not "the newest one is".
+         */
+        override suspend fun syncAndAwait() {
+            workScheduler.requestSyncNow()
+            workManager
+                .getWorkInfosForUniqueWorkFlow(SyncWorker.UNIQUE_WORK_NAME)
                 .first { infos -> infos.isNotEmpty() && infos.all { it.state.isFinished } }
         }
     }

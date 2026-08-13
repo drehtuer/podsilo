@@ -11,13 +11,12 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import net.drehtuer.podsilo.BuildConfig
-import net.drehtuer.podsilo.core.download.SyncTrigger
 import net.drehtuer.podsilo.core.gpodder.RetrofitGpodderClientFactory
 import net.drehtuer.podsilo.core.gpodder.RetrofitNextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
 import net.drehtuer.podsilo.core.model.port.GpodderClientFactory
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
-import net.drehtuer.podsilo.feature.settings.ConnectSyncTrigger
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import net.drehtuer.podsilo.system.AndroidConnectivityMonitor
 import net.drehtuer.podsilo.work.WorkScheduler
 import okhttp3.OkHttpClient
@@ -75,18 +74,6 @@ object AppModule {
     fun provideLoginFlowClient(okHttpClient: OkHttpClient): NextcloudLoginFlowClient =
         RetrofitNextcloudLoginFlowClient(okHttpClient)
 
-    /**
-     * S5 enqueues the first sync as soon as credentials land, so S1 fills in by itself.
-     *
-     * An adapter rather than a second interface on `WorkScheduler`: `:core:download` and
-     * `:feature:settings` each declare their own one-method port for this, which is the ports rule
-     * working as intended — neither module should have to know the other exists.
-     */
-    @Provides
-    @Singleton
-    fun provideConnectSyncTrigger(workScheduler: WorkScheduler): ConnectSyncTrigger =
-        ConnectSyncTrigger { workScheduler.requestSyncNow() }
-
     /** Shown in S4's About row. Named because a bare String binding would be ambiguous. */
     @Provides
     @Named("appVersion")
@@ -105,7 +92,11 @@ object AppModule {
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BindingsModule {
-    /** `:core:download` asks for a sync pass through this; `:app` is where the worker it schedules lives. */
+    /**
+     * Every "I have written something the server needs" in the app arrives here — a finished
+     * download, a mark-as-played, S4's bulk mark, the mark-old rule, and S5 once credentials land.
+     * `:app` is where the worker it schedules lives, and one port means one place to look.
+     */
     @Binds
     abstract fun bindSyncTrigger(workScheduler: WorkScheduler): SyncTrigger
 

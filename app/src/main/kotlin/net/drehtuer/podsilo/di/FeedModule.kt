@@ -16,6 +16,7 @@ import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import okhttp3.OkHttpClient
 import java.time.Clock
 import javax.inject.Singleton
@@ -38,8 +39,10 @@ object FeedModule {
         ledgerRepository: EpisodeLedgerRepository,
         listRepository: EpisodeListRepository,
         settingsRepository: SettingsRepository,
+        syncTrigger: SyncTrigger,
         clock: Clock,
-    ): MarkOldEpisodesRule = MarkOldEpisodesRule(ledgerRepository, listRepository, settingsRepository, clock)
+    ): MarkOldEpisodesRule =
+        MarkOldEpisodesRule(ledgerRepository, listRepository, settingsRepository, syncTrigger, clock)
 
     // A @Provides method for a composition root mirrors that root's dependency list; see
     // FeedRefresher's own KDoc for why that list is what it is.

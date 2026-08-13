@@ -6,8 +6,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import net.drehtuer.podsilo.core.download.DownloadWorker
-import net.drehtuer.podsilo.core.download.SyncTrigger
 import net.drehtuer.podsilo.core.feed.FeedRefreshWorker
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import javax.inject.Inject
 import javax.inject.Singleton
 

@@ -508,6 +508,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
             runCurrent()
 
             assertTrue("no request is attempted at all", scheduler.refreshes.isEmpty())
+            assertEquals("including the sync half", 0, scheduler.syncs)
         }
 
     @Test
@@ -521,6 +522,25 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
             runCurrent()
 
             assertEquals(listOf(FEED_URL), scheduler.refreshes)
+        }
+
+    /**
+     * Issue #60: the RSS half was the only half. The sync pass is global by nature — it pulls the
+     * subscription list and drains the outbox — so it is *not* scoped to this feed even though the
+     * refresh beside it is.
+     */
+    @Test
+    fun `a pull-to-refresh also runs a sync pass, before the feed fetch`() =
+        runTest {
+            seed(episode("e1"))
+            val vm = viewModel()
+            runCurrent()
+
+            vm.onEvent(EpisodeListEvent.PullToRefresh)
+            runCurrent()
+
+            assertEquals(1, scheduler.syncs)
+            assertEquals(listOf("sync", "refresh"), scheduler.order)
         }
 
     @Test

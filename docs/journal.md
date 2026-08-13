@@ -4135,3 +4135,69 @@ Two things fell out that I would not have got from the source:
 
 Also: the row count stayed at 72 across both flips. One row per episode, updated in place, exactly as
 `EpisodeActionSaver` reads.
+
+---
+
+## 2026-08-14 — issue #60, steps 1 and 2: the triggers that were never wired
+
+**Attempted:** the two steps of `docs/TODO.md` that needed no decision — make a triage decision reach
+Nextcloud when it is made, and make pull-to-refresh actually sync. Together they are the whole of
+what the author reported.
+
+705 tests (+8), 0 failures, 3 skipped; `ktlintCheck detekt test` green. Every one of the five new
+triggers was verified to fail without its fix.
+
+### One port, after finding three of it
+
+`SyncTrigger` lived in `:core:download`, which meant nothing outside that module could ask for a sync
+pass — so `:feature:settings` had declared `ConnectSyncTrigger` and `:app` had declared
+`ActivitySyncTrigger`, both one-method interfaces for the same verb, both bound to the same
+`WorkScheduler`. Moving the port to `:core:model` (where architecture §2 says ports live) let all
+three collapse into one type with one binding.
+
+That is worth noticing as a *shape*: a port in the wrong module does not announce itself as a
+problem, it quietly grows copies. The copies were each locally reasonable — the KDoc on one of them
+even explained why a separate interface was correct — and the third one is what made it obvious.
+
+### The trigger goes where the write is
+
+Three writers produce outbox rows: `TriageWriter.markAsPlayed` (S2, S3, S7), `SettingsViewModel`'s
+bulk mark, and `MarkOldEpisodesRule`. The trigger went into those three rather than into the eight or
+so events that reach them — the same reasoning as yesterday's redaction-in-the-store, and for the
+same reason: a rule applied at the call sites is a rule the next call site forgets.
+
+`TriageWriter.queue` deliberately does **not** trigger. `QUEUED` has no outbound action, so the pass
+would find an empty outbox; the `DOWNLOAD` action only exists once the file has landed, and
+`DownloadWorker` already asks then.
+
+### Two contracts for one piece of work
+
+Pull-to-refresh needs to *wait* — `docs/UI.md` §4 says the indicator covers the whole chain — while a
+triage write must never block on the network to record a decision. So there are now two ways to ask:
+`SyncTrigger.requestSyncNow()` (fire-and-forget, for writers) and
+`EpisodeScheduler.syncAndAwait()` (suspending, for the two screens that hold an indicator). Same
+unique work underneath. That reads like duplication and is not, so both KDocs say which is which and
+why.
+
+Sync runs **before** the feed refresh, and the tests assert the order: the pass replaces the
+subscription list, so refreshing first would fetch the set of feeds it is about to replace.
+
+### Three tests that were never running, and how that was caught
+
+The regression check found that removing `syncAndAwait()` from S1 left the suite green. The cause was
+not the test's logic — **`perl -0777 -i -pe` interpolated `@Test` in the replacement string as an
+empty array**, so three inserted tests had their annotation silently deleted and JUnit never picked
+them up. They read perfectly in review.
+
+Two lessons, one specific and one not:
+
+- In a perl replacement, `@Test` is an array interpolation. Anything with a sigil has to be escaped
+  or the string single-quoted, and the failure is *invisible* — the code compiles and the file looks
+  right.
+- **A test that has never been observed failing is not evidence.** CLAUDE.md §7 asks for a regression
+  test that fails before the fix, and I nearly treated "the suite is green" as confirmation when
+  three of the five assertions were inert. The check that caught it took four minutes; the belief it
+  disproved would have shipped.
+
+A fourth test was wrong in a more ordinary way: it awaited a preview dialog that an empty scope never
+opens, and hung for three seconds before Turbine gave up. Rewritten to test the reachable path.

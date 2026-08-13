@@ -33,6 +33,7 @@ class EpisodeDetailViewModelTest {
     private val scheduler = RecordingScheduler()
     private val workMonitor = FakeDownloadWorkMonitor()
     private val clock = Clock.fixed(Instant.parse("2026-08-02T12:00:00Z"), ZoneOffset.UTC)
+    private val syncTrigger = RecordingSyncTrigger()
 
     @Before
     fun setUp() {
@@ -61,7 +62,7 @@ class EpisodeDetailViewModelTest {
         episodeRepository = episodes,
         ledgerRepository = ledger,
         feedRepository = feeds,
-        triageWriter = TriageWriter(ledger, clock),
+        triageWriter = TriageWriter(ledger, clock, syncTrigger),
         scheduler = scheduler,
         folderLabel = { folder },
         workMonitor = workMonitor,

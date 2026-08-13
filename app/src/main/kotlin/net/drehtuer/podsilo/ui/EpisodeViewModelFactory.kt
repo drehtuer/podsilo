@@ -12,11 +12,11 @@ import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import net.drehtuer.podsilo.feature.episodes.EpisodeDetailViewModel
 import net.drehtuer.podsilo.feature.episodes.EpisodeListViewModel
 import net.drehtuer.podsilo.feature.episodes.PodcastListViewModel
 import net.drehtuer.podsilo.feature.episodes.TriageWriter
-import net.drehtuer.podsilo.feature.settings.ConnectSyncTrigger
 import net.drehtuer.podsilo.feature.settings.ConnectViewModel
 import net.drehtuer.podsilo.feature.settings.NamingViewModel
 import net.drehtuer.podsilo.feature.settings.SettingsViewModel
@@ -59,7 +59,7 @@ class EpisodeViewModelFactory
         private val databaseArchive: DatabaseArchive,
         private val namingSample: NamingSampleSourceAdapter,
         private val loginFlowClient: NextcloudLoginFlowClient,
-        private val syncTrigger: ConnectSyncTrigger,
+        private val syncTrigger: SyncTrigger,
         private val logRepository: net.drehtuer.podsilo.core.model.port.LogRepository,
         @Named("appVersion") private val appVersion: String,
         @Named("appBuild") private val appBuild: String,
@@ -115,6 +115,7 @@ class EpisodeViewModelFactory
                 SettingsViewModel(
                     settingsRepository = settingsRepository,
                     ledgerRepository = ledgerRepository,
+                    syncTrigger = syncTrigger,
                     listRepository = listRepository,
                     feedRepository = feedRepository,
                     folderStatus = settingsFolderStatus,
@@ -156,7 +157,7 @@ class EpisodeViewModelFactory
          * A fresh instance per view model, which is fine — it is stateless. Sharing the *class* is
          * the point: S2 and S3 must write byte-identical ledger rows for the same decision.
          */
-        private fun triageWriter() = TriageWriter(ledgerRepository, clock)
+        private fun triageWriter() = TriageWriter(ledgerRepository, clock, syncTrigger)
 
         private inline fun factory(crossinline create: () -> ViewModel): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
