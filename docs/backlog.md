@@ -16,16 +16,6 @@ done and when, and a backlog that also keeps that record is two records (2026-08
 
 ## Open items
 
-- **The error log has two write points missing.** `FeedRefresher` records feed failures and
-  `ConnectViewModel` records auth failures, so S8 is real but quiet: **`SyncOrchestrator`/`SyncWorker`
-  and `EpisodeDownloader`/`DownloadWorker` record nothing**. A download that fails after its retries
-  are exhausted leaves a row `lastError` and no log entry, which is exactly the case the screen was
-  built for. Carried over from `TODO.md` when that file was retired; it is the last unbuilt item from
-  the UI work.
-  - With it: **the test that no entry ever contains a credential** — not the app password, not the
-    Basic-auth header, not a URL carrying either. `docs/UI.md` §11 states the rule and nothing
-    asserts it.
-
 - **Nothing lints `src/androidTest/`.** Verified 2026-08-11:
   `runKtlintCheckOverAndroidTestDebugSourceSet` reports **`NO-SOURCE`** (the Kotlin dir is never
   registered with ktlint), and detekt's default source roots are `src/main` + `src/test` only, which

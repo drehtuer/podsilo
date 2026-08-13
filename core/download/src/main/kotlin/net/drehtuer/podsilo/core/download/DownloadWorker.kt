@@ -28,6 +28,9 @@ import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
+import net.drehtuer.podsilo.core.model.port.LogCategory
+import net.drehtuer.podsilo.core.model.port.LogRepository
+import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import java.time.Clock
 import java.util.concurrent.TimeUnit
@@ -39,6 +42,25 @@ private const val BACKOFF_SECONDS = 30L
 /** Terminal ledger states (`docs/architecture.md` §9) — none of them may be re-entered by a download. */
 private val TERMINAL_STATES =
     setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY)
+
+/**
+ * The plain-language half of a failed download (`docs/UI.md` §11: the sentence the user reads comes
+ * first, the technical half is separate and collapsed).
+ *
+ * Each one names the *next step* where there is one, because a log entry the user can act on is the
+ * whole reason S8 exists. `FOLDER_UNAVAILABLE` deliberately does not say "retry": retrying cannot
+ * work until the folder is chosen again (`docs/architecture.md` §11).
+ */
+private fun ErrorCause.sentence(): String =
+    when (this) {
+        ErrorCause.NETWORK -> "This episode could not be downloaded: the server did not respond."
+        ErrorCause.SERVER -> "This episode could not be downloaded: the podcast server refused it."
+        ErrorCause.AUTH -> "This episode could not be downloaded: the podcast server refused access."
+        ErrorCause.DISK_FULL -> "There is not enough space left to download this episode."
+        ErrorCause.FOLDER_UNAVAILABLE -> "The download folder is not available. Choose it again in Settings."
+        ErrorCause.FEED_PARSE, ErrorCause.TAG_WRITE, ErrorCause.UNKNOWN ->
+            "This episode could not be downloaded."
+    }
 
 /**
  * Downloads one episode, then durably records it (CLAUDE.md §5's mark-on-download: **ledger row
@@ -69,6 +91,7 @@ class DownloadWorker
         private val episodeDownloader: EpisodeDownloader,
         private val notifications: DownloadNotifications,
         private val syncTrigger: SyncTrigger,
+        private val logRepository: LogRepository,
         private val clock: Clock,
     ) : CoroutineWorker(appContext, workerParameters) {
         override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo(episodeTitle = "", 0, null)
@@ -179,12 +202,46 @@ class DownloadWorker
                             outcome.retryable,
                         ),
                     )
+                    recordFailure(episode, outcome, attempts)
                     // Genuinely transient failures go back to WorkManager's backoff; everything else
                     // stays in ERROR for the user to retry deliberately (CLAUDE.md §3: never
                     // hand-roll retry logic WorkManager already provides).
                     if (outcome.retryable && runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
                 }
             }
+        }
+
+        /**
+         * Writes the failure to the error log (S8) beside the row's own `lastError`.
+         *
+         * **Every attempt, not only the last.** The row shows the current state and the log shows
+         * the history, and the DAO collapses repeats onto one entry with a count — which is what
+         * turns "it failed three times overnight" from an inference into a `×3` the user can read
+         * (`docs/UI.md` §11). Logging only the final attempt would lose exactly that.
+         *
+         * A download that fails because the folder is gone or the disk is full is a **storage**
+         * problem the user fixes elsewhere, so it is filed under that category rather than under
+         * `DOWNLOAD`; S8's filter chips are the reason the distinction is worth making.
+         */
+        private suspend fun recordFailure(
+            episode: Episode,
+            outcome: DownloadOutcome.Failed,
+            attempts: Int,
+        ) {
+            val category =
+                when (outcome.cause) {
+                    ErrorCause.DISK_FULL, ErrorCause.FOLDER_UNAVAILABLE -> LogCategory.STORAGE
+                    else -> LogCategory.DOWNLOAD
+                }
+            logRepository.record(
+                NewLogEntry(
+                    category = category,
+                    feedUrl = episode.feedUrl,
+                    episodeKey = episode.episodeKey,
+                    message = outcome.cause.sentence(),
+                    detail = "${episode.title} · attempt $attempts · ${outcome.reason}",
+                ),
+            )
         }
 
         private suspend fun succeed(

@@ -206,25 +206,62 @@ class LogRepositoryTest {
             assertTrue(log.exportPlainText().contains("empty"))
         }
 
+    /**
+     * `docs/UI.md` §11: *"Never contains the app password, the Basic-auth header, or full URLs with
+     * credentials"*.
+     *
+     * This used to be a weaker test whose comment said the store "cannot scrub what it is handed"
+     * and deferred the real assertion to the write points "asserted in :app" — where nothing
+     * asserted it. It now scrubs, which is the only version of the rule that a sixth write point
+     * cannot forget: a credential reaches the log inside an exception message, and every write point
+     * is a place to forget it.
+     *
+     * The shapes are exhaustively covered by `LogRedactionTest`; what this pins is that `record`
+     * applies it, on the way in, for every field a user can read.
+     */
     @Test
-    fun `nothing a caller passes is transformed, so credentials can only arrive by being passed`() =
+    fun `a credential in what a caller passes never reaches the store`() =
         runTest {
-            // This store cannot scrub what it is handed — it has no way to tell a password from a
-            // podcast title. The invariant is enforced at the *write points* (asserted in :app), and
-            // this test pins the half that lives here: the store never invents or copies a field, so
-            // a clean caller stays clean.
+            val appPassword = "aBcD3-fGhIj-KlMnO-pQrSt"
+
             log.record(
                 NewLogEntry(
                     category = LogCategory.AUTH,
-                    message = "Authorization was refused. Try again.",
-                    detail = "HTTP 401",
+                    message = "Sync failed for https://podsilo:$appPassword@cloud.example.org",
+                    detail = "Authorization: Basic cG9kc2lsbzphQmNEMw==",
                 ),
             )
 
-            val text = log.exportPlainText()
+            val stored = log.observe(category = null).first().single()
+            assertFalse("the message must not carry it", stored.message.contains(appPassword))
+            assertFalse("nor the detail", stored.detail.orEmpty().contains("cG9kc2lsbzphQmNEMw=="))
+            assertEquals("Sync failed for https://cloud.example.org", stored.message)
+            assertEquals("Authorization: <redacted>", stored.detail)
 
-            assertFalse(text.contains("password", ignoreCase = true))
-            assertFalse(text.contains("Basic ", ignoreCase = true))
+            val text = log.exportPlainText()
+            assertFalse("nor the text the user shares", text.contains(appPassword))
+            assertFalse(text.contains("cG9kc2lsbzphQmNEMw=="))
+        }
+
+    /**
+     * Redaction must not change what collapses onto what — the identity is built from the redacted
+     * message, so two occurrences of the same failure still land on one entry.
+     */
+    @Test
+    fun `redacted entries still collapse onto each other`() =
+        runTest {
+            repeat(2) {
+                log.record(
+                    NewLogEntry(
+                        category = LogCategory.AUTH,
+                        message = "Sync failed for https://podsilo:secret-pw@cloud.example.org",
+                    ),
+                )
+            }
+
+            val entries = log.observe(category = null).first()
+            assertEquals(1, entries.size)
+            assertEquals(2, entries.single().occurrences)
         }
 
     private fun feedTimeout(

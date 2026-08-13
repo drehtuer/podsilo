@@ -1187,10 +1187,9 @@ where this document meets that code — recorded so Tier 4c doesn't rediscover t
 | S5 | `NextcloudLoginFlowClient`, with typed failures | each `ConnectError` in §8 maps to one of them |
 | Artwork and icons | Coil and `icons-lucide-android`, pinned | UI.md §18; §18's table is the allow-list |
 
-**One thing S8 still lacks is content, not a backend.** `FeedRefresher` records feed failures and
-the S5 auth flow records its own; `SyncOrchestrator`/`SyncWorker` and
-`EpisodeDownloader`/`DownloadWorker` still record nothing, so a download that exhausts its retries
-leaves a row `lastError` and no log entry (`docs/backlog.md`).
+**S8 has content from every failing path** (2026-08-13): feed refresh, the S5 auth flow, every failed
+sync pass and every failed download attempt. Repeats collapse onto one entry with a count, which is
+what turns "it failed all night" into something readable rather than something inferred.
 
 ---
 
@@ -1982,11 +1981,11 @@ places the built thing differs from the sketch.
   sweeping one up would emit a `PLAY` the user never agreed to.
 - `Instant` is **`java.time`**, and nothing was added to get it — see §B1 and `docs/architecture.md` §5.
 
-**Still missing, and it is not a port:** two error-log *write points*. `FeedRefresher` and the S5
-auth flow record; `SyncOrchestrator`/`SyncWorker` and `EpisodeDownloader`/`DownloadWorker` do not,
-so S8 stays quieter than the failures it is meant to explain. The test that no entry ever contains
-the app password, the Basic-auth header, or a URL with credentials is also still unwritten. Both are
-in `docs/backlog.md`.
+**All five write points exist** (2026-08-13): feed refresh, the S5 auth flow, sync passes and failed
+downloads. The rule that no entry ever carries a credential is enforced by the **store** rather than
+by each caller — `LogRepositoryImpl.record` applies `redactSecrets`, so a sixth write point cannot
+forget it, and the categories a download failure lands in (`STORAGE` for a lost folder or a full
+disk, `DOWNLOAD` otherwise) are what S8's filter chips sort on.
 
 ## B9. Navigation
 

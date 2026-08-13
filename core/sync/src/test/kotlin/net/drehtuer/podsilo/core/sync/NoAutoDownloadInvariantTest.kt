@@ -63,6 +63,7 @@ class NoAutoDownloadInvariantTest {
                     ledgerRepository,
                     FakeSyncStateRepository(),
                     gpodderClient,
+                    RecordingLogRepository(),
                     fixedClock,
                 ).sync()
 
@@ -92,6 +93,7 @@ class NoAutoDownloadInvariantTest {
                     ledgerRepository,
                     syncStateRepository,
                     gpodderClient,
+                    RecordingLogRepository(),
                     fixedClock,
                 ).sync()
             }
@@ -126,6 +128,7 @@ class NoAutoDownloadInvariantTest {
                 ledgerRepository,
                 FakeSyncStateRepository(),
                 gpodderClient,
+                RecordingLogRepository(),
                 fixedClock,
             ).sync()
 
@@ -166,6 +169,7 @@ class NoAutoDownloadInvariantTest {
                     subscriptions = SubscriptionDelta(manyFeedUrls(1), emptyList(), timestamp = 100L),
                     episodeActionsPage = EpisodeActionPage(remoteActions, timestamp = 100L),
                 ),
+                RecordingLogRepository(),
                 fixedClock,
             ).sync()
 

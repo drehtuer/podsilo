@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.work
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.GpodderClientFactory
+import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.SyncStateRepository
 import net.drehtuer.podsilo.core.sync.SyncOrchestrator
@@ -28,6 +29,7 @@ class SyncOrchestratorFactory
         private val episodeLedgerRepository: EpisodeLedgerRepository,
         private val syncStateRepository: SyncStateRepository,
         private val gpodderClientFactory: GpodderClientFactory,
+        private val logRepository: LogRepository,
         private val clock: Clock,
     ) {
         fun create(credentials: NextcloudCredentials): SyncOrchestrator =
@@ -36,6 +38,7 @@ class SyncOrchestratorFactory
                 episodeLedgerRepository = episodeLedgerRepository,
                 syncStateRepository = syncStateRepository,
                 gpodderClient = gpodderClientFactory.create(credentials),
+                logRepository = logRepository,
                 clock = clock,
             )
     }

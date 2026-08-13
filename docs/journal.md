@@ -3917,3 +3917,67 @@ against `main` in a way that a branch changing code does not. Two of main's own 
 `docs/decisions/0011`, `docs/logo.md` and `docs/UI_interface.md` — documents this branch deletes —
 which is not a mistake on either side, just what happens when a rename lands late. All four
 citations were repointed in the merge.
+
+---
+
+## 2026-08-13 (later) — issue #60, step 0: making the failure visible before fixing it
+
+**Attempted:** the first step of `docs/TODO.md`'s plan for #60 — wire the two missing error-log
+write points, and with them the test that no entry ever carries a credential. Deliberately *not* the
+fix: the point of doing this first is that three of the candidate faults are indistinguishable from
+outside the app, and two of them are cheap to "fix" wrongly.
+
+697 tests (+13), 0 failures, 3 skipped; `ktlintCheck detekt test` green.
+
+### What was built
+
+`SyncOrchestrator` now records every failed pass, and the push failure gets its own sentence because
+the reassurance is the useful half: *"2 decision(s) could not be sent to Nextcloud. They are kept
+here and will be sent again."* — with a test that the rows really do stay unsynced, since a message
+promising that while `markSynced` had already run would be worse than silence.
+
+`DownloadWorker` records every failed **attempt**, not only the last. The DAO collapses repeats onto
+one entry with a count, so logging each attempt is what turns "it failed three times overnight" from
+an inference into a `×3` the user can read. A failure caused by a lost folder or a full disk is filed
+under `STORAGE` rather than `DOWNLOAD`, and its sentence names the fix rather than offering a retry
+that cannot work.
+
+### The test was supposed to be a test, and became a design change
+
+The plan called for *"the test that no entry ever contains the app password, the Basic-auth header,
+or a URL with credentials"*. Writing it made the shape of the problem obvious: an assertion at five
+write points across four modules is a rule that the sixth forgets. So redaction moved **into the
+store** — `LogRepositoryImpl.record` applies `redactSecrets` — and the test asserts the store, not
+the callers.
+
+Only free text is redacted. `feedUrl` and `episodeKey` are left intact deliberately: the UI navigates
+by them, and a feed URL is already displayed on S1 as the title fallback, so scrubbing it in the log
+alone would break *tap an entry to reach the episode* in exchange for nothing.
+
+### Two things worth keeping
+
+**The first regex left the credential in the log.** `(authorization\s*[:=]\s*)\S+` looks right and
+is not: `\S+` stops at the space after `Basic`, so the header became `Authorization: <redacted>
+dXNlcjpwYXNzd29yZA==` — a redaction marker with the secret still sitting next to it, which is worse
+than no redaction because it looks handled. The table caught it on the first run. Review would not
+have; I had already read that line twice.
+
+**An existing test was weaker than its own comment claimed.** `LogRepositoryTest` had a case saying
+the store "cannot scrub what it is handed — the invariant is enforced at the *write points*
+(asserted in `:app`)". Nothing in `:app` asserted it, and the test itself only checked that a clean
+entry stayed clean, which is true of any implementation including a broken one. That is the third
+time this project has found a test whose comment described an intention rather than the assertion
+underneath it, and the pattern is always the same: the comment names something *elsewhere* that
+turns out not to exist.
+
+### Not done, and deliberately
+
+`ManualNextcloudProbe` against the author's real server is step 0's third item and needs a human at a
+browser. It is the thing that turns §4 and §6 of the plan from suspicions into facts, so it stays
+open rather than being quietly dropped.
+
+Also noted while in there: a failed `GET` surfaces as Retrofit's own `HttpException`, which is not an
+`IOException`, so an expired app password lands in the orchestrator's *non-retryable* branch and in
+the log as a plain `SYNC` failure rather than `AUTH`. Sniffing "401" out of a message string works
+until a server rewords it, so the fix is a typed failure in the port — recorded in `docs/TODO.md`
+rather than done here.
