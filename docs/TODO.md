@@ -151,17 +151,25 @@ other half of why it goes first.
 
 ### Step 1 — A decision must reach the server when it is made
 
-The whole of the reported symptom, and the only step that is unambiguously required.
+**Done 2026-08-14.** 705 tests, 0 failures, 3 skipped; `ktlintCheck detekt test` green. Each of the
+five triggers was verified to fail without its fix.
 
-- [ ] Add `requestSyncNow()` to `EpisodeScheduler` (`:feature:episodes`) — `WorkScheduler` already
+- [x] `SyncTrigger` moved to `:core:model.port`, where every module can reach it. It also absorbed
+      **two duplicates that existed only because it was in the wrong place** — `ConnectSyncTrigger`
+      in `:feature:settings` and `ActivitySyncTrigger` in `:app`, both one-method ports for the same
+      verb. Three declarations, one binding, now one type.
+- [x] ~~Add `requestSyncNow()` to `EpisodeScheduler` (`:feature:episodes`)~~ — `WorkScheduler` already
       implements it via `SyncTrigger`, so this is wiring, not new machinery.
-- [ ] Call it after **every** path that writes an outbox row: S2's swipes (at the point the deferred
+- [x] The trigger lives **where the row is written**, not at the call sites that reach it:
+      `TriageWriter.markAsPlayed` (covers S2, S3 and S7), `SettingsViewModel`'s bulk mark, and
+      `MarkOldEpisodesRule`. Three writers, three triggers — rather than the eight or so events that
+      reach them. Deliberately **not** on `TriageWriter.queue`: `QUEUED` has no outbound action, so a
+      pass there would find an empty outbox.
+- [x] ~~Call it after every path that writes an outbox row: S2's swipes (at the point the deferred
       write commits, **not** when the gesture starts — `docs/UI.md` §12.3), S2's row overflow, S3's
       action bar, selection-mode bulk actions, and S4's *Mark old / all episodes as played*.
-- [ ] `FeedRefresher`'s `MarkOldEpisodesRule` writes `SKIPPED` rows during a refresh and must trigger
-      a pass too — it is the one non-UI writer, and its rows are exactly the ones the author will
-      never think to look for.
-- [ ] **The trigger is not the durability mechanism.** The row is written first and the flag only
+- [x] `MarkOldEpisodesRule` triggers only when it actually wrote something.
+- [x] **The trigger is not the durability mechanism.** The row is written first and the flag only
       flips on a confirmed 2xx (CLAUDE.md §5); this step only shortens "eventually" to "now". A test
       must pin that a failed sync leaves the row unsynced and the next pass still drains it.
 
@@ -170,10 +178,15 @@ work by name already gives that, but assert it.
 
 ### Step 2 — Pull-to-refresh means refresh, on both screens
 
-- [ ] S1: `PullToRefresh` enqueues an expedited `SyncWorker` **and** the feed refresh, per
-      `docs/UI.md` §4, and the indicator stays up for the whole chain rather than for the RSS half.
-- [ ] S2: the same, scoped to its feed for the RSS half; the sync pass is global by nature.
-- [ ] Offline still short-circuits before either (`docs/UI.md` §12.10) — unchanged.
+**Done 2026-08-14**, in the same change.
+
+- [x] S1 and S2 both run a sync pass **before** the feed refresh — the pass replaces the subscription
+      list, so refreshing first would fetch the set of feeds it is about to replace. The indicator
+      covers both halves, through a new suspending `EpisodeScheduler.syncAndAwait()`; the fire-and-
+      forget `SyncTrigger` stays what a *writer* uses, since a decision must never block on the
+      network to be recorded.
+- [x] The RSS half stays scoped to one feed on S2; the sync half is global by nature.
+- [x] Offline still short-circuits before either, now asserted for the sync half too.
 
 After steps 1 and 2 the author's next action produces a visible result, which is the actual bug
 report. Everything below is what stays broken afterwards.

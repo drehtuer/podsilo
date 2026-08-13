@@ -23,6 +23,7 @@ import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import net.drehtuer.podsilo.core.model.port.ThemePreference
 
 /**
@@ -152,4 +153,14 @@ class RecordingLogRepository : LogRepository {
     }
 
     override suspend fun exportPlainText(): String = recorded.joinToString("\n") { it.message }
+}
+
+/** Counts sync requests from the mark-old rule — the only thing in `:core:feed` that asks for one. */
+class RecordingFeedSyncTrigger : SyncTrigger {
+    var requests = 0
+        private set
+
+    override fun requestSyncNow() {
+        requests++
+    }
 }

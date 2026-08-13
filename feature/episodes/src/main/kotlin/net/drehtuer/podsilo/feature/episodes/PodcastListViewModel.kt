@@ -172,6 +172,10 @@ class PodcastListViewModel(
             }
             refreshing.value = true
             try {
+                // Sync first, then the feeds — `docs/UI.md` §4 asks for both and only the second
+                // shipped (issue #60). The order matters: the pass replaces the subscription list,
+                // so refreshing first would fetch the set of feeds we are about to replace.
+                scheduler.syncAndAwait()
                 // `null` means every feed — S1 refreshes the whole subscription list, S2 one feed.
                 scheduler.requestFeedRefresh(null)
             } finally {

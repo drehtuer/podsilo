@@ -23,6 +23,7 @@ import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import net.drehtuer.podsilo.core.model.port.ThemePreference
 
 // In-memory port doubles for the DownloadWorker tests. Deliberately hand-written rather than mocked:

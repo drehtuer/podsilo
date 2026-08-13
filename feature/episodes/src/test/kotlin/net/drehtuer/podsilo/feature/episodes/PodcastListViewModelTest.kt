@@ -257,6 +257,7 @@ class PodcastListViewModelTest {
                 assertEquals(PodcastListEffect.ShowMessage(SnackbarText.Offline), awaitItem())
             }
             assertTrue("nothing may be scheduled while offline", scheduler.refreshes.isEmpty())
+            assertEquals("nor a sync pass — offline is a precondition, not a failure", 0, scheduler.syncs)
         }
 
     @Test
@@ -267,6 +268,24 @@ class PodcastListViewModelTest {
             viewModel.onEvent(PodcastListEvent.PullToRefresh)
 
             assertEquals(listOf<String?>(null), scheduler.refreshes)
+        }
+
+    /**
+     * Issue #60. `docs/UI.md` §4 specifies a sync pass **and** a feed refresh, and only the second
+     * one shipped — so the gesture fetched RSS and never touched the action log in either direction.
+     *
+     * The order is asserted, not incidental: the pass replaces the subscription list, so refreshing
+     * first would fetch the set of feeds the sync is about to replace.
+     */
+    @Test
+    fun `pull to refresh syncs before it refreshes the feeds`() =
+        runTest {
+            val viewModel = viewModel()
+
+            viewModel.onEvent(PodcastListEvent.PullToRefresh)
+
+            assertEquals(1, scheduler.syncs)
+            assertEquals(listOf("sync", "refresh"), scheduler.order)
         }
 
     @Test

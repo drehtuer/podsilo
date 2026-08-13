@@ -34,6 +34,7 @@ import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import net.drehtuer.podsilo.core.model.port.ThemePreference
 
 const val FEED_URL = "https://example.org/feed.xml"
@@ -293,7 +294,7 @@ class FakeLoginFlowClient(
     }
 }
 
-class RecordingSyncTrigger : ConnectSyncTrigger {
+class RecordingSyncTrigger : SyncTrigger {
     var syncs = 0
 
     override fun requestSyncNow() {

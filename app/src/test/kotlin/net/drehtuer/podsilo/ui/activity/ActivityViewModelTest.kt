@@ -98,7 +98,7 @@ class ActivityViewModelTest {
                 workMonitor = { work },
                 syncStatus = { MutableStateFlow(null) },
                 scheduler = scheduler,
-                triageWriter = TriageWriter(FakeActivityLedger(), clock),
+                triageWriter = TriageWriter(FakeActivityLedger(), clock, {}),
                 syncNow = { },
                 clock = clock,
             )
@@ -279,6 +279,8 @@ private class RecordingActivityScheduler : EpisodeScheduler {
     }
 
     override suspend fun requestFeedRefresh(feedUrl: String?) = Unit
+
+    override suspend fun syncAndAwait() = Unit
 }
 
 /**

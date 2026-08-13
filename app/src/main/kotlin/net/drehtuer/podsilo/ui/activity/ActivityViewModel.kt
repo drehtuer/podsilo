@@ -24,6 +24,7 @@ import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import net.drehtuer.podsilo.feature.episodes.DownloadFolderStatus
 import net.drehtuer.podsilo.feature.episodes.DownloadWork
 import net.drehtuer.podsilo.feature.episodes.DownloadWorkMonitor
@@ -59,7 +60,7 @@ class ActivityViewModel(
     private val syncStatus: SyncStatus,
     private val scheduler: EpisodeScheduler,
     private val triageWriter: TriageWriter,
-    private val syncNow: ActivitySyncTrigger,
+    private val syncNow: SyncTrigger,
     // Injected rather than System.currentTimeMillis(), so the clear cursor is testable (CLAUDE.md §7).
     private val clock: java.time.Clock = java.time.Clock.systemUTC(),
 ) : ViewModel() {
@@ -221,8 +222,3 @@ internal fun waitReason(
         !online -> WaitReason.NETWORK
         else -> WaitReason.WIFI
     }
-
-/** `:app` owns `SyncWorker`; this keeps the view model from importing WorkManager. */
-fun interface ActivitySyncTrigger {
-    fun requestSyncNow()
-}

@@ -12,6 +12,7 @@ import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import java.time.Clock
 import java.time.ZoneId
 
@@ -38,6 +39,7 @@ class MarkOldEpisodesRule(
     private val ledgerRepository: EpisodeLedgerRepository,
     private val listRepository: EpisodeListRepository,
     private val settingsRepository: SettingsRepository,
+    private val syncTrigger: SyncTrigger,
     private val clock: Clock,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) {
@@ -58,6 +60,11 @@ class MarkOldEpisodesRule(
         // One transaction and one Flow emission, not one per episode: this routinely touches
         // hundreds of rows and the list underneath is on screen.
         ledgerRepository.upsertAll(stale.map { it.toSkippedRow(now) })
+        // These are `PLAY` actions the author consented to once, at the setting, and they are worth
+        // no less than a hand-made decision — so they get a pass of their own rather than waiting for
+        // whatever asks next (issue #60). Only when something was actually written: an empty refresh
+        // must not schedule work.
+        syncTrigger.requestSyncNow()
         return stale.size
     }
 }

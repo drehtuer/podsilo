@@ -32,6 +32,7 @@ import net.drehtuer.podsilo.core.model.port.LogCategory
 import net.drehtuer.podsilo.core.model.port.LogRepository
 import net.drehtuer.podsilo.core.model.port.NewLogEntry
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import java.time.Clock
 import java.util.concurrent.TimeUnit
 

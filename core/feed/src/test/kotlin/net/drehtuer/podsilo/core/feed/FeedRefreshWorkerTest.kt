@@ -48,6 +48,9 @@ class FeedRefreshWorkerTest {
     private val episodes = RecordingEpisodeRepository()
     private val ledger = RecordingLedgerRepository()
     private val settings = FakeRefreshSettings()
+
+    /** The mark-old rule asks for a sync pass when it writes; counted so a test can pin "only then". */
+    private val syncTrigger = RecordingFeedSyncTrigger()
     private val log = RecordingLogRepository()
 
     @Before
@@ -111,6 +114,7 @@ class FeedRefreshWorkerTest {
                                         ledgerRepository = ledger,
                                         listRepository = ledger,
                                         settingsRepository = settings,
+                                        syncTrigger = syncTrigger,
                                         clock = Clock.fixed(Instant.ofEpochMilli(NOW_MILLIS), ZoneOffset.UTC),
                                         zone = ZoneOffset.UTC,
                                     ),
@@ -241,6 +245,7 @@ class FeedRefreshWorkerTest {
 
             assertTrue(ledger.writes.isEmpty())
             assertTrue("the rule must not even query when it is off", ledger.queriedScopes.isEmpty())
+            assertEquals("and a refresh that marks nothing schedules no sync", 0, syncTrigger.requests)
         }
 
     @Test
@@ -260,6 +265,10 @@ class FeedRefreshWorkerTest {
             assertEquals("ancient", written.episodeKey)
             assertEquals(LedgerState.SKIPPED, written.state)
             assertTrue("the PLAY action goes through the normal outbox", !written.syncedToServer)
+            // Issue #60: these are `PLAY` actions the author consented to once, at the setting, and they
+            // are worth no less than a hand-made decision — so the rule asks for a pass of its own
+            // rather than leaving them for whatever happens to sync next.
+            assertEquals(1, syncTrigger.requests)
         }
 
     @Test

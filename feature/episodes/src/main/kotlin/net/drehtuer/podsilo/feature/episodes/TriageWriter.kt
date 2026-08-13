@@ -6,6 +6,7 @@ import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
+import net.drehtuer.podsilo.core.model.port.SyncTrigger
 import java.time.Clock
 
 private const val MILLIS_PER_SECOND = 1_000
@@ -24,6 +25,7 @@ private const val MILLIS_PER_SECOND = 1_000
 class TriageWriter(
     private val ledgerRepository: EpisodeLedgerRepository,
     private val clock: Clock,
+    private val syncTrigger: SyncTrigger,
 ) {
     /**
      * Marks [episodes] as played, in **one transaction and one `Flow` emission** — bulk triage
@@ -46,12 +48,23 @@ class TriageWriter(
                 )
             },
         )
+        // Issue #60: this is the *only* reason a skip ever reached Nextcloud promptly, and it did
+        // not exist. Nothing asked for a pass after a triage decision, so a skip waited for a
+        // completed download, an app-bar tap, or the periodic pass — four hours by default. One
+        // request per call, not per episode: the write above is one transaction and this is one
+        // pass, however many rows it covered.
+        syncTrigger.requestSyncNow()
     }
 
     /**
      * Marks [episodes] `QUEUED` so the list reflects the decision immediately, before any worker
      * runs. The download itself is enqueued by the caller through `WorkScheduler` — this class never
      * touches WorkManager (`docs/UI.md` §B0.2).
+     *
+     * **No sync is requested here, and that is not an omission.** `QUEUED` has no outbound action —
+     * `toOutboundAction` returns `null` for it, because "I intend to download this" is local state
+     * the API cannot express. The `DOWNLOAD` action exists only once the file has landed, and
+     * `DownloadWorker` asks for the pass then.
      *
      * `attempts` resets to 0 and `lastError` clears, per `docs/decisions/0012` §3: a re-decision is a
      * new attempt chain, and a fresh download that rendered as "attempt 3 of 3" would look exhausted

@@ -8,6 +8,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import net.drehtuer.podsilo.core.model.LedgerState
@@ -50,6 +51,7 @@ class SettingsViewModelTest {
     private val now = Instant.parse("2026-08-02T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val archive = FakeDatabaseArchive()
+    private val syncTrigger = RecordingSyncTrigger()
 
     @Before
     fun setUp() {
@@ -72,6 +74,7 @@ class SettingsViewModelTest {
             namingSummary = { "Der Podcast/{date}_{title}.mp3" },
             syncStatus = { lastSync },
             archive = archive,
+            syncTrigger = syncTrigger,
             clock = clock,
             version = "0.1.0",
             build = "42 · 2026-08-04 00:00 UTC · abc1234",
@@ -159,6 +162,26 @@ class SettingsViewModelTest {
             assertFalse(batch.any { it.state == LedgerState.QUEUED })
             // The durable row exists before anything is posted; only a 2xx flips this (CLAUDE.md §5).
             assertTrue(batch.none { it.syncedToServer })
+            // Issue #60: one pass for the batch. Before this, S4 told the user in the dialog that the
+            // state goes to Nextcloud and then let the rows sit for up to four hours.
+            assertEquals("one pass for the whole batch", 1, syncTrigger.syncs)
+        }
+
+    /**
+     * The mirror of the case above: a confirmation that finds nothing to write must not schedule a
+     * pass either. The outbox would be empty, so the pass could only ever be a wasted wake-up.
+     */
+    @Test
+    fun `confirming with nothing undecided writes nothing and asks for no sync pass`() =
+        runTest {
+            feeds.seed(feed())
+            val viewModel = viewModel()
+
+            viewModel.onEvent(SettingsEvent.BulkConfirmed)
+            runCurrent()
+
+            assertTrue("nothing was written", ledger.writes.isEmpty())
+            assertEquals("so nothing is worth a pass", 0, syncTrigger.syncs)
         }
 
     @Test

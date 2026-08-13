@@ -289,8 +289,22 @@ class RecordingScheduler : EpisodeScheduler {
     /** Suspends until [completeRefresh] is called, so a test can observe `isRefreshing` while it is true. */
     override suspend fun requestFeedRefresh(feedUrl: String?) {
         refreshes += feedUrl
+        order += "refresh"
         inFlightRefresh?.await()
     }
+
+    /** Recorded in the same list as the refreshes, so a test can assert the *order* of the two. */
+    override suspend fun syncAndAwait() {
+        syncs++
+        order += "sync"
+        inFlightSync?.await()
+    }
+
+    var syncs = 0
+    val order = mutableListOf<String>()
+
+    /** Set to hold the sync open, the same way [inFlightRefresh] holds the refresh. */
+    var inFlightSync: CompletableDeferred<Unit>? = null
 
     /** Set to hold a refresh open; complete it to let the scheduler return. */
     var inFlightRefresh: CompletableDeferred<Unit>? = null
