@@ -5,7 +5,6 @@ package net.drehtuer.podsilo.feature.episodes
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -18,6 +17,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+
+/**
+ * A pull comfortably past the refresh threshold, independent of any row's height.
+ *
+ * Deliberately duplicated from `EpisodeListTestHarness` in the Robolectric source set rather than
+ * shared: `src/test/` and `src/androidTest/` are separate compilations, and a `commonTest` module
+ * for one float would cost more than it saves.
+ */
+private const val PULL_DISTANCE_PX = 1_000f
 
 /**
  * **S1 against `docs/UI.md` §4, on a real Compose runtime.**
@@ -80,14 +88,28 @@ class PodcastListConformanceTest {
         compose.onAllNodes(hasText("no image", substring = true)).assertCountEquals(0)
     }
 
-    /** §4: pull-to-refresh is the refresh affordance, and it must work on a *populated* list. */
+    /**
+     * §4: pull-to-refresh is the refresh affordance, and it must work on a *populated* list.
+     *
+     * Swiping the feed row rather than `hasScrollAction()`, and by an explicit distance rather than
+     * the default `swipeDown()` — the same two corrections `PodcastListScreenTest` already carries,
+     * for the same two reasons. S1's chip row became scrollable in its own right with #48's fix, so
+     * that matcher now finds two nodes and fails as an ambiguous match; and the default swipe travels
+     * a node's own height, which makes the gesture's distance depend on how tall a row happens to be.
+     * Nested scroll carries the gesture up to the `PullToRefreshBox` regardless.
+     */
     @Test
     fun aPopulatedListCanBePulledToRefresh() {
         render(feeds(FeedUi(url = "a", title = "Der Podcast", undecidedCount = 12)))
 
-        compose.onNode(hasScrollAction()).performTouchInput { swipeDown() }
+        compose.onNodeWithText("Der Podcast").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + PULL_DISTANCE_PX)
+        }
 
-        assertTrue(events.contains(PodcastListEvent.PullToRefresh))
+        assertTrue(
+            "pulling a populated list down must request a refresh, got $events",
+            events.contains(PodcastListEvent.PullToRefresh),
+        )
     }
 
     /**

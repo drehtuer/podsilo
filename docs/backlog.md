@@ -26,12 +26,21 @@ done and when, and a backlog that also keeps that record is two records (2026-08
     Basic-auth header, not a URL carrying either. `docs/UI.md` §11 states the rule and nothing
     asserts it.
 
-- **Three instrumented tests have never been run.** The ones added for issue #48 — chip reachability
-  at the device's real width, density and font scale; the app bar; the overflow as a real popup
-  window rather than Robolectric's shadow — compile and have never had a device attached. They exist
-  for the next time one is, and #48 was a measured-layout fault that hundreds of JVM tests never saw,
-  which is the argument for running them. (The SAF and Keystore instrumented tests *have* run — see
-  `docs/dev-environment.md` §10.)
+- **Nothing lints `src/androidTest/`.** Verified 2026-08-11:
+  `runKtlintCheckOverAndroidTestDebugSourceSet` reports **`NO-SOURCE`** (the Kotlin dir is never
+  registered with ktlint), and detekt's default source roots are `src/main` + `src/test` only, which
+  `build.gradle.kts` does not extend. So the device tests — the ones with no CI coverage either — are
+  also the only Kotlin in the repo with no style or complexity checking at all. Caught while fixing
+  the two stale tests: an over-length line in a device test passed `./gradlew ktlintCheck detekt`
+  and had to be found by hand. Small to fix (add the source dirs to both), but it will surface a
+  backlog of existing violations, which is why it is a note rather than a drive-by.
+
+- **`device-test.sh` and `adb-connect-host.sh` refuse to run over wireless debugging.** Both gate on
+  "no adb server inside the container", which is correct for the usbip path and exactly wrong for the
+  wireless one, where that server is what holds the connection (`docs/dev-environment.md` §9.4). A
+  wireless run currently means executing the script's steps by hand. The distinguishing fact is
+  cheap — a device serial shaped `<ip>:<port>` is a network device, and `adb devices` showing one
+  means the local server is legitimate — so the guard could be narrowed rather than removed.
 
 - **Two `ErrorCause` values are unreachable by design.** `FEED_PARSE` and `TAG_WRITE` are declared
   and never produced anywhere: a tag-write failure must never fail a download (CLAUDE.md §6), so no
@@ -66,9 +75,6 @@ done and when, and a backlog that also keeps that record is two records (2026-08
   seeding the SQLite file directly does not help, because with no account configured S1 correctly
   shows the *not configured* empty state instead of the list (`docs/UI.md` §4). Do it alongside the
   real-device Nextcloud login.
-- **A `scripts/adb-connect-host.sh` helper** for Tier 3 (emulator on the Windows host, driven from
-  the container). CLAUDE.md §4 asks for it explicitly; `docs/dev-environment.md` §6 records that
-  neither it nor Tier 3 exists yet. Worth writing the first time someone actually needs a device.
 - **Paging 3 for the episode list.** CLAUDE.md §3/§5 mandate it for long lists; the UI contract
   currently says "paging or a keyed `LazyColumn`" (`docs/UI.md` §B14.3). A 500-episode feed
   under the `All` filter is the case that decides it — measure before adding the dependency.

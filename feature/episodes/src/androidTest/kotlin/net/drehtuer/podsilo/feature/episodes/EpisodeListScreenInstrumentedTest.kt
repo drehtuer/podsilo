@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -84,6 +85,15 @@ class EpisodeListScreenInstrumentedTest {
         assertEquals(listOf(EpisodeListEvent.RowClicked("e1")), events)
     }
 
+    /**
+     * `docs/architecture.md` §11's guarantee, asserted **through the row overflow** since the `⋮` replaced
+     * the inline `TextButton`s (`docs/UI.md` §5's row anatomy).
+     *
+     * Opening the menu is the subject rather than incidental setup: §12.1 makes it the mandatory
+     * non-gesture equivalent of the swipes, so the remedy being reachable *there* is the actual
+     * promise. The earlier version asserted the label was on screen, which stopped being true when
+     * the menu landed — and went unnoticed because these never run on CI.
+     */
     @Test
     fun aLostFolderGrantOffersChooseFolderRatherThanRetry() {
         compose.setContent {
@@ -106,7 +116,11 @@ class EpisodeListScreenInstrumentedTest {
             )
         }
 
+        compose.onNodeWithContentDescription("Actions for Warum Hamburg immer regnet").performClick()
+
         compose.onNodeWithText("Choose folder").assertIsDisplayed()
+        // The "rather than Retry" half, which the name promised and the original never checked.
+        compose.onAllNodesWithText("Retry").assertCountEquals(0)
     }
 
     /**

@@ -42,12 +42,13 @@ below differ enormously in how well-proven they are.
 | **Tier 2 — emulator booting in-container** | ✅ **Verified** | 2026-08-02: `scripts/emulator-start.sh` creates + boots `podsilo-ci` headless in ~28 s from nothing |
 | **Tier 2 — `connectedAndroidTest`** | ✅ **Verified** | 2026-08-02: 6 tests green on `podsilo-ci(AVD) - 15` across `:app` and `:feature:episodes` |
 | **Tier 3 — a real device over adb from the container** | ✅ **Verified** | 2026-08-02: a physical Pixel 5 passed into WSL with usbipd-win, visible in here with no image change — see [§9](#9-attaching-a-real-android-device) |
-| **Tier 3 — adb to an emulator on *Windows*** | ❌ **Never run** | Same mechanism as the row above, but the Windows-side `adb -a -P 5037 nodaemon server` half is untested |
+| **Tier 3 — a real device over *wireless debugging*** | ✅ **Verified** | 2026-08-11: a Pixel 10a (Android 17 / API 37) paired and driven over Wi-Fi with no USB, no usbipd and no WSL-side server — see [§9.4](#94-wireless-debugging-no-usb-at-all) |
+| **Tier 3 — adb to an emulator on *Windows*** | ❌ **Never run** | Same mechanism as the USB row above, but the Windows-side `adb -a -P 5037 nodaemon server` half is untested |
 | **A real Nextcloud login from the phone** | ✅ **Verified** | 2026-08-02: Login Flow v2 approved in the phone's browser; 4 subscriptions and 9,565 episodes arrived |
 | **The download pipeline end to end** | ✅ **Verified** | 2026-08-02: two real episodes fetched, tagged (TIT2/TPE1/TALB/TCON/TYER/COMM **and APIC**) and written through SAF on a Pixel 5 |
 | **The foreground-service notification** | ✅ **Verified** | 2026-08-02 — after fixing the manifest crash it caused on API 34 (`docs/journal.md`) |
 | **Backup / restore with real data** | ✅ **Verified** | 2026-08-02: 9,565 episodes round-tripped; a ledger row created after the export was correctly removed by the restore |
-| **The device test set** | ◐ **Partly** | 2026-08-03: 41 declared, **35 executed, 6 skipped**. `SafDownloadTargetInstrumentedTest` opts out without a SAF grant — which the set's own uninstall removes — and `am instrument` reports those skips as `OK`. The script now fails on a skip rather than calling it green; see [§6](#6-testing-tiers) |
+| **The device test set** | ◐ **Partly** | 2026-08-11 on a Pixel 10a / Android 17: **60 declared, 54 passed, 0 failed, 6 skipped**. The two stale conformance tests found earlier the same day are fixed. The 6 skips remain `SafDownloadTargetInstrumentedTest` without a SAF grant — still the reason this is not a ✅; see [§6](#the-device-test-set) |
 | `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (architecture §2) |
 | `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (architecture §11) |
 | SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |
@@ -57,7 +58,8 @@ below differ enormously in how well-proven they are.
 | **A full `SyncOrchestrator` pass on real data** | ✅ **Verified** | 2026-08-02: real subscriptions + a real episode — outbox push, the echo of our own action, and server-clock `since` all confirmed (`docs/journal.md`) |
 
 **In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
-with a real phone.** Tier 1 is where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is
+with a real phone — over USB or, more easily, over wireless debugging ([§9.4](#94-wireless-debugging-no-usb-at-all)).**
+Tier 1 is where CLAUDE.md §4 says the majority of tests must live, and Tier 2 is
 slow enough (≈28 s to boot, minutes per run) that it should stay reserved for what genuinely cannot
 run headless. Tier 3 turned out to need **nothing added to the container** — see [§9](#9-attaching-a-real-android-device)
 for why, and for the one failure mode that breaks it.
@@ -374,12 +376,70 @@ What the set covers, in rough order of what it has actually caught:
 | UI conformance | `PodcastListConformanceTest` | S1 against `docs/UI.md` §4 / §12.5 / §17 / §18 |
 | | `SettingsConformanceTest` | S4/S5 against §7/§8 — no password field, restore gating, the bulk preview |
 | | `EpisodeListScreenInstrumentedTest` | S2 rows on a real Compose runtime |
+| | `LogoRenderConformanceTest` | the brand mark actually rasterises (`docs/UI.md` Part C), in both feature modules |
+| | `MarkLegibilityConformanceTest`, `NotificationIconConformanceTest` | `:core:ui` and `:core:download` — added to the script on 2026-08-10, having never run before |
+
+### Last run: 2026-08-11, Pixel 10a (Android 17 / API 37), over wireless debugging
+
+**60 declared — 54 passed, 0 failed, 6 skipped.**
+
+| Module | Class | Result |
+|---|---|---|
+| `:core:datastore` | `KeystoreAppPasswordCipherTest` | 6 ✅ |
+| `:core:download` | `NotificationIconConformanceTest` | 3 ✅ |
+| `:core:ui` | `MarkLegibilityConformanceTest` | 4 ✅ |
+| `:feature:episodes` | `EpisodeListScreenInstrumentedTest` | 7 ✅ |
+| | `LogoRenderConformanceTest` | 5 ✅ |
+| | `PodcastListConformanceTest` | 6 ✅ |
+| `:feature:settings` | `SettingsConformanceTest` / `LogoRenderConformanceTest` | 6 ✅ / 2 ✅ |
+| `:app` | 5 classes via `am instrument` | 21 declared, 15 ✅, **6 skipped** |
+
+The 6 skips are the documented `SafDownloadTargetInstrumentedTest` opt-out — a fresh install has no
+SAF grant, and the set's own uninstall is what removes it. The runner reports skips as `OK`, which is
+why `device-test.sh` counts them and refuses to call a run with skips green. **That is why this is
+not a clean bill of health:** the six tests covering the actual SAF write are the six that did not
+run, and granting a folder by hand before the run is the only way to change that.
+
+#### The two stale tests this run found, and their fix
+
+The earlier run the same day failed two conformance tests. **Neither was an app bug** — both asserted
+a UI shape the 2026-08-10 change deliberately replaced, and neither had run on a device since,
+because these never run on CI.
+
+- `aLostFolderGrantOffersChooseFolderRatherThanRetry` asserted *Choose folder* was **displayed** on a
+  `FOLDER_UNAVAILABLE` row. That label moved out of an inline `TextButton` and into the row overflow,
+  so it is a tap away now. It opens the overflow first — which is the better assertion anyway, since
+  §12.1 makes that menu the mandatory non-gesture equivalent of the swipes — and it now also asserts
+  no bare *Retry* is offered, the half `docs/architecture.md` §11 actually promises and the original name
+  claimed without checking.
+- `aPopulatedListCanBePulledToRefresh` used `onNode(hasScrollAction())`, which began matching **two**
+  nodes once S1's chip row scrolled: an ambiguous-match error, not a refresh failure. It now swipes
+  the feed row by an explicit distance, letting nested scroll carry the gesture to the
+  `PullToRefreshBox`.
+
+The second fix is a **verbatim copy of a correction `PodcastListScreenTest` already carried** — the
+Robolectric suite hit the identical problem on 2026-08-10, fixed it, and recorded why in a comment.
+The device test was not updated alongside it because nothing runs it automatically. That is the
+sharpest illustration so far of what this tier costs: the same bug had to be found twice, a day
+apart, and the second time by hand.
+
+⚠ **`scripts/device-test.sh` cannot run over wireless debugging as written.** It gates on
+`adb-connect-host.sh`, which aborts when an adb server is running inside the container — correct for
+the usbip path, and exactly backwards for the wireless one, where the container-local server *is* the
+client that owns the connection. The run above was done by executing the script's steps by hand. See
+[§9.4](#94-wireless-debugging-no-usb-at-all).
 
 **`:app` is run by `adb install` + `am instrument`, not by Gradle.** UTP's installer cannot place the
 ~58 MB app APK on a usbip-attached phone and fails with `ErrorCode: 2002` over a report reading
 `tests="0" failures="0"`. Stale packages, install timeouts, permission flags and disabling UTP were
 each ruled out by experiment; the script records all four. The library modules, which install only
 their own small test APK, run through Gradle normally.
+
+Plain `adb install` of the same 41 MB APK is not the problem and never was: over wireless debugging
+on 2026-08-11 both APKs installed in seconds. Whether UTP's installer *also* recovers on a transport
+that is not usbip is untested — the hand-run above kept the `adb install` path rather than
+re-litigating it, so if this is ever collapsed back to a single `./gradlew connectedDebugAndroidTest`
+it should be proven on both transports.
 
 The UI conformance tests duplicate assertions that also exist under Robolectric. That is deliberate:
 three of the bugs found on the author's phone were things a Robolectric render agreed with and a
@@ -591,8 +651,18 @@ offline mode — see the 2026-07-31 Tier 4a journal entry for the exact workarou
 
 ## 9. Attaching a real Android device
 
-**Verified 2026-08-02 with a Pixel 5.** Short version: get the phone into WSL, then run
-`./scripts/adb-connect-host.sh` in the container. There is nothing to install in here.
+There are two ways in, and **[§9.4 (wireless) is the easier one](#94-wireless-debugging-no-usb-at-all)** —
+try it first. Nothing has to be installed in the container for either.
+
+- **Over USB** (§9.1–9.3, verified 2026-08-02 with a Pixel 5): get the phone into WSL with
+  usbipd-win, then run `./scripts/adb-connect-host.sh` in the container. The adb server must live in
+  WSL, because only it can own the USB device.
+- **Over Wi-Fi** (§9.4, verified 2026-08-11 with a Pixel 10a): pair from Developer options and
+  `adb connect`. No usbipd, no cable, no WSL-side setup — and the adb-server rule is the *opposite*
+  one, because no process owns a USB device.
+
+Read §9.1's reasoning before applying §9.3's "never run a server in here" to a wireless session: that
+warning is specifically about USB, and following it on Wi-Fi disconnects the phone.
 
 ### 9.1 Why the container needs no USB support at all
 
@@ -652,7 +722,10 @@ sudo update-alternatives --install /usr/local/bin/usbip usbip \
 Then `adb devices` **in WSL** — which both starts the server and prompts the phone for its USB
 debugging authorisation. Accept the RSA fingerprint on the phone's screen.
 
-### 9.3 The one thing that breaks it
+### 9.3 The one thing that breaks it (USB only)
+
+**This section is about the USB path. On the wireless path of [§9.4](#94-wireless-debugging-no-usb-at-all)
+the rule is reversed** — there the container-local server is the correct arrangement.
 
 **Never let an adb client in the container run while no server is listening.** adb silently starts a
 server when none answers, and a server started *here* is blind to USB — yet because the network
@@ -675,6 +748,73 @@ An adb server is running INSIDE this container (pid 3763).
 ```
 
 Recovery is always: `adb kill-server` in the container, then `adb devices` in WSL.
+
+### 9.4 Wireless debugging: no USB at all
+
+**Verified 2026-08-11 with a Pixel 10a (`stallion`, Android 17 / API 37).** This is the easier path
+of the two and needs nothing on the Windows side — no usbipd, no `linux-tools-virtual`, no cable.
+It works because `--network=host` puts the container on the WSL host's network, and the phone is
+simply another address on the LAN.
+
+**Everything §9.1 and §9.3 say about the adb server is inverted here.** Those sections are about
+USB: the server must own the USB device, so it must live in WSL, and a server started in the
+container is a bug. Over Wi-Fi *nothing* owns a USB device — the server connects to the phone over
+TCP — so the container-local server is correct and required. Do not "fix" it with `adb kill-server`.
+
+On the phone: **Settings → System → Developer options → Wireless debugging → Pair device with
+pairing code.** It shows an IP, a **pairing port** and a six-digit code. Then, in the container:
+
+```bash
+adb pair 192.168.89.201:44745 067408
+# Successfully paired to 192.168.89.201:44745 [guid=adb-5B271JEA321125-JWO6Uq]
+```
+
+**The pairing port is not the connect port,** and this is the one genuinely fiddly part. Pairing uses
+a short-lived port that closes the moment it succeeds; the phone listens for connections on a
+*different* port, shown on the Wireless debugging screen itself under the device name. Read it from
+there and:
+
+```bash
+adb connect 192.168.89.201:43169
+adb devices -l
+# 192.168.89.201:43169   device product:stallion model:Pixel_10a device:stallion
+```
+
+`adb mdns services`, which is supposed to discover that port for you, **returns nothing here** —
+mDNS does not cross into the container's network namespace. If the screen is not to hand, the port
+can be found by scanning, since it is the only thing the phone has open in the ephemeral range:
+
+```bash
+printf '%s\n' {30000..50000} \
+  | xargs -P 500 -I{} bash -c \
+      'timeout 0.7 bash -c "exec 3<>/dev/tcp/192.168.89.201/{}" 2>/dev/null && echo OPEN {}'
+# OPEN 43169
+```
+
+Then target it explicitly, because a stale `emulator-5554` in the device list makes Gradle ambiguous:
+
+```bash
+export ANDROID_SERIAL=192.168.89.201:43169
+./gradlew :feature:settings:connectedDebugAndroidTest
+```
+
+**The port changes every time wireless debugging is toggled**, and the pairing does not survive it —
+expect to redo both after a reboot. That is Android's design, not a fault here.
+
+#### What does not work yet
+
+`./scripts/adb-connect-host.sh` and therefore `./scripts/device-test.sh` **both refuse to run over
+wireless.** The connect helper detects a container-local adb server with `pgrep -x adb` and exits 1
+on principle, which is right for USB and wrong for Wi-Fi:
+
+```
+$ ./scripts/adb-connect-host.sh
+An adb server is running INSIDE this container (pid 2230).
+```
+
+Nothing is actually wrong when that appears on the wireless path. Until the scripts learn the
+difference — the distinguishing fact is cheap, a device serial of the form `<ip>:<port>` is a network
+device — a wireless run means executing `device-test.sh`'s steps by hand. Noted in `docs/backlog.md`.
 
 ---
 
@@ -796,6 +936,10 @@ adb shell rm /data/local/tmp/podsilo.apk
 ```
 
 Same failure family as the UTP installer problem in [§6](#the-device-test-set), and the same fix.
+
+**This is a usbip problem specifically.** Over wireless debugging ([§9.4](#94-wireless-debugging-no-usb-at-all))
+`adb install` of the 41 MB debug APK completed in seconds on 2026-08-11. If installs are the thing
+making a USB session painful, moving to Wi-Fi is a shorter route than the push-and-`pm install` dance.
 
 ### Installing a release build over a debug one
 

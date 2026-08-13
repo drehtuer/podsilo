@@ -16,12 +16,17 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: [v0.3.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
-> end to end.** Subscription mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud
-> login, naming and tagging are built and tested (684 JVM tests, green), and all eight screens in
-> `docs/UI.md` render and are reachable. Verified against a **real Nextcloud on a real phone** —
-> login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and backup/restore.
-> `podsilo-0.3.0.apk` is a signed, minified release build; sideload it on your own device.
+> **Status: [v0.4.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
+> end to end, and triage now scales.** Subscription mirroring, feed refresh, the download pipeline,
+> GPodder sync, Nextcloud login, naming and tagging are built and tested (684 JVM tests, green), and
+> all eight screens in `docs/UI.md` render and are reachable. Verified against a **real Nextcloud on
+> a real phone** — login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and
+> backup/restore. `podsilo-0.4.0.apk` is a signed, minified release build; sideload it on your own
+> device.
+>
+> The device test set was last run on 2026-08-11 against a Pixel 10a (Android 17): **60 tests, 54
+> passed, 0 failed, 6 skipped.** The skips are the SAF write, which opts out on an install with no
+> folder granted — see [`docs/dev-environment.md`](docs/dev-environment.md) §6.
 
 ## The idea
 
@@ -74,14 +79,15 @@ hand-written ID3 frames, no bespoke retry logic.
 
 Development happens in a Docker dev container (JDK 17 + Android SDK) on Windows/WSL2. Tests come in
 three tiers: JVM unit tests as the default and main workload, a headless emulator in the container
-for instrumented runs, and an emulator on the Windows host driven over TCP for interactive UI work.
-Sync is tested against a disposable [opodsync](https://codeberg.org/kd2/opodsync) server, never
-against a real Nextcloud.
+for instrumented runs, and a real device — over USB or wireless debugging — driven from the container
+for everything a device has to answer for. Sync is tested against a disposable
+[opodsync](https://codeberg.org/kd2/opodsync) server, never against a real Nextcloud.
 
 Setup instructions are in [`docs/dev-environment.md`](docs/dev-environment.md), which is also honest
-about which tiers have actually been run. The module design, schema and sync semantics are in
-[`docs/architecture.md`](docs/architecture.md); the whole of the UI — the screen design, the
-Compose seam it binds to, and the brand mark — is in [`docs/UI.md`](docs/UI.md).
+about which tiers have actually been run — all three have, and its status table says what each run
+proved and what is still unverified. The module design, schema and sync semantics are in
+[`docs/architecture.md`](docs/architecture.md); the whole of the UI — the screen design, the Compose
+seam it binds to, and the brand mark — is in [`docs/UI.md`](docs/UI.md).
 
 Five documents, and that is deliberate: `architecture.md` and `UI.md` are the two references,
 [`docs/backlog.md`](docs/backlog.md) holds what is not being built, `docs/third-party.md` tracks
