@@ -12,7 +12,7 @@ import org.junit.runner.RunWith
 import java.security.KeyStore
 
 /**
- * `KeystoreAppPasswordCipher` on a real Android Keystore — the thing `docs/decisions/0010` says can
+ * `KeystoreAppPasswordCipher` on a real Android Keystore — the thing `docs/architecture.md` §2 says can
  * only be checked here.
  *
  * Robolectric has no `AndroidKeyStore` provider, so until this existed the class had **never

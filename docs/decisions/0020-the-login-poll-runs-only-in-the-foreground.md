@@ -9,7 +9,7 @@ Connecting to Nextcloud was **impossible** on a Pixel 10a running Android 17 (SD
 ended with S5 showing *"Can't reach that address. Check the spelling and your network."* while the
 browser plainly said access had been granted. Reproducible on Wi-Fi and on mobile data alike.
 
-`docs/decisions/0019`'s error-log write point is what made it diagnosable. The entry read:
+`docs/UI.md` §8's error-log write point is what made it diagnosable. The entry read:
 
 ```
 AUTH ×3

@@ -296,7 +296,7 @@ private fun EpisodeRows(
     zone: ZoneId,
 ) {
     // Keyed by episodeKey: the sticky headers and any item animation both need stable keys, and a
-    // 500-episode feed under "All" is the case that punishes their absence (UI_interface §14.3).
+    // 500-episode feed under "All" is the case that punishes their absence (`docs/UI.md` §B14.3).
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(items, key = { it.episodeKey }) { episode ->
             val header = state.sections.firstOrNull { it.firstIndex == items.indexOf(episode) }

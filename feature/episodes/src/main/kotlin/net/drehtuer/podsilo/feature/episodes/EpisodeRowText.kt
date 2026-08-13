@@ -20,7 +20,7 @@ internal const val MINUTES_PER_HOUR = 60
 
 /**
  * A `FOLDER_UNAVAILABLE` or `DISK_FULL` failure replaces *Retry* with the action that can actually
- * clear it (`docs/UI.md` §12.11, `docs/decisions/0011`) — a Retry there is a button that cannot work.
+ * clear it (`docs/UI.md` §12.11, `docs/architecture.md` §11) — a Retry there is a button that cannot work.
  */
 internal fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
     when (this) {
@@ -86,7 +86,7 @@ private fun Duration.formatDuration(): String {
 }
 
 /**
- * A percentage is only ever drawn from an update seen **in this process** (`docs/UI_interface.md`
+ * A percentage is only ever drawn from an update seen **in this process** (`docs/UI.md` Part B
  * §7). After process death WorkManager's progress is gone, so a `DOWNLOADING` row with none reads
  * *resuming* rather than implying it knows how far along it is.
  */

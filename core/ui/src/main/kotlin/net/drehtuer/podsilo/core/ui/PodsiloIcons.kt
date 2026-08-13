@@ -20,10 +20,10 @@ import com.composables.icons.lucide.R as LucideR
  * Lucide only, one weight everywhere. Never mixed with Material Symbols: two icon families in one
  * app read as an unfinished migration.
  *
- * **What the artifact actually ships** (`docs/decisions/0015` assumed otherwise, and is amended):
+ * **What the artifact actually ships** (`docs/UI.md` §18 assumed otherwise, and is amended):
  * `com.composables:icons-lucide-android` is a pack of **`VectorDrawable` XML resources**, not
  * `ImageVector` objects — its `classes.jar` is empty. So these are drawable ids resolved with
- * `painterResource`, which is why they are `Int`s and not `ImageVector`s. Everything ADR 0015
+ * `painterResource`, which is why they are `Int`s and not `ImageVector`s. Everything UI.md §18
  * decided still holds; only the call site differs.
  */
 object PodsiloIcons {
@@ -96,7 +96,7 @@ object PodsiloIcons {
     @DrawableRes val Offline: Int = LucideR.drawable.lucide_ic_wifi_off
 
     // `server` was here, for S1's not-configured empty state. That state now leads with the brand
-    // lockup instead (`docs/logo.md` §4.2), leaving the glyph with no call site — and this object is
+    // lockup instead (`docs/UI.md` §C4.2), leaving the glyph with no call site — and this object is
     // an allow-list, not an inventory, so an entry nobody renders is an invitation to find it a job.
     // The brand mark is deliberately *not* added in its place: it is not a glyph. See PodsiloLogo.kt.
 

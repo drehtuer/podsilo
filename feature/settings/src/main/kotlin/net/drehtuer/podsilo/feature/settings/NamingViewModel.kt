@@ -139,7 +139,7 @@ class NamingViewModel(
 /**
  * The synthetic worst cases (`docs/UI.md` §9). Deliberately unpleasant: an over-long title, an
  * episode with no date, and a title full of characters FAT32 rejects. The `MISSING_DATE` preview is
- * *expected* to render `00000000` (`docs/decisions/0004`) — if it ever shows an empty segment, the
+ * *expected* to render `00000000` (`docs/architecture.md` §11) — if it ever shows an empty segment, the
  * engine regressed, not this screen.
  */
 internal fun sample(case: PreviewCase): Episode =

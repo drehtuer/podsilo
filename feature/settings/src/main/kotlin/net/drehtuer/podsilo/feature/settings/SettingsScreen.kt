@@ -93,7 +93,7 @@ fun SettingsScreen(
 }
 
 /**
- * Backup and restore of the local database (`docs/decisions/0018`).
+ * Backup and restore of the local database (`docs/UI.md` §7).
  *
  * The subtitles name what is actually at stake. Most of the database can be rebuilt — feeds come
  * from Nextcloud, episodes from the RSS — but the ledger is the app's own memory of what has been
@@ -345,7 +345,7 @@ private fun AboutGroup(
     onEvent: (SettingsEvent) -> Unit,
 ) {
     GroupHeader("ABOUT")
-    // `docs/logo.md` §4.3: the horizontal lockup, flush left on the surface ground, no card and no
+    // `docs/UI.md` §C4.3: the horizontal lockup, flush left on the surface ground, no card and no
     // frame. One of only three in-app placements of the mark, and the only one that is purely the
     // app saying what it is.
     PodsiloLockup(modifier = Modifier.padding(horizontal = RowPadding, vertical = LogoGap))

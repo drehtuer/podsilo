@@ -45,7 +45,7 @@ class SettingsScreensTest {
 
     @Test
     fun `the About group carries the lockup beside the version and licence`() {
-        // `docs/logo.md` §4.3: horizontal lockup, flush left, no card and no frame. GPL-3.0 and a
+        // `docs/UI.md` §C4.3: horizontal lockup, flush left, no card and no frame. GPL-3.0 and a
         // version string mean little without saying whose they are.
         renderSettings(SettingsUiState(version = "0.1.0"))
 
@@ -272,7 +272,7 @@ class SettingsScreensTest {
             )
         }
 
-        // The name is the question, not a detail buried in a sentence (docs/decisions/0019).
+        // The name is the question, not a detail buried in a sentence (`docs/UI.md` §8).
         compose.onNodeWithText("Connect as podsilo?").assertIsDisplayed()
         compose.onNode(hasText("your browser was signed in to", substring = true)).assertIsDisplayed()
 

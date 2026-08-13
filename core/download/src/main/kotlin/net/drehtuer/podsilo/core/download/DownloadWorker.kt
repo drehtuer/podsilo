@@ -202,7 +202,7 @@ class DownloadWorker
         /**
          * Publishes byte progress for the UI, in the **same throttled tick** as the notification.
          *
-         * That shared tick is the point, not an economy: `docs/UI_interface.md` §7 requires the
+         * That shared tick is the point, not an economy: `docs/UI.md` §B7 requires the
          * notification, the episode row, S1's aggregate and S7 never to disagree, and the surest way
          * to guarantee that is for one clock to drive them all. This is the only publisher; nothing
          * persists a percentage, so after process death there is simply no progress to read and the
@@ -248,7 +248,7 @@ class DownloadWorker
         /**
          * Ledger rows carry denormalised `feedUrl`/`enclosureUrl`/`durationSeconds` snapshots so the
          * outbox can still build a valid action after the episode row is pruned
-         * (`docs/decisions/0001`). `syncedToServer` is always `false` on a local write — only a
+         * (`docs/architecture.md` §4). `syncedToServer` is always `false` on a local write — only a
          * confirmed 2xx flips it, and only the sync pass may do that.
          */
         @Suppress("LongParameterList")

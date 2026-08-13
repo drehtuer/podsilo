@@ -40,7 +40,7 @@ private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 private const val MILLIS_PER_SECOND = 1_000
 
 /**
- * S4 (`docs/UI_interface.md` §5).
+ * S4 (`docs/UI.md` §B5).
  *
  * Every control commits immediately — there is no Save button and no form buffer (`docs/UI.md` §7).
  * The single exception is the bulk *mark as played*, which is the one operation here that reaches
@@ -158,7 +158,7 @@ class SettingsViewModel(
      * lives here rather than only on the row so it holds however the event arrives.
      *
      * The reason is sequencing, not secrecy. The archive deliberately carries no credentials
-     * (`docs/decisions/0018`), so a restore onto an unconfigured install drops the ledger behind a
+     * (`docs/UI.md` §7), so a restore onto an unconfigured install drops the ledger behind a
      * *not configured* screen that shows none of it — which is precisely how it read on the Pixel 5,
      * with the snackbar reporting restored podcasts the list could not display. Connecting first
      * means the restored ledger lands somewhere that renders it, and the next sync reconciles it.
@@ -293,7 +293,7 @@ class SettingsViewModel(
 
 /**
  * Snapshots what a later reader needs, exactly as `TriageWriter` does for a swipe
- * (`docs/decisions/0001`) — and `syncedToServer = false`, because the durable row exists before
+ * (`docs/architecture.md` §4) — and `syncedToServer = false`, because the durable row exists before
  * anything is posted and only a confirmed 2xx flips it (CLAUDE.md §5).
  */
 internal fun Episode.toSkippedRow(now: Long): EpisodeLedgerRow =

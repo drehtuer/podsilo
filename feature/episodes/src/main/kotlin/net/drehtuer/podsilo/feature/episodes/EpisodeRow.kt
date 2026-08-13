@@ -227,7 +227,7 @@ private fun EpisodeRowBody(
 }
 
 /**
- * A percentage is only ever drawn from an update seen **in this process** (`docs/UI_interface.md`
+ * A percentage is only ever drawn from an update seen **in this process** (`docs/UI.md` Part B
  * §7). After process death WorkManager's progress is gone, so a `DOWNLOADING` row with none reads
  * *resuming* rather than implying it knows how far along it is.
  */

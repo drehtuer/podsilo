@@ -37,7 +37,7 @@ private const val NOW_MILLIS = 1_784_019_600_000
 
 /**
  * [FeedRefreshWorker] against MockWebServer + in-memory ports. Robolectric because rssparser's
- * Android target resolves `XmlPullParserFactory` at runtime (`docs/decisions/0005`) — headless, no
+ * Android target resolves `XmlPullParserFactory` at runtime (`docs/architecture.md` §7) — headless, no
  * emulator.
  */
 @RunWith(RobolectricTestRunner::class)

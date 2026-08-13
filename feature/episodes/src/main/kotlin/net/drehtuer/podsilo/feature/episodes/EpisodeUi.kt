@@ -9,7 +9,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * One row of the triage list (`docs/UI_interface.md` §1).
+ * One row of the triage list (`docs/UI.md` §B1).
  *
  * **[actions] is computed here, once**, rather than derived by a `when (state)` inside each
  * Composable — the row body, the overflow menu, the swipe label and the accessibility custom
@@ -37,7 +37,7 @@ data class EpisodeUi(
     val ledgerState: LedgerState?,
     val progress: DownloadProgress? = null,
     val writtenFileName: String? = null,
-    /** The typed failure, so a row can tell *Retry* from *Choose folder* (`docs/decisions/0011`). */
+    /** The typed failure, so a row can tell *Retry* from *Choose folder* (`docs/architecture.md` §11). */
     val lastError: FailureUi? = null,
     val hasEnclosure: Boolean = true,
     val episodePageUrl: String? = null,
@@ -49,7 +49,7 @@ data class EpisodeUi(
         get() = ledgerState in TERMINAL_STATES
 }
 
-/** Never reconstructed from a ledger row — only ever from a live update (`docs/UI_interface.md` §7). */
+/** Never reconstructed from a ledger row — only ever from a live update (`docs/UI.md` §B7). */
 data class DownloadProgress(
     val bytesDownloaded: Long,
     val totalBytes: Long?,
@@ -85,7 +85,7 @@ private val TERMINAL_STATES = setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED,
  *
  * An episode with no enclosure is not downloadable at all — the affordance is **absent**, not
  * present-and-failing, because a Download button that always errors is worse than none
- * (`docs/UI_interface.md` §14.3).
+ * (`docs/UI.md` §B14.3).
  */
 internal fun actionsFor(
     state: LedgerState?,
@@ -114,7 +114,7 @@ internal fun actionsFor(
 }
 
 /**
- * Projects a stored [EpisodeListItem] into its row, applying `docs/UI_interface.md` §7's table.
+ * Projects a stored [EpisodeListItem] into its row, applying `docs/UI.md` §B7's table.
  *
  * [work] is supplied by the ViewModel from WorkManager, deliberately as a parameter rather than read
  * from the ledger: **the ledger knows an episode is `DOWNLOADING`, but only this process knows how
@@ -163,7 +163,7 @@ fun EpisodeListItem.toUi(
 
 /**
  * How a row looks while its swipe decision is still inside the undo window
- * (`docs/decisions/0021`).
+ * (`docs/UI.md` §12.3).
  *
  * **Presentation only.** No ledger row exists yet, nothing has been posted, and nothing is queued;
  * this is the app showing the user that their gesture registered. If the window is undone the row
@@ -183,7 +183,7 @@ internal fun EpisodeUi.asPending(pending: PendingUndo): EpisodeUi =
 
 /**
  * A `DOWNLOADING` ledger row with **no work behind it at all** — killed before WorkManager could
- * resume it (`docs/UI_interface.md` §7's third case).
+ * resume it (`docs/UI.md` §B7's third case).
  *
  * Distinct from "downloading but has not reported yet", which is live work and reads *resuming*. The
  * distinction matters because only this case needs re-enqueueing, and re-enqueueing a download that

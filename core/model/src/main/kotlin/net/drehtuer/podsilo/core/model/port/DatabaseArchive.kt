@@ -13,7 +13,7 @@ package net.drehtuer.podsilo.core.model.port
  * it. This is the export that doesn't.
  *
  * **The archive holds no credentials.** The Nextcloud app password lives in DataStore behind a
- * Keystore-backed cipher (`docs/decisions/0010`), not in the database, so it is not in the zip and
+ * Keystore-backed cipher (`docs/architecture.md` §2), not in the database, so it is not in the zip and
  * a restored install must be reconnected. That is deliberate: a backup file the user may copy to a
  * PC or a cloud drive must not be a credential file. It *does* contain feed and enclosure URLs,
  * episode titles and show notes — the user's subscription list in readable form.

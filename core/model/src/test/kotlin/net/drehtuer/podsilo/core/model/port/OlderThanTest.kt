@@ -52,7 +52,7 @@ class OlderThanTest {
     @Test
     fun `the zone is the one passed in, not the runner's default`() {
         // Crossing a DST boundary is where a zone-unaware implementation drifts by an hour. The
-        // zone is a parameter for the same reason :core:naming takes one (docs/decisions/0004).
+        // zone is a parameter for the same reason :core:naming takes one (`docs/architecture.md` §11).
         val now = Instant.parse("2026-04-15T00:30:00Z")
 
         val berlinCutoff = OlderThan.MONTH_1.cutoffMillis(now, berlin)

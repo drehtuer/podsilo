@@ -89,7 +89,7 @@ data class DownloadRequest(
  * `download to app cache → verify → resolve name → rewrite tags → copy into the SAF tree → delete cache`.
  *
  * Nothing here touches an Android API: the SAF half sits behind [DownloadTarget]
- * (`docs/decisions/0011`) and the ledger writes belong to [DownloadWorker], which is what makes
+ * (`docs/architecture.md` §11) and the ledger writes belong to [DownloadWorker], which is what makes
  * this class — the part with all the branching — testable without an emulator.
  *
  * It contains **no** string-sanitisation logic of its own; every naming decision, including

@@ -27,7 +27,7 @@ import java.time.ZoneId
 /**
  * The cache -> verify -> name -> tag -> deliver -> clean-up pipeline (`docs/architecture.md` §11),
  * end to end, with MockWebServer for the network and [FakeDownloadTarget] for the SAF write
- * (`docs/decisions/0011`). No Android, no emulator.
+ * (`docs/architecture.md` §11). No Android, no emulator.
  */
 class EpisodeDownloaderTest {
     @get:Rule

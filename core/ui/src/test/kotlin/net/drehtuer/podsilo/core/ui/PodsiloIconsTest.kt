@@ -57,7 +57,7 @@ class PodsiloIconsTest {
     @Test
     fun `the allow-list has exactly the icons §18 names`() {
         // 26 rows in the table. A new affordance means adding a row there before adding a glyph.
-        // Was 27 until `server` lost its only call site to the brand lockup (`docs/logo.md` §4.2).
+        // Was 27 until `server` lost its only call site to the brand lockup (`docs/UI.md` §C4.2).
         assertEquals(26, all.size)
     }
 

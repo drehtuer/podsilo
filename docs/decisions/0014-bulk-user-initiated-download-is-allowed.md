@@ -62,5 +62,5 @@ download volume, and the action stays enabled even then, because the estimate co
 - `WorkScheduler` enqueues one work request per episode, as a normal download would — bulk is a loop
   at the call site, not a new work type. Each row is therefore individually cancellable in S7, which
   is what makes the "visible" column of the table above true rather than aspirational.
-- The ledger writes go through `upsertAll` in one transaction (`docs/UI_interface.md` §8.6), not one
+- The ledger writes go through `upsertAll` in one transaction (`docs/UI.md` §B8.6), not one
   `upsert` per episode.

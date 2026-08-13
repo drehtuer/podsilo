@@ -1,21 +1,28 @@
-# Podsilo UI/UX design
+# Podsilo UI — design, seam and brand mark
 
-Design reference for the Compose UI (`:feature:episodes`, `:feature:settings`, `:app` navigation).
-No implementation — this document decides *what the screens are, what they show, and what every
-gesture does*, so that Tier 4c can be built without re-litigating UX mid-code.
+The whole of Podsilo's user interface, in three parts:
 
-Companion documents: [`docs/architecture.md`](architecture.md) (modules, schema, sync semantics) and
-[`TODO.md`](../TODO.md) (build order). Where this document adds a screen or a rule that the
-architecture implies but does not state, it is marked **[gap]** and listed again in
-[§13](#13-coverage-check-against-the-architecture). Three decisions here **change** the architecture
-or the README and need an ADR before implementation — all three are collected in
-[§14](#14-decisions-that-needed-an-adr--all-three-accepted).
+| Part | What it decides | Numbered |
+|---|---|---|
+| **A** (§1–§19) | The UX: what the screens are, what they show, what every gesture does | `§1`…`§19` |
+| **B** (§B0–§B17) | The seam: per-screen state, events, effects, and the ports the screens bind to | `§B0`…`§B17` |
+| **C** (§C1–§C6) | The brand mark: construction, placements, and how it ships | `§C1`…`§C6` |
+
+A bare `§n` always means Part A. Parts B and C were separate documents (`UI_interface.md`,
+`logo.md`) until 2026-08-13; they are one file now because every rule in B and C is a consequence of
+a rule in A, and three files meant three places for the same rule to drift.
+
+The companion is [`docs/architecture.md`](architecture.md) — modules, schema, sync semantics.
+Where Part A adds a screen or a rule that the architecture implies but does not state, it is marked
+**[gap]** and listed again in [§13](#13-coverage-check-against-the-architecture).
 
 **Vocabulary:** the user-facing word for the "I don't want this file" decision is **Mark as played**
 (never "Skip"). The ledger state behind it is still `SKIPPED` and the emitted GPodder action is still
 `PLAY` (architecture §6) — internal names are unchanged, only the UI wording.
 
 ## Table of contents
+
+### Part A — design
 
 1. [Design principles](#1-design-principles)
 2. [Screen inventory](#2-screen-inventory)
@@ -37,6 +44,25 @@ or the README and need an ADR before implementation — all three are collected 
 18. [Iconography](#18-iconography)
 19. [Orientation](#19-orientation)
 
+### Part B — the seam
+
+B0. [Rules the seam enforces](#b0-rules-the-seam-enforces) · B1. [Shared types](#b1-shared-types) ·
+B2. [S1 state](#b2-s1--podcast-list) · B3. [S2 state](#b3-s2--episode-list) ·
+B4. [S3 state](#b4-s3--episode-detail-sheet) · B5. [S4/S5/S6 state](#b5-s4--s5--s6--settings-connection-naming) ·
+B6. [S7 state](#b6-s7--activity) · B7. [Progress](#b7-progress-and-the-rule-about-stale-percentages) ·
+B8. [Ports](#b8-what-the-screens-bind-to--all-of-it-built) · B9. [Navigation](#b9-navigation) ·
+B10. [Theming](#b10-theming) · B11. [Motion mapping](#b11-motion--the-compose-mapping) ·
+B12. [Consistency](#b12-consistency-invariants) · B13. [Declared types](#b13-types-referenced-above-declared) ·
+B14. [Corner cases](#b14-corner-cases) · B15. [Notifications](#b15-notifications) ·
+B16. [Accessibility](#b16-accessibility-contract) · B17. [Icons, technically](#b17-icons--the-technical-half)
+
+### Part C — the brand mark
+
+C1. [The mark](#c1-the-mark) · C2. [Files](#c2-files) ·
+C3. [Launcher and system surfaces](#c3-android-launcher-and-system-surfaces) ·
+C4. [Where it appears](#c4-where-the-logo-appears-inside-the-app) ·
+C5. [What it never does](#c5-what-the-logo-never-does) · C6. [Compose integration](#c6-compose-integration)
+
 ---
 
 ## 1. Design principles
@@ -57,7 +83,7 @@ or the README and need an ADR before implementation — all three are collected 
 5. **The default view is the small one.** Filters default to "still to decide" everywhere, because a
    podcast catcher's backlog is otherwise unbounded.
 6. **Decisions are reversible by acting again.** A swipe carries a ~5 s undo window because a
-   gesture can be started by accident (§12.3, `docs/decisions/0021`); every other decision commits
+   gesture can be started by accident (§12.3); every other decision commits
    at once and is fixed by downloading the episode again, not by racing a timer.
 7. **State is truthful and local-first.** The UI renders the Room ledger; network activity is shown
    as *activity*, never as a blocking modal. Failures are surfaced but never destructive, and every
@@ -494,13 +520,13 @@ second note in the preview states it plainly rather than warning against it. Fur
 **About group** — version and licence, plus a **Source code** row linking to the repository. GPL-3.0
 means little without somewhere to get the code, so the licence line and the link belong together.
 
-**Backup group** (`docs/decisions/0018`)
+**Backup group**
 
 - **Export database** — a SAF `CreateDocument`, offered as `podsilo-backup-YYYY-MM-DD.zip` so
   successive backups sit beside each other rather than one silently replacing the last. The subtitle
   names what is inside; the snackbar afterwards names the counts.
 - **Restore from backup** — **disabled until Nextcloud is connected**, reading *"Connect Nextcloud
-  first"* (`docs/decisions/0018`). Not about secrecy — the archive carries no credentials by design —
+  first"*. Not about secrecy — the archive carries no credentials by design —
   but about sequencing: the restored ledger would otherwise land behind S1's *not configured* empty
   state, which shows none of it, while the snackbar reports podcasts restored. Connect first and the
   ledger lands somewhere that renders it.
@@ -526,7 +552,7 @@ Settings has no Save button: every control commits on change.
 
 A modal dialog over S4, using **Nextcloud Login Flow v2** exclusively — the app never sees, asks
 for, or stores a user password; it stores only the app password the flow hands back (encrypted,
-`AppPasswordCipher`, ADR 0010).
+`AppPasswordCipher`, architecture §2).
 
 ```mermaid
 block-beta
@@ -594,7 +620,7 @@ stored.
 
 ### The account is confirmed before anything is stored
 
-**Amended 2026-08-03 — see `docs/decisions/0019`.** This section used to store the credentials the
+**Amended 2026-08-03.** This section used to store the credentials the
 moment gpoddersync answered 200. It no longer does, because Login Flow v2 **has no account chooser**:
 if the browser already holds a Nextcloud session, the grant page reads *"Currently logged in as X"*
 above a single **Grant access** button, and X is simply whoever that browser was signed in as. The
@@ -684,7 +710,7 @@ deliberately absent: the extension is appended after resolution and is not resol
 filename.
 
 Live preview calls the already-tested `NamingTemplateEngine.resolve()` against a real recent episode
-plus synthetic worst cases (missing date → `00000000` per ADR 0004; over-long title → truncation;
+plus synthetic worst cases (missing date → `00000000` per architecture §11; over-long title → truncation;
 illegal characters → sanitised). An invalid template shows the reason under the field and cannot be
 applied. Existing files are never renamed — a note says so.
 
@@ -796,8 +822,7 @@ since a tag failure never blocks a download — architecture §11), and abandone
 Both directions are **re-mappable in Settings → Triage** (`Download`, `Mark as played`, `Nothing`);
 the swipe background's icon and word are rendered from the current mapping, never hard-coded. Each
 swipe is single-direction, must pass a ~40 % threshold to commit (no accidental flicks), and then
-holds its decision for a ~5 s **undo window** before anything is written (§12.3,
-`docs/decisions/0021`) — the threshold guards against the flick, the window against the deliberate
+holds its decision for a ~5 s **undo window** before anything is written (§12.3) — the threshold guards against the flick, the window against the deliberate
 swipe on the wrong row. Non-gesture equivalents are mandatory: the row overflow `⋮`
 and the S3 action bar.
 
@@ -836,7 +861,7 @@ A percentage is only ever drawn from a progress update received in this process.
 
 ### 12.3 A swipe has an undo window; everything else is corrected by acting again
 
-**Amended 2026-08-09 (issue #49, `docs/decisions/0021`).** This section was titled *"No undo —
+**Amended 2026-08-09 (issue #49).** This section was titled *"No undo —
 re-download instead"* and argued it from the protocol: a skip becomes a `PLAY` action in an
 append-only log that other clients act on, and the GPodder API has no retraction. That argument is
 still correct, and it is *why* the amendment takes the shape it does.
@@ -852,7 +877,7 @@ immediately killed by process death is lost, which is the cost the design accept
 
 - **The row's action buttons and S3's action bar** are deliberate presses on a named affordance, not
   a gesture that can be started by trying to scroll. No undo.
-- **Bulk actions keep their confirmations and gain no undo** (`docs/decisions/0021`, decision D2):
+- **Bulk actions keep their confirmations and gain no undo** (settled with the author when undo was added):
   selection mode, *Download all* and *Mark old / all episodes as played*. Naming the count before
   writing is a stronger safeguard than five seconds for an action covering hundreds of rows.
 
@@ -868,7 +893,7 @@ Decisions are otherwise corrected by acting again:
   and the UI reports *"Already in your folder — Der Podcast/20260630_Hafen-Kran-Kaffee.mp3"* as a
   snackbar (and in the row/detail status line). This is an informational outcome, not an `ERROR`, and
   is not written to S8. If the file is gone, the download proceeds and produces it again.
-  - **This does not change collision suffixing.** `existingNames` keeps doing what ADR 0011 says it
+  - **This does not change collision suffixing.** `existingNames` keeps doing what architecture §11 says it
     is for — stopping two *different* episodes fighting over one name, with ` (2)`, ` (3)`, … inside
     `:core:naming`. The guard is a separate, narrower question asked of the same data: *is the name
     this episode previously wrote still there?*
@@ -983,7 +1008,7 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 - Resolving the cause resumes the queue automatically; nothing needs re-queuing by hand.
 - An in-flight download interrupted by the cause becomes `ERROR` with its reason (and an S8 entry) —
   the pause applies to the *queue*, and one already-started transfer can still fail properly.
-- A `DownloadFolderUnavailableException` failure is **non-retryable** by design (ADR 0011), so its row
+- A `DownloadFolderUnavailableException` failure is **non-retryable** by design (architecture §11), so its row
   must not offer a bare **Retry** — the action is **Choose folder**. Retry only appears on failures
   where retrying can plausibly work (network, 5xx, truncated body).
 
@@ -1042,9 +1067,9 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 | Motion / transitions | §16 | **added** |
 | Spacing consistency across screens | §17 | **added** |
 | Icon set and per-affordance mapping | §18 | **added — nothing recorded it before** |
-| Brand mark, lockups, launcher and notification icon | `docs/logo.md`; §18 says why it is not in the icon table | **added** |
+| Brand mark, lockups, launcher and notification icon | Part C; §18 says why it is not in the icon table | **added** |
 | Landscape / orientation | §19 | **added** |
-| UI ↔ app-logic contract | `docs/UI_interface.md` | **added — the handover surface for Tier 4c** |
+| UI ↔ app-logic contract | Part B | **added** |
 | Not a player / not a file manager | no playback controls; S7 shows filenames only, never deletes | ✔ |
 
 ---
@@ -1151,7 +1176,7 @@ where this document meets that code — recorded so Tier 4c doesn't rediscover t
 |---|---|---|
 | Download progress, cancel, foreground notification | `DownloadWorker` + `DownloadNotifications`, progress throttled to 1 Hz | UI adopts the same 1 Hz throttle (§12.2) |
 | Folder states for the checklist and the paused banner | `DownloadFolderAccess` → `NotChosen` / `Granted` / `Revoked` | used verbatim (§4, §12.11) |
-| "File still there?" for the duplicate guard | `DownloadTarget.existingNames(folder)` (ADR 0011) | reuse; **no new port method** (§12.3) |
+| "File still there?" for the duplicate guard | `DownloadTarget.existingNames(folder)` (architecture §11) | reuse; **no new port method** (§12.3) |
 | Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.11) |
 | Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; `SyncTrigger` in `:core:download` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
 | Credential change takes effect immediately after S5 | `SyncOrchestratorFactory` builds the client per pass from current credentials | nothing to do; no restart needed after connecting |
@@ -1160,11 +1185,12 @@ where this document meets that code — recorded so Tier 4c doesn't rediscover t
 | **S8 error log** | `LogRepository` over the `error_log` table (schema v2) | collapse and eviction are DAO queries, so the screen just renders (§11) |
 | S2's scoped pull-to-refresh | `FeedRefreshWorker.KEY_FEED_URL` | same worker, not a second one |
 | S5 | `NextcloudLoginFlowClient`, with typed failures | each `ConnectError` in §8 maps to one of them |
-| Artwork and icons | Coil and `icons-lucide-android`, pinned | ADR 0015; §18's table is the allow-list |
+| Artwork and icons | Coil and `icons-lucide-android`, pinned | UI.md §18; §18's table is the allow-list |
 
-**One thing S8 still lacks is content, not a backend.** Only `FeedRefresher` records failures so far;
-`SyncOrchestrator`/`SyncWorker`, `EpisodeDownloader`/`DownloadWorker` and the S5 auth flow are not
-wired yet, so the screen will render an honest but very quiet log until they are.
+**One thing S8 still lacks is content, not a backend.** `FeedRefresher` records feed failures and
+the S5 auth flow records its own; `SyncOrchestrator`/`SyncWorker` and
+`EpisodeDownloader`/`DownloadWorker` still record nothing, so a download that exhausts its retries
+leaves a row `lastError` and no log entry (`docs/backlog.md`).
 
 ---
 
@@ -1186,7 +1212,7 @@ slide and rule lines wipe; nothing bounces, scales, or fades in from nothing.
 | Chips / segments | 100 ms fill swap with **no** motion — the list beneath rebuilds without a transition, because a filter change is a new question, not a movement |
 | Banners | 250 ms standard height expand, pushing content rather than covering it |
 | Dialogs | scrim fade plus a 12 px translate up, 200 ms |
-| Snackbar | 250 ms up, 3 200 ms hold, 200 ms out; carries an action in exactly one case — *Undo* on a swipe (§12.3, `docs/decisions/0021`) |
+| Snackbar | 250 ms up, 3 200 ms hold, 200 ms out; carries an action in exactly one case — *Undo* on a swipe (§12.3) |
 | Theme change | instant — a colour-scheme crossfade on a flat, high-contrast palette reads as a rendering fault |
 
 Three rules the table cannot express, and the ones that actually get broken:
@@ -1214,7 +1240,7 @@ being drawn.
 - **App bar** — 2 px bottom rule, title flush left, leading element inset at **14 dp** so its optical
   edge lands on the 16 dp content grid. **Amended 2026-08-08:** this used to record one intentional
   asymmetry — S1 inset at 16 dp because its leading element was the title itself. S1 now leads with
-  the 24 dp brand mark (`docs/logo.md` §4.1), so its leading element is an icon like every other
+  the 24 dp brand mark (§C4.1), so its leading element is an icon like every other
   screen's and the exception is gone. A simplification, not a new special case.
 - **Rows** — 16 dp horizontal padding, ≥ 72 dp tall, 1 dp hairline between rows, 2 px rule between
   *groups*. Artwork is 56 dp on S1, 52 dp on S2, 76 dp on S3.
@@ -1226,7 +1252,7 @@ being drawn.
 - **Status bar** — `7dp / 16dp`, muted role.
 
 The per-screen state contract, corner cases, notifications and the accessibility semantics behind
-§12.12 live in **`docs/UI_interface.md`** alongside these.
+§12.12 live in **Part B** alongside these.
 
 ---
 
@@ -1242,8 +1268,8 @@ has no call site, and adding an affordance means adding a row before adding a gl
 
 **How they ship:** Android renders no SVG at runtime, so these become `VectorDrawable`/`ImageVector`.
 Preferred route is Lucide's own Compose artifact rather than hand-converting, per CLAUDE.md's
-"use existing libraries" rule; approved as a dependency in ADR 0015. Sizing, the conversion
-fallback and the reason there is no per-density work to do are in `docs/UI_interface.md` §17.
+"use existing libraries" rule; approved as a dependency in UI.md §18. Sizing, the conversion
+fallback and the reason there is no per-density work to do are in §B17.
 
 | Icon | Used for |
 |---|---|
@@ -1283,20 +1309,20 @@ Three distinctions that make the UI lie if they are used interchangeably:
   marker only, and it appears beside the word, never alone.
 
 **`server` was the 25th row here**, for S1's not-configured empty state. That state now leads with the
-brand lockup instead (`docs/logo.md` §4.2) — it is the app's first screen and the one moment with room
+brand lockup instead (§C4.2) — it is the app's first screen and the one moment with room
 to say its own name, where a server glyph said only that a server was missing. The row is struck
 rather than left in place: this table is an allow-list, and an entry with no call site is an
 invitation to find it one.
 
 The **brand mark** is not an icon either, and is deliberately absent from the table above. It carries
 no action, is never tappable, has exactly four placements, and is governed by
-[`docs/logo.md`](logo.md). Adding it to this allow-list would invite call sites to use the logo as a
+Part C. Adding it to this allow-list would invite call sites to use the logo as a
 glyph — do not. In code it lives in `PodsiloLogo.kt`, next to `PodsiloIcons` and outside it.
 
 The **monogram tile** is not an icon: a feed with no `imageUrl` gets a filled surface square with its
 first letter, not a generic placeholder glyph. A stock "no image" icon repeated down the list is
 noise; a letter is at least identifying. A feed with no artwork never gets the brand mark — repeating
-the logo down a list makes every podcast look like it is ours (`docs/logo.md` §5).
+the logo down a list makes every podcast look like it is ours (§C5).
 
 ---
 
@@ -1308,7 +1334,7 @@ re-arrange — a triage worklist is a list, and a list in a wider window is the 
 
 **Orientation is not locked.** `screenOrientation` stays unset. Locking would break a device in a car
 mount, a keyboard case, or a foldable, and Podsilo has no reason to — nothing here depends on aspect
-ratio. Rotation preserves state (`docs/UI_interface.md` §14.2): scroll position, filter, open sheet and open
+ratio. Rotation preserves state (§B14.2): scroll position, filter, open sheet and open
 dialog all survive; one-shot effects do not replay.
 
 Four things genuinely break in a short window, all with cheap fixes. Nothing below justifies a second
@@ -1340,3 +1366,1173 @@ by side, but S2's own detail is a bottom sheet, so the pattern would need a thir
 sheet, and every triage gesture would need a "which pane has focus" answer. The product is one
 decision at a time on a phone (§1). If a tablet layout is ever wanted it is a new design, and item 1's
 content-width cap is the part of it that already applies.
+
+---
+
+# Part B — the seam between the Compose UI and the app logic
+
+Part A says what the screens are. This part defines the **seam**: for every screen, the immutable
+state the UI renders, the events it emits, and the ports it reaches through. Nothing here describes
+rendering; nothing here describes I/O. If a Composable needs a value that is not in a `UiState`
+below, or performs an action that is not a `UiEvent`, the seam is wrong — fix the seam, not the
+Composable. `docs/architecture.md` is what sits underneath it.
+
+Sections in this part are numbered **§B0–§B17**; a bare `§n` without the letter refers to Part A.
+
+Designs are **not in this repository**: `Podsilo Screens.dc.html` (every screen and state, light and
+dark) and `Podsilo Prototype.dc.html` (tap-through) live in the design project. The only design
+assets that are committed are `assets/icons/` (Lucide SVG source, see §B17) and `assets/art/`
+(generated placeholder cover art for the mock-ups, never shipped in the app).
+
+Package root for everything below: `net.drehtuer.podsilo`.
+
+---
+
+## B0. Rules the seam enforces
+
+1. **Unidirectional.** DAO `Flow` → repository → ViewModel `StateFlow<UiState>` → Composable.
+   Composables emit `UiEvent` upward and never call a repository, `WorkManager`, or an HTTP client.
+2. **The ViewModel never enqueues work directly.** All enqueueing goes through `WorkScheduler`
+   (`:app`), which already owns it as built in Tier 4b. `WorkManager` is not a ViewModel dependency.
+3. **The UI never triggers network.** It writes ledger rows and asks for work; workers do the I/O
+   and write back; the UI observes the database (architecture §3).
+4. **One state type per screen, always non-null.** No `UiState?`, no `isLoading` plus a nullable
+   payload. Loading, empty, error and content are *variants*, not flags — every screen's state is a
+   sealed hierarchy or carries an explicit `content:` variant field.
+5. **Every list item carries its own affordance set.** The row does not derive "can I download this?"
+   from a `when (state)` in the Composable — the ViewModel computes `actions: Set<EpisodeUiAction>`
+   so the row, the overflow, the swipe label and the accessibility custom actions all read one
+   source (§12.6).
+6. **Presentation strings are resolved in the Composable, not the ViewModel.** State carries typed
+   values (`Instant`, `LedgerState`, `ErrorCause`); `stringResource` happens at render. The one
+   exception is a server-supplied message (`lastError`), which is passed through verbatim alongside
+   a typed cause.
+7. **Snapshots for one-shot effects.** Snackbars, navigation and system-picker launches are
+   `Channel<UiEffect>`/`Flow<UiEffect>`, never state fields — they must not replay on rotation.
+
+---
+
+## B1. Shared types
+
+**Where these live, as built:** `ErrorCause` is in `:core:model` because the ledger stores it;
+everything else on this page is UI vocabulary and lives in `:feature:episodes`, which `:app` depends
+on for navigation anyway. Keeping `EpisodeUi` out of `:core:model` keeps that module what it is — the
+Android-free domain, not a place screens put their projections.
+
+```kotlin
+// :feature:episodes, except ErrorCause (:core:model). Everything else already exists.
+
+/**
+ * What a row/sheet may currently do. Computed by the ViewModel from the ledger row.
+ * NOT `EpisodeAction` — that name is already taken in :core:model by the GPodder wire type
+ * (`port.EpisodeAction`, architecture §5). Two different things called EpisodeAction in one
+ * module is a compile error at best and a silent mix-up at worst.
+ */
+enum class EpisodeUiAction { DOWNLOAD, DOWNLOAD_AGAIN, MARK_AS_PLAYED, RETRY, CANCEL, OPEN_IN_BROWSER, COPY_LINK }
+// No CHOOSE_FOLDER: a folder failure is carried by FailureUi.remedy, which relabels RETRY rather
+// than adding an action. Verified against the code 2026-08-03.
+
+/** One row in S2/S3/S7. Wraps the existing EpisodeListItem with UI-resolved bits. */
+data class EpisodeUi(
+    val episodeKey: String,
+    val feedUrl: String,
+    val feedTitle: String,
+    val title: String,
+    val artworkUrl: String?,          // episode image, else the feed's
+    val publishedAt: Instant?,        // null renders as no date part, never a fabricated one
+    val duration: Duration?,          // itunes:duration is unreliable — null renders as no part
+    val descriptionSnippet: String,   // HTML already stripped, ≤ 2 lines' worth
+    val ledgerState: LedgerState?,    // null == "to decide" (there is no NEW state — architecture §9)
+    val progress: DownloadProgress?,  // non-null only while this process has seen an update
+    val writtenFileName: String?,
+    val lastError: FailureUi?,        // carries the cause, so Choose-folder vs Retry is decidable
+    val hasEnclosure: Boolean,        // false → dimmed "no audio" row, download disabled
+    val episodePageUrl: String?,      // Episode.link; null → no *Open in browser* row
+    val actions: Set<EpisodeUiAction>, // computed in an init, not passed in
+)
+
+/** Never reconstructed from a stale ledger row — see §B7 "resuming". */
+data class DownloadProgress(val bytesDownloaded: Long, val totalBytes: Long?, val percent: Int?)
+
+data class FailureUi(val cause: ErrorCause, val message: String, val attempts: Int, val retryable: Boolean) {
+    // What to offer *instead of* Retry when retrying cannot work: CHOOSE_FOLDER, FREE_UP_SPACE, or
+    // null for an ordinary Retry. This is §12.11 made checkable.
+    val remedy: FailureRemedy?
+}
+
+// ErrorCause lives in :core:model and is **stored** on the ledger row (schema v3), not derived from
+// the message text — see its KDoc. `retryable` is stored alongside it, because a 404 and a 503 are
+// both SERVER and only one is worth retrying.
+
+enum class ErrorCause { NETWORK, SERVER, AUTH, FEED_PARSE, DISK_FULL, FOLDER_UNAVAILABLE, TAG_WRITE, UNKNOWN }
+
+/** One user-visible condition with three causes (§12.11). */
+sealed interface QueueStatus {
+    data object Running : QueueStatus
+    data class Paused(val cause: PauseCause, val queuedCount: Int) : QueueStatus
+    enum class PauseCause { FOLDER_NOT_CHOSEN, FOLDER_REVOKED, DISK_FULL }
+}
+
+// NOT IMPLEMENTED — kept as the shape a shared effect type would take if one were ever wanted.
+// Each screen declares its own instead (`PodcastListEffect`, `SettingsEffect`, `ConnectEffect`,
+// `EpisodeListEffect`, `ErrorLogEvent`), which is what shipped and works; there is no `UiEffect` in
+// the codebase. Verified 2026-08-03.
+sealed interface UiEffect {
+    data class Snackbar(val text: SnackbarText) : UiEffect
+    data class Navigate(val route: Route) : UiEffect
+    data object LaunchFolderPicker : UiEffect          // ACTION_OPEN_DOCUMENT_TREE
+    data class OpenUrl(val url: String) : UiEffect     // custom tab: Login Flow v2, "open in browser"
+    data class ShareText(val text: String) : UiEffect
+}
+```
+
+**`Instant` and `Duration` are `java.time`** — free at `minSdk 33` and already this project's time
+vocabulary (`:core:naming`, `:core:sync`, `:core:feed`, `:core:download` all use it). **No
+`kotlinx-datetime`, no `kotlin.time.Instant`** — either would be a second vocabulary in a codebase
+that has one (architecture §5).
+
+Storage keeps `Long` epoch millis, unchanged. The conversion happens in exactly one place,
+`EpochTime` in `:core:model`, whose value is its function names: `ofMillis` for everything, and
+`ofServerSeconds` for `SyncState.lastEpisodeActionSyncTs` alone, which is Unix **seconds** verbatim
+from the server. A ViewModel projecting `EpisodeListItem` → `EpisodeUi` calls `EpochTime`; nothing
+else calls `Instant.ofEpochMilli` directly.
+
+---
+
+## B2. S1 — Podcast list
+
+```kotlin
+data class PodcastListUiState(
+    val content: Content,
+    val filter: PodcastFilter = PodcastFilter.WITH_NEW,
+    val isRefreshing: Boolean = false,
+    val queueStatus: QueueStatus = QueueStatus.Running,
+    val isOffline: Boolean = false,
+    val setup: SetupChecklist?,           // null once complete and the grant is intact
+    val activityBadge: Boolean,           // any running download, ERROR row, or unsynced row
+    val totalUndecided: Int,
+) {
+    sealed interface Content {
+        data object NotConfigured : Content          // no Nextcloud → connect empty state
+        data object Loading : Content                // shimmer rows, no spinner overlay
+        data object NoSubscriptions : Content        // configured, zero feeds
+        data class Feeds(val feeds: List<FeedUi>) : Content
+    }
+}
+
+data class FeedUi(
+    val url: String,
+    val title: String?,                   // null → render the URL (architecture §4), never "Unknown"
+    val artworkUrl: String?,
+    val lastRefreshedAt: Instant?,        // null → "never refreshed"
+    val undecidedCount: Int?,             // null → "–": never fetched is not zero (§12.5)
+    val activeDownloads: Int,
+    val aggregateProgress: Float?,        // 0f..1f, null → indeterminate ring
+)
+
+data class SetupChecklist(
+    val nextcloudConnected: Boolean,
+    val instanceLabel: String?,
+    val folderState: FolderState,         // DownloadFolderAccess.State, used verbatim
+    val namingPreview: String,
+)
+
+enum class PodcastFilter { WITH_NEW, ALL }
+
+sealed interface PodcastListEvent {
+    data class FeedClicked(val feedUrl: String) : PodcastListEvent
+    data class FilterChanged(val filter: PodcastFilter) : PodcastListEvent
+    data object PullToRefresh : PodcastListEvent
+    data object ActivityClicked : PodcastListEvent
+    data object SettingsClicked : PodcastListEvent
+    data object ConnectNextcloudClicked : PodcastListEvent
+    data object ChooseFolderClicked : PodcastListEvent
+    data object NamingClicked : PodcastListEvent
+    data object PausedBannerActionClicked : PodcastListEvent
+}
+```
+
+**Ports used:** `FeedRepository.observeAll`, `EpisodeLedgerRepository.observeEpisodes(filter)` for
+the counts (the *same* query as S2, so a badge can never disagree with the list it opens),
+`SettingsRepository`, `DownloadFolderAccess`, `WorkScheduler` (refresh + sync), `ConnectivityMonitor`
+(§B8).
+
+**Ordering is frozen.** The ViewModel sorts once per explicit refresh and on cold start, then holds
+the key order in a `List<String>` and re-projects updated `FeedUi` values into it. Rows update in
+place; they never move under the user's finger (§4). Recomputing the sort inside the `Flow`
+combine is the bug this rule exists to prevent.
+
+---
+
+## B3. S2 — Episode list
+
+```kotlin
+data class EpisodeListUiState(
+    val feedUrl: String,
+    val feedTitle: String,                 // falls back to the URL
+    val filter: EpisodeFilter = EpisodeFilter.TO_DECIDE,
+    val content: Content,
+    val sections: List<MonthSection>,      // sticky headers; null pubDate lands in the trailing "Date unknown"
+    val selection: Selection?,             // non-null == selection mode
+    val isRefreshing: Boolean = false,
+    val queueStatus: QueueStatus = QueueStatus.Running,
+    val feedError: FailureUi?,             // inline banner; episodes stay listed
+    val swipeMapping: SwipeMapping,        // background label/icon are rendered FROM this
+    val downloadAllCount: Int,             // overflow item reads "Download all (n)"
+) {
+    sealed interface Content {
+        data object Loading : Content
+        data class Empty(val filter: EpisodeFilter) : Content
+        data class Episodes(val items: List<EpisodeUi>) : Content
+    }
+}
+
+data class MonthSection(val label: YearMonth?, val firstIndex: Int, val count: Int)
+data class Selection(val keys: Set<String>, val allInFilter: Int)
+data class SwipeMapping(val right: SwipeAction, val left: SwipeAction)
+enum class SwipeAction { DOWNLOAD, MARK_AS_PLAYED, NONE }
+enum class EpisodeFilter { TO_DECIDE, DOWNLOADED, PLAYED_OR_HANDLED, ALL }
+
+sealed interface EpisodeListEvent {
+    data class RowClicked(val episodeKey: String) : EpisodeListEvent          // opens S3, never triages
+    data object BackClicked : EpisodeListEvent                                 // -> EpisodeListEffect.NavigateUp
+    data object ActivityClicked : EpisodeListEvent                             // -> EpisodeListEffect.OpenActivity
+    data class Triage(val episodeKey: String, val action: EpisodeUiAction) : EpisodeListEvent
+    data class SwipeCommitted(val episodeKey: String, val direction: SwipeDirection) : EpisodeListEvent
+    data class FilterChanged(val filter: EpisodeFilter) : EpisodeListEvent
+    data class SelectionToggled(val episodeKey: String) : EpisodeListEvent
+    data class SelectionStarted(val episodeKey: String) : EpisodeListEvent     // carries its row: a long-press selects the one it landed on
+    data object SelectionCleared : EpisodeListEvent
+    data object SelectAllInFilter : EpisodeListEvent
+    data class SelectionActionRequested(val action: EpisodeUiAction) : EpisodeListEvent  // opens the confirm; writes nothing
+    data object SelectionActionDismissed : EpisodeListEvent
+    data class BulkConfirmed(val action: EpisodeUiAction, val keys: Set<String>) : EpisodeListEvent
+    data object DownloadAllRequested : EpisodeListEvent                        // opens the confirm dialog
+    data class DownloadAllConfirmed(val keys: List<String>) : EpisodeListEvent
+    data object PullToRefresh : EpisodeListEvent
+    data object RetryFeedClicked : EpisodeListEvent
+}
+```
+
+**Confirmation is a UI-owned dialog, not a state field of the list.** `DownloadAllRequested` makes
+the ViewModel produce a `BulkPreview` (below) which the dialog renders; nothing is written until
+`DownloadAllConfirmed`.
+
+**Undo** (built 2026-08-09, issue #49; §12.3): a swipe emits `ShowUndo` and holds
+its decision in `pendingUndo` for ~5 s, writing **nothing** until the window elapses;
+`UndoRequested` discards it. The **view model owns the window**, not the snackbar — the host only
+reports a tap, and one arriving after the write finds nothing to discard. The row renders the state
+the decision will produce, which is presentation only. Scope is swipes: the row buttons, S3 and
+every bulk action still commit immediately.
+
+**The feed-error banner** (built 2026-08-10): `feedError` is a `String?` and not the `FailureUi?` this document once declared — the text is the plain sentence `FeedRefresher` already wrote to the error log, passed through verbatim, so the banner and S8 cannot describe one failure two ways. It shows while that entry is **newer than `Feed.lastRefreshedAt`**, which is why a 304 now moves that timestamp. `RetryFeedClicked` exists and refreshes exactly as the pull gesture does.
+
+**The row overflow** (built 2026-08-10) renders `EpisodeUi.actions` and **replaces** the inline buttons the row used to draw — §5's anatomy ends at "status badge/progress, overflow ⋮". It is also the first row-level call site for `COPY_LINK` and `OPEN_IN_BROWSER`; the former now emits its own `CopyLink` effect, having previously emitted `OpenUrl` and therefore opened a browser.
+
+**Selection mode** (built 2026-08-09, issue #46) replaces the app bar rather than adding to it, and
+its actions go through `SelectionActionRequested` rather than reaching `BulkConfirmed` directly —
+that indirection is what makes "name the count before you write" structural here as well. The count
+is a **live region**, and every row carries a custom accessibility action so selection is reachable
+without a long-press (§12.12); `pendingSelectionAction` is its own state field for the same
+reason `pendingBulk` and `pendingMarkAll` are, so one confirmation's wording can never be rendered
+over another's action.
+
+**The app bar** (added 2026-08-09, issue #48 — S2 had shipped without one, alone among the eight
+screens) carries up navigation, the feed title, the Activity action that §3's map draws, and
+the overflow holding *Download all (n)*. Both new events resolve to *effects* — `NavigateUp` and
+`OpenActivity` — because the screen owns no `NavController` (§B0.2). The overflow renders only when
+`downloadAllCount > 0`, since the ViewModel zeroes it outside the *To decide* filter and an overflow
+with no items is a button that opens an empty menu. §5.s diagram also shows a `[filter]`
+label in the bar; there is no filter *icon* — §18's (Part A) allow-list has none — and the filter is the chip
+row directly beneath.
+
+```kotlin
+data class BulkPreview(
+    val episodeKeys: List<String>,         // `count` is derived from this
+    val perFeed: List<FeedBreakdown>,      // named, not Pair: `first`/`second` says nothing about which is which
+    val estimatedBytes: Long?,              // null when any duration is unknown → no size shown
+    val freeBytes: Long?,                   // read ONCE when the dialog opens
+    val exceedsFreeSpace: Boolean,          // warning line only; never disables the action
+)
+```
+
+**Ports used:** `EpisodeLedgerRepository.observeEpisodes(filter)` (one SQL join — the filter is
+resolved in the DAO, not in Kotlin), `EpisodeLedgerRepository.upsert`, `FeedRepository.get`,
+`SettingsRepository` (swipe mapping), `WorkScheduler`, `DownloadTarget.existingNames` **only** via
+the download path, never from the ViewModel.
+
+---
+
+## B4. S3 — Episode detail sheet
+
+```kotlin
+data class EpisodeDetailUiState(
+    val episode: EpisodeUi,
+    val descriptionHtml: String,      // RAW, straight from Episode.description
+    val deliveredTo: String?,         // "SD card / Podcasts" — folder label, only when DOWNLOADED
+    val episodePageUrl: String?,      // RSS <link> of the item; null → the row is not rendered
+)
+
+sealed interface EpisodeDetailEvent {
+    data class Triage(val action: EpisodeUiAction) : EpisodeDetailEvent
+    data object Dismissed : EpisodeDetailEvent
+    data object ErrorDetailsClicked : EpisodeDetailEvent   // → S8
+    data class LinkClicked(val url: String) : EpisodeDetailEvent
+    data object OpenInBrowserClicked : EpisodeDetailEvent
+}
+```
+
+**Opening in the browser is an effect, not navigation.** `OpenInBrowserClicked` emits
+`UiEffect.OpenUrl(episodePageUrl)`, which the host Composable hands to a Custom Tab (falling back to
+`Intent.ACTION_VIEW`). The sheet stays open behind it — leaving to read show notes is not a triage
+decision, and coming back must not cost the user their place. The row renders only when the feed
+supplied an item `<link>`; it is never synthesised from the enclosure URL, which points at an audio
+file rather than a page. Needs one field on the domain type:
+
+```kotlin
+// :core:model — Episode
+val link: String?,   // RSS <item><link> / Atom <link rel="alternate">, mapped in :core:feed
+```
+See §B8.
+
+**Sanitisation happens at render, never at write** (architecture §4). The sanitiser is a UI-layer
+function, not a repository concern:
+
+```kotlin
+// :feature:episodes
+fun sanitizeEpisodeHtml(raw: String): AnnotatedString
+```
+Allowed: paragraphs, line breaks, bold/italic, lists, links. Stripped: `<script>`, `<style>`,
+`<iframe>`, remote images, tracking pixels. It is a pure function and is table-tested; feeding it a
+malicious feed is a unit test, not a manual check.
+
+---
+
+## B5. S4 / S5 / S6 — Settings, connection, naming
+
+```kotlin
+data class SettingsUiState(
+    val nextcloud: NextcloudUi,
+    val downloadFolder: FolderUi,
+    val namingSummary: String,
+    val allowMobileData: Boolean,
+    val swipeMapping: SwipeMapping,
+    val markOldOlderThan: OlderThan,        // OFF | M1 | M3 | M6 | Y1
+    val theme: ThemePreference,             // LIGHT | DARK | SYSTEM
+    val errorLogCount: Int,
+    val version: String,
+    val pendingBulk: BulkPreview?,          // non-null while the preview dialog is up
+    val restoreConfirmationVisible: Boolean,// the restore warning, shown BEFORE the file picker
+    val archiveBusy: Boolean,               // a zip is being written or read; both backup rows dead
+)
+
+data class NextcloudUi(val instanceUrl: String?, val loginName: String?, val connectedAt: Instant?, val lastSyncAt: Instant?, val outboxDepth: Int)
+data class FolderUi(val label: String?, val state: FolderState)   // DownloadFolderAccess.State
+
+sealed interface SettingsEvent {
+    data object ConnectClicked : SettingsEvent
+    data object DisconnectClicked : SettingsEvent
+    data object ChooseFolderClicked : SettingsEvent
+    data object NamingClicked : SettingsEvent
+    data object LastSyncClicked : SettingsEvent
+    data object ErrorLogClicked : SettingsEvent
+    data class MobileDataChanged(val allowed: Boolean) : SettingsEvent
+    data class SwipeChanged(val direction: SwipeDirection, val action: SwipeAction) : SettingsEvent
+    data class OlderThanChanged(val value: OlderThan) : SettingsEvent
+    data class BulkPreviewRequested(val scope: BulkScope) : SettingsEvent   // OLDER_THAN | ALL
+    data object BulkConfirmed : SettingsEvent
+    data object BulkCancelled : SettingsEvent
+    data class ThemeChanged(val theme: ThemePreference) : SettingsEvent
+    data object ExportDatabaseClicked : SettingsEvent
+    data object RestoreDatabaseClicked : SettingsEvent      // opens the warning, not the picker
+    data object RestoreConfirmed : SettingsEvent
+    data object RestoreCancelled : SettingsEvent
+    data class BackupDestinationChosen(val uri: String) : SettingsEvent   // back from CreateDocument
+    data class BackupSourceChosen(val uri: String) : SettingsEvent       // back from OpenDocument
+}
+```
+
+The backup rows go through `DatabaseArchive` (§7). The picked document comes back
+to the ViewModel as an event rather than being handled in the activity, because S4 has to report what
+happened to it — which is why `HostActions` carries a callback for these two and not for the download
+folder.
+
+**`RestoreDatabaseClicked` is refused while `nextcloud.instanceUrl` is null** — the row is disabled
+and `SettingsViewModel.requestRestore` re-checks the account, so the rule holds however the event
+arrives. Restoring before connecting drops the ledger behind S1's `NotConfigured` content variant,
+which never consults the feed list (UI.md §7's 2026-08-02 amendment).
+
+The two swipe dropdowns **cannot hold the same action**: `SwipeChanged` swaps them in the ViewModel
+rather than rejecting the input, so the pair is always valid and the swipe background can be
+rendered from state with no defensive branch.
+
+### S5 — Nextcloud connection dialog
+
+```kotlin
+data class ConnectUiState(
+    val host: String,
+    val phase: Phase,
+    val inlineError: ConnectError?,
+    val isChangingExisting: Boolean,
+    val showSwitchAccountHint: Boolean,        // set by RejectAccount — "log out in the browser"
+) {
+    sealed interface Phase {
+        data object Editing : Phase
+        data object RequestingFlow : Phase
+        data object AwaitingAuthorization : Phase   // field read-only, Cancel aborts the poll
+        data object VerifyingGpodderSync : Phase    // the authenticated GET /subscriptions
+        data class ConfirmingAccount(val loginName: String) : Phase   // granted, NOT yet stored
+    }
+}
+
+enum class ConnectError { UNREACHABLE, TLS, NOT_NEXTCLOUD, NO_GPODDERSYNC, UNAUTHORIZED, ABANDONED }
+
+sealed interface ConnectEvent {
+    data class HostChanged(val value: String) : ConnectEvent   // a typed scheme is stripped, not rejected
+    data object Submit : ConnectEvent
+    data object Cancel : ConnectEvent
+    data object ConfirmAccount : ConnectEvent   // the only path that stores credentials
+    data object RejectAccount : ConnectEvent    // discards it, opens the server root to log out
+    data class ForegroundChanged(val inForeground: Boolean) : ConnectEvent   // gates the poll — ADR 0020
+}
+```
+
+**The poll runs only while the dialog is on screen** (`docs/decisions/0020`). `ConnectDialog` emits
+`ForegroundChanged` from `LifecycleStartEffect` — `ON_START`/`ON_STOP`, because the browser covering
+the app is a *stop* while a notification shade is only a pause. The view model holds the started
+`LoginFlow` across the trip to the browser and resumes on return; its `isForeground` starts **false**,
+so a host that forgets to wire the lifecycle polls never rather than polling in the background.
+
+This is the one place a screen's lifecycle reaches the seam, and it is the **dialog** that reports it,
+not the view model observing one: §B0's rule is that Composables emit events upward, and only the
+dialog knows whether it is on screen.
+
+**Success is claimed only after `VerifyingGpodderSync` returns 200.** On failure the app password is
+discarded, never stored. The dialog is not dismissable by tapping outside while a request is in
+flight.
+
+**And a 200 still does not store anything** (UI.md §8). Login Flow v2 has no account chooser, so the
+account is whichever one the browser was signed into; `ConfirmingAccount` names it and waits.
+`ConfirmAccount` is the only path to `setNextcloudCredentials`.
+
+The granted `NextcloudCredentials` are held in a **private field on the view model**, never in
+`ConnectUiState` — the state is a data class whose `toString` gets printed by logs and inspectors,
+and it would carry the app password. The UI receives `loginName` and nothing else.
+
+Uses `NextcloudLoginFlowClient` (§B8), implemented in `:core:gpodder`.
+
+### S6 — Naming template editor
+
+```kotlin
+data class NamingUiState(
+    val folderTemplate: String,
+    val fileTemplate: String,
+    val validation: Validation,
+    val previews: List<NamingPreview>,     // real recent episode + synthetic worst cases
+    val placeholders: List<String>,
+) {
+    sealed interface Validation {
+        data object Valid : Validation
+        data class Invalid(val field: Field, val reason: String) : Validation   // cannot be applied
+    }
+}
+
+data class NamingPreview(val label: PreviewCase, val resolved: String)
+enum class PreviewCase { RECENT_EPISODE, MISSING_DATE, OVERLONG_TITLE, ILLEGAL_CHARACTERS }
+```
+
+Previews call the already-tested `NamingTemplateEngine.resolve()` — the editor contains **zero**
+sanitisation, truncation or date logic of its own (architecture §11). The `MISSING_DATE` preview is
+expected to render `00000000` (architecture §11); if it ever renders an empty segment, the engine regressed,
+not the UI.
+
+---
+
+## B6. S7 — Activity
+
+```kotlin
+data class ActivityUiState(
+    val queueStatus: QueueStatus,
+    val sync: SyncUi,
+    val downloading: List<EpisodeUi>,
+    val queued: List<QueuedUi>,
+    val failed: List<EpisodeUi>,
+    val recent: List<DeliveredUi>,          // last ~20, filenames only
+)
+
+data class SyncUi(val lastSyncAt: Instant?, val outboxDepth: Int, val canSyncNow: Boolean, val blockedReason: BlockedReason?)
+data class QueuedUi(val episode: EpisodeUi, val reason: WaitReason)  // WIFI, NETWORK, FOLDER, RESUMING
+data class DeliveredUi(val fileName: String, val folderLabel: String, val episodeKey: String)
+
+sealed interface ActivityEvent {
+    data object SyncNowClicked : ActivityEvent
+    data class CancelClicked(val episodeKey: String) : ActivityEvent
+    data class RetryClicked(val episodeKey: String) : ActivityEvent
+    data class MarkAsPlayedClicked(val episodeKey: String) : ActivityEvent
+    data class DetailsClicked(val episodeKey: String) : ActivityEvent
+    data class RowClicked(val episodeKey: String) : ActivityEvent     // opens S3 for that episode
+    data object PausedBannerActionClicked : ActivityEvent
+    data object ErrorLogClicked : ActivityEvent
+}
+```
+
+`recent` exists to answer "did it actually land?" and nothing else. A **Clear list** button empties it
+when it is non-empty. That is a *display cursor* — `SettingsRepository.observeDeliveredClearedAt` —
+and deletes no file and no ledger row: those rows are what stop an episode being downloaded again
+(CLAUDE.md §11), so the label says "list" (added 2026-08-03). There is **no** delete, no
+open-file, and no existence check — Podsilo is not a file manager (README).
+
+A `FOLDER_UNAVAILABLE` failure carries `retryable = false`, so its row renders **Choose folder** and
+not **Retry** (§12.11, architecture §11).
+
+---
+
+### B6b. S8 — Error log
+
+```kotlin
+data class ErrorLogUiState(
+    val filter: LogCategory?,          // null == All
+    val entries: List<LogEntry>,       // already collapsed by the DAO, newest first
+    val expanded: Set<Long>,           // ids whose technical-detail section is open
+    val canClear: Boolean,             // false when empty — Clear/Copy/Share go disabled, not hidden
+    val pendingClear: Boolean,         // the confirmation dialog is up
+)
+
+sealed interface ErrorLogEvent {
+    data class FilterChanged(val category: LogCategory?) : ErrorLogEvent
+    data class DetailToggled(val id: Long) : ErrorLogEvent
+    data class EntryClicked(val id: Long) : ErrorLogEvent    // jumps to the episode in S2, when it names one
+    data object CopyAllClicked : ErrorLogEvent
+    data object ShareClicked : ErrorLogEvent
+    data object ClearRequested : ErrorLogEvent               // opens the confirmation
+    data object ClearConfirmed : ErrorLogEvent
+    data object ClearCancelled : ErrorLogEvent
+}
+```
+
+**Clearing always confirms** (§11) — the dialog names the count and says the log is
+device-local, because there is no copy anywhere else and clearing is not undoable. It clears the
+whole ring buffer, **not** the current filter: a filtered view that cleared only the visible
+category would leave a count the user cannot account for. Recording resumes immediately; clearing is
+`LogRepository.clear()` and touches nothing else — no ledger row, no worker, no sync state. Clear,
+Copy all and Share are disabled (not hidden) when the log is empty, so the affordance stays where
+the user learned it.
+
+---
+
+## B7. Progress, and the rule about stale percentages
+
+`DownloadProgress` is assembled from `WorkManager`'s `WorkInfo.progress` **for this process only**,
+merged with the ledger state:
+
+| Ledger state | Live progress seen this process | What the UI shows |
+|---|---|---|
+| `DOWNLOADING` | yes | determinate bar, `%` and `MB / MB` |
+| `DOWNLOADING` | no, work is live | **indeterminate**, word *resuming* |
+| `DOWNLOADING` | no, no live work for the key | *queued*, and the ViewModel re-enqueues on first observation |
+| `QUEUED` | — | indeterminate + the wait reason |
+
+**A percentage is only ever drawn from an update received in this process.** Persisting a percentage
+to render after process death is the specific bug this table forbids.
+
+Updates are throttled to **1 Hz** — and, as built (2026-08-09, issue #47), that is *the same tick*
+that updates the notification rather than a second timer beside it, which is what makes "the
+notification, the row, S1's aggregate and S7 never disagree" structural instead of aspirational.
+
+**How it is wired.** `DownloadWorker` publishes `KEY_PROGRESS_BYTES`/`KEY_PROGRESS_TOTAL` through
+`setProgressAsync`, tagging each request with its episode key — `WorkInfo` exposes tags and *not* the
+unique work name, so without the tag a queued download cannot be mapped back to its episode.
+`WorkManagerDownloadMonitor` (`:app`) turns that into `DownloadWork(progress, live)` behind the
+`DownloadWorkMonitor` port, and **all three cases above resolve in one place**,
+`EpisodeListItem.toUi`, so S2, S3 and S7 cannot answer them differently. `live` and `progress` are
+separate because the table needs both questions: *is there work at all* versus *has it reported yet*.
+
+Before this, none of the table was implemented: the worker published nothing, nothing observed
+`WorkInfo.progress`, and every `DOWNLOADING` row drew the indeterminate bar for the whole download.
+
+---
+
+## B8. What the screens bind to — all of it built
+
+This was a gap list of ten items the UI needed and the repository did not have. **Every one of them
+now exists** (2026-08-01), so it is kept as a short index of what each turned into, and of the three
+places the built thing differs from the sketch.
+
+| # | Needed for | Built as |
+|---|---|---|
+| 8.1 | S8's entire backing store | `LogRepository` + `error_log` (schema v2). Collapse-on-identity and eviction are **DAO queries**, not UI logic and not an app-start sweep |
+| 8.2 | *Download again* | `KEY_USER_REQUESTED` + the pre-flight duplicate guard — `docs/decisions/0012` |
+| 8.3 | §12.10's offline rules | `ConnectivityMonitor` / `AndroidConnectivityMonitor` |
+| 8.4 | S5 | `NextcloudLoginFlowClient` / `RetrofitNextcloudLoginFlowClient` |
+| 8.5 | the bulk-download warning line | `DownloadTarget.freeBytes()` |
+| 8.6 | S2 selection mode, S4's mark-as-played | `upsertAll`, `previewUndecided`, `undecided` |
+| 8.7 | S2's pull-to-refresh | `FeedRefreshWorker.KEY_FEED_URL` — the same worker, not a second one |
+| 8.8 | *Open in browser* | `Episode.link`, mapped in `:core:feed`, stored in schema v2 |
+| 8.9 | S4's four persisted controls | `SettingsRepository.observeTheme`/`SwipeMapping`/`AllowMobileData`/`MarkOldOlderThan` |
+| 8.10 | artwork and icons | Coil and `icons-lucide-android`, pinned — §18 |
+
+**Three things came out differently from the sketch, and the built shape is the contract:**
+
+- `previewUndecided` returns `List<FeedUndecidedCount>`, not `List<Pair<String, Int>>` —
+  `first`/`second` says nothing about which is the feed and which is the count.
+- `BulkScope` is a **data class**, not an enum: `OLDER_THAN` has to carry its cutoff, and both scopes
+  need the optional per-feed narrowing *Download all* uses. Both select only episodes with **no
+  ledger row**, so a bulk action can never re-touch a decided episode; with a cutoff, episodes with
+  an unknown `pubDate` are excluded, because a missing date is not evidence of being old and
+  sweeping one up would emit a `PLAY` the user never agreed to.
+- `Instant` is **`java.time`**, and nothing was added to get it — see §B1 and `docs/architecture.md` §5.
+
+**Still missing, and it is not a port:** two error-log *write points*. `FeedRefresher` and the S5
+auth flow record; `SyncOrchestrator`/`SyncWorker` and `EpisodeDownloader`/`DownloadWorker` do not,
+so S8 stays quieter than the failures it is meant to explain. The test that no entry ever contains
+the app password, the Basic-auth header, or a URL with credentials is also still unwritten. Both are
+in `docs/backlog.md`.
+
+## B9. Navigation
+
+Single activity, one `NavHost`, `S1` the start destination and the only screen at the bottom of the
+backstack.
+
+```kotlin
+sealed interface Route {
+    data object Podcasts : Route                        // S1
+    data class Episodes(val feedUrl: String) : Route    // S2
+    data class EpisodeDetail(val episodeKey: String) : Route  // S3, bottom sheet destination
+    data object Settings : Route                        // S4
+    data object Connect : Route                         // S5, dialog destination
+    data object Naming : Route                          // S6
+    data object Activity : Route                        // S7
+    data object ErrorLog : Route                        // S8
+}
+```
+
+Back from S2 returns to S1 with its scroll position **and** filter intact — the per-feed filter is
+held in the ViewModel's `SavedStateHandle`, session-scoped, resetting to `TO_DECIDE` on cold start.
+S5 cannot be dismissed by tapping outside while an auth request is in flight.
+
+`:feature:episodes`'s TODO scope names only the episode list. S1, S7 and S8 need a home: either the
+module list gains them, or S7/S8 land in `:app`. Recommended: S1 and S2 in `:feature:episodes`
+(they share the ledger query and the `EpisodeUi` projection), S7 and S8 in `:app` (they are
+cross-cutting: workers, sync and the log, none of which are episode-list concerns).
+
+---
+
+## B10. Theming
+
+
+```kotlin
+@Composable fun PodsiloTheme(preference: ThemePreference, content: @Composable () -> Unit)
+```
+
+One seed colour, two generated Material 3 schemes, **dynamic colour off** so the app looks the same
+on every device and both schemes can actually be verified. Applied at the root; changing the
+preference recomposes and does **not** recreate the activity.
+
+The visual system these screens are drawn in maps onto M3 as: `primary` = the accent (`#ec3013`
+light, one ramp step up on the dark ground), `surface`/`background` = the light ground, zero corner
+radius on every shape token, `Archivo` for both the display and body type roles, and 2 dp dividers
+where M3 would default to 1 dp. Status is always carried by **text** as well as colour, greyed-out
+rows use `onSurfaceVariant` rather than an opacity that drops the title below 4.5:1, and swipe
+backgrounds stay ≥ 3:1 and distinguishable in dark mode (darkening them is not sufficient).
+
+---
+
+## B11. Motion — the Compose mapping
+
+The durations, easings and the three rules behind them are in **§16**, which is canonical;
+this table is only which API carries each one, so a reader implementing a screen does not have to
+guess.
+
+| Transition | Carried by |
+|---|---|
+| S1 → S2, forward and back | `NavHost`'s `enterTransition`/`exitTransition` and `popEnterTransition`/`popExitTransition` — separate values, since back is faster |
+| S3 sheet | `ModalBottomSheet`; its default drag-following dismiss is what §16 (Part A) asks for, so do not replace it with an animated visibility |
+| Triage commit | `Modifier.animateItem` for the collapse, `AnimatedContent` for the treatment crossfade, and a plain `delay` for the 400 ms hold — a delay, not an animation, so *Remove animations* cannot strip it |
+| Swipe | `SwipeToDismissBox`, with the background composed behind rather than faded in |
+| Progress | `animateFloatAsState` with a 1 000 ms `tween(easing = LinearEasing)`; `LinearProgressIndicator` |
+| Banners | `AnimatedVisibility(expandVertically/shrinkVertically)` |
+| Dialogs | `AlertDialog` / `BasicAlertDialog` |
+| Snackbar | `SnackbarHost`; `SnackbarDuration.Short` — no action label, ever |
+| Chips, segments, theme | no animation API at all; these change state and repaint |
+
+The one thing to get right that no API gives you: the triage hold must survive the reduced-motion
+setting, so read it (`AccessibilityManager`/`Settings.Global.ANIMATOR_DURATION_SCALE`) to disable the
+*other* transitions and leave the delay alone — not the reverse.
+
+---
+
+## B12. Consistency invariants
+
+The spacing and sizing contract is in **§17** — one canonical list, including the single
+intentional asymmetry (leading-icon screens inset 14 dp, S1 16 dp). Two implementation notes that
+belong here rather than there:
+
+- Those values want to be **named constants in one file** per feature module, not literals at ~200 call
+  sites. Every one of them was found drifting at least once while the screens were being drawn, and
+  that was with 37 static frames to compare — it will drift faster in code.
+- The ≥ 48 dp floor is a `Modifier.sizeIn(minHeight = 48.dp)` on the control, **not** extra padding
+  around the glyph or the label: padding changes the visual, `sizeIn` changes only the target.
+
+---
+
+## B13. Types referenced above, declared
+
+Everything the state classes lean on, so no reader has to infer a shape. These live in
+`:core:model` unless marked otherwise.
+
+```kotlin
+// All four are built, in :core:model's `port` package beside SettingsRepository, which persists them.
+enum class SwipeDirection { LEFT, RIGHT }
+enum class ThemePreference { LIGHT, DARK, SYSTEM }
+
+// OlderThan carries its own Period and computes the cutoff: `cutoffMillis(now, zone)`. Calendar
+// arithmetic, not `now - 90 days`, so "3 months" means what the label says. Two callers need it (the
+// preview dialog and FeedRefresher), which is why it is on the type rather than at a call site.
+enum class OlderThan { OFF, MONTH_1, MONTH_3, MONTH_6, YEAR_1 }
+
+// SwipeMapping enforces "the two directions never hold the same action" in `with(direction, action)`,
+// which swaps rather than rejects. NONE is exempt — both directions may be disabled.
+data class SwipeMapping(val right: SwipeAction, val left: SwipeAction)
+enum class LogCategory { SYNC, FEED, DOWNLOAD, STORAGE, AUTH }
+enum class WaitReason { WIFI, NETWORK, FOLDER, RESUMING }
+enum class BlockedReason { OFFLINE, NOT_CONFIGURED }   // no SYNC_IN_FLIGHT — never produced
+
+/**
+ * NOT a new type: this is `DownloadFolderAccess.State`, as built in Tier 4b, reproduced here only
+ * so the state classes above read. It lives in `:core:download`; if `:feature:settings` cannot see
+ * it from there, promote that one enum to `:core:model` rather than declaring a parallel copy.
+ */
+enum class FolderState { NOT_CHOSEN, GRANTED, REVOKED }
+
+/**
+ * A snackbar's *identity*, not its text — the string is resolved at render (rule §B0.6).
+ * Sealed rather than an enum because two of them carry a value.
+ */
+sealed interface SnackbarText {
+    data object SyncFailed : SnackbarText
+    data object SyncSucceeded : SnackbarText
+    data class AlreadyInFolder(val fileName: String) : SnackbarText   // informational, NOT an error (§12.3, Part A)
+    data class BulkApplied(val count: Int) : SnackbarText
+    data object LogCleared : SnackbarText
+    data class DownloadFailed(val cause: ErrorCause) : SnackbarText
+    data object LinkCopied : SnackbarText
+}
+
+/** S6's invalid-template target. */
+enum class Field { FOLDER_TEMPLATE, FILE_TEMPLATE }
+
+/** :feature:episodes — month grouping key; kotlinx.datetime has no YearMonth. */
+data class YearMonth(val year: Int, val month: Int)
+
+data class NewLogEntry(
+    val category: LogCategory,
+    val feedUrl: String?,
+    val episodeKey: String?,
+    val message: String,
+    val detail: String?,
+)
+```
+
+`EpisodeUiAction` (§B1) is the full affordance vocabulary; `Route` (§B9) is the full destination set.
+Neither is extended anywhere else — a new affordance or destination is an edit to those two
+declarations, so the compiler finds every `when` that needs updating.
+
+---
+
+## B14. Corner cases
+
+The cases below are where a plausible implementation is wrong. Each is a test, not a note.
+
+### B14.1 State changes under the user
+
+| Case | Required behaviour |
+|---|---|
+| Remote `PLAY`/`DOWNLOAD` arrives for an episode the user is mid-swipe on | the swipe still commits — the local write wins, and reconciliation is idempotent (architecture §9). Never cancel a gesture because of a background sync. |
+| Remote action arrives for a `DOWNLOADING` episode | the row moves to `HANDLED_REMOTELY` and the worker is cancelled; the partial cache file is deleted. The row animates through the normal terminal treatment so the change is visible, never silent. |
+| Remote action arrives for an already-`DOWNLOADED` episode | **no-op.** No state change, no animation, no snackbar. This is the "triage durability" property and it must be observable as *nothing happening*. |
+| A feed is unsubscribed on the server while S2 for that feed is open | the screen stays up with its episodes (they are still in Room until the next refresh prunes them) and shows a one-line inline notice that the podcast is no longer in Nextcloud. It does **not** pop the backstack — yanking a screen out from under a reader is worse than a stale one. Triage actions stay enabled: the ledger is keyed by episode, not by current subscription (architecture §6). |
+| A feed's title arrives from its first successful fetch while S1 is on screen | the row's primary line swaps from URL to title **in place**, without re-sorting (§B2's frozen ordering). |
+| The download folder grant is revoked while S2 is open | the paused banner appears above the list; `QUEUED` rows stay `QUEUED` and read *paused*; new download requests are still accepted (§12.11, Part A). |
+
+### B14.2 Lifecycle and process death
+
+| Case | Required behaviour |
+|---|---|
+| Process death mid-download | covered by §B7 — never a stale percentage; `DOWNLOADING` with no live work re-enqueues on first observation. |
+| Process death in selection mode | selection is **dropped**, not restored. A restored set of checkboxes the user cannot remember choosing is a bulk action waiting to be confirmed by accident. |
+| Process death with the S5 dialog open mid-poll | the flow is abandoned and the app password discarded. On return the dialog is closed and S4 shows the previous instance (or none). An abandoned flow is written to the log (`AUTH`). |
+| Rotation with a dialog or sheet open | preserved, via `SavedStateHandle` — but one-shot `UiEffect`s must not replay (rule §B0.7). |
+| Rotation into landscape | no state consequence — every screen stays one scrolling column (§19). The four short-window adjustments there are layout-only: no `UiState` field describes orientation, and no ViewModel reads a window size class. If one ever needs to, that is a design change first. |
+| Cold start while a sync is already running from a previous process | S1 shows the refresh indicator for the live work; it does not start a second pass. `WorkScheduler` uses unique work, so this is a query, not a guard. |
+
+### B14.3 Data shapes that break naive rendering
+
+| Case | Required behaviour |
+|---|---|
+| `Episode.description` is null or strips to empty | the snippet line is **omitted**, not rendered as an empty line, and S3 shows a single muted "No description." sentence rather than a blank sheet. |
+| `durationSeconds` and `pubDate` both absent | meta line renders neither part and shows nothing — never "unknown", never a fabricated value. The row is still fully triageable. |
+| Episode has no enclosure | `hasEnclosure = false` → `actions` contains only `OPEN_IN_BROWSER`; the row is dimmed with a **no audio** badge. Download must be *absent*, not present-and-failing. |
+| Two episodes in one feed share a `guid` | the ledger is keyed by `episodeKey`, so they are one row and one decision. The list must not show a duplicate — dedup by key when projecting, and do not assume the DAO did it. |
+| A title long enough to overflow at the largest font scale | the title truncates first; the decision affordances never do (§12.12, Part A). |
+| A feed with 500+ episodes under `All` | paging or a keyed `LazyColumn` with stable `episodeKey`s — the sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them. |
+| `writtenFileName` present but the file is gone | the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists — the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (`docs/decisions/0012`). |
+
+### B14.4 Disconnect
+
+`SettingsEvent.DisconnectClicked` opens a confirmation that states plainly that **the ledger is
+kept** — so nothing is re-downloaded after reconnecting — and that only the credentials are cleared.
+Same type as the other previews:
+
+```kotlin
+data class DisconnectConfirm(val instanceUrl: String, val outboxDepth: Int)
+```
+A non-zero `outboxDepth` adds a line naming how many decisions have not reached Nextcloud yet: they
+survive in the outbox and push after reconnecting, which the user should know before disconnecting
+rather than discover afterwards.
+
+---
+
+## B15. Notifications
+
+Not screen state, but part of this seam — they are the UI when the app is closed, and they are
+already half-built (`DownloadNotifications`, Tier 4b).
+
+| Notification | Content | Tap target |
+|---|---|---|
+| Foreground service, while downloads run | "Downloading n episodes", current title, determinate progress, **Cancel all**. Shows *Paused* rather than progress when the queue is paused (§12.11, Part A). | S7 |
+| Completion, one per batch | the count only; silent by default | S7 |
+| Failure, only after retries are exhausted | the plain-language cause | S8 |
+| Sync | **never.** No notification for sync, ever. | — |
+
+Progress uses the same 1 Hz throttle as the UI, from the same source, so the notification and S7 can
+never disagree. `FOREGROUND_SERVICE_TYPE_DATA_SYNC`, as built.
+
+---
+
+## B16. Accessibility contract
+
+These are state and semantics decisions, so they belong here rather than in a style guide:
+
+- **Selection mode is reachable without a long-press.** **NOT IMPLEMENTED** —
+  `showsSelectionAffordance` does not exist on `EpisodeListUiState`; selection is long-press only.
+  Verified 2026-08-03. When a touch-exploration service is active,
+  a checkbox appears on the leading artwork of every row. That is a state input the ViewModel needs:
+  `EpisodeListUiState.showsSelectionAffordance: Boolean`, driven by `AccessibilityManager`, not by a
+  `LocalInspectionMode`-style guess.
+- **Swipe actions are duplicated as custom accessibility actions**, with labels read from
+  `SwipeMapping` — the announced label follows the configured mapping, so a remapped swipe never
+  announces the wrong verb.
+- **Every status is carried by text**, never colour alone. Greyed-out rows announce their state word
+  ("played", "handled elsewhere"), not just a visual change.
+- **Progress is announced as text** ("downloading, 62 percent"), throttled — a 1 Hz announcement is
+  correct; a per-frame one is unusable.
+- **Artwork carries a content description** ("cover art for <podcast>"); the monogram fallback tile
+  carries the same one, not "no image".
+- **Selection changes announce `n selected`** on every toggle, and sticky month headers are exposed
+  as list headings so the fast-scroll thumb is not the only way through a long list.
+
+---
+
+## B17. Icons — the technical half
+
+Which icon carries which meaning is a UX decision and lives in **§18**, the single
+canonical mapping; do not restate it here or the two will drift. What belongs here is how they get
+into the app.
+
+### Android has no runtime SVG support
+
+This matters and my first pass got it wrong. Android cannot render an `.svg` at runtime at all — the
+platform's vector format is **`VectorDrawable`** (XML in `res/drawable`), and Compose's is
+**`ImageVector`**. `stroke="currentColor"` is not valid in either; a converter emits a literal colour
+which the call site then overrides with a tint (`Icon(painter, tint = …)`, or `android:tint`).
+
+So an SVG in the repo is *source material*, never a shipped asset. Which raises the real question:
+
+### Prefer the Lucide artifact over converting by hand
+
+CLAUDE.md's guiding rule — **use existing libraries, don't invent replacements** — applies here.
+Hand-converting 27 SVGs, keeping their names in step with the table in §18 (Part A), and re-converting whenever
+the set changes is exactly the kind of hand-rolled pipeline that rule exists to prevent. Lucide ships
+for Compose:
+
+- `com.composables:icons-lucide-android` (Maven Central) — the Android variant bundles the icons as
+  **Vector Drawables** reachable through `R.drawable`, so `painterResource` works and Android Studio
+  gives XML previews in autocomplete.
+- The Compose-Multiplatform variant of the same set exposes them as `ImageVector` extensions
+  (`Lucide.Download`), which reads better at the call site but has no IDE preview.
+
+Either is a **new dependency and therefore needs author approval** per CLAUDE.md §3 — it is not
+pre-approved, so it is a decision, not a given. The trade is: one dependency carrying ~1.7k icons
+where 27 are used (tree-shaking/R8 handles the rest) against 27 checked-in XML files that are ours to
+maintain. Recommendation: take the dependency, and treat §18's (Part A) table as the allow-list rather than as
+a manifest of files.
+
+If the author would rather not add the dependency, the fallback is Android Studio's **Vector Asset
+Studio** (`New → Vector Asset → Local file`) on the exported SVGs in `assets/icons/` — a one-off
+conversion producing 27 `res/drawable/ic_*.xml` files. Those exports exist for exactly this path; they
+are not intended to be committed as `.svg`.
+
+### Scaling
+
+Neither format has a density problem: both are vector, sized in `dp`, rasterised per-device at
+runtime — no `-hdpi`/`-xxhdpi` buckets, no bitmap variants, nothing to re-export per screen size.
+Three real caveats, none about screen density:
+
+- **Don't render Lucide below ~20 dp.** The 2 dp stroke is drawn for a 24 dp grid; smaller and the
+  strokes thin out and the joins mush. Every icon in these designs is 16–21 dp *drawn* — the smaller
+  ones are inline markers beside text, and if any read weakly on a real device, raise the size rather
+  than thinning the stroke.
+- **Icons do not scale with font scale, deliberately.** At large accessibility font sizes the text
+  grows and the icons hold at 24 dp; the title truncates first (§12.12). An icon that
+  grows with the type breaks every row height in the app.
+- **The glyph is not the target.** 24 dp drawn inside a ≥ 48 dp touch target (§B12) — the padding is
+  part of the control, not decoration.
+
+### The brand mark is the one hand-converted asset, and that is on purpose
+
+Everything above argues against hand-converting SVGs. The mark is the exception, because the argument
+does not apply to it: there are three drawables, not 27, they are ours and change only when the brand
+does, and no library ships them. They live in `core/ui/src/main/res/drawable/` (plus the notification
+icon in `:core:download` and the launcher foreground in `:app`), converted from `assets/logos/`.
+
+Two mechanics that differ from the icon pipeline:
+
+- **The mark is never tinted.** Icons are single-colour and take `Icon(painter, tint = …)`; the mark
+  is two-colour and tinting it flattens the bars into the vessel. Ground colour is handled by
+  *choosing a drawable* — `PodsiloMark` reads the theme's surface luminance and picks the inverse
+  build. Not a `-night` qualifier: the theme is a DataStore preference and can disagree with the
+  system's night mode.
+- **The lockups have no drawable at all.** A `VectorDrawable` cannot hold text, so a lockup is
+  composed — mark drawable plus a `Text` — and its wordmark therefore *does* scale with font scale,
+  unlike every icon in the app. See §C2 and §C6.
+
+Which surface gets the mark is a brand decision and lives in §C4, the same way §18 owns
+which icon means what. Do not restate either here.
+
+The **monogram tile** is not an icon and needs no drawable: when `Feed.imageUrl` is null or not yet
+fetched, the artwork slot renders as a filled surface square with the feed's first letter at the
+heading weight in the muted role. Same content description as real artwork ("cover art for
+<podcast>"), never "no image". It is never the brand mark — that would make every podcast look like
+ours (§C5).
+
+---
+
+# Part C — the brand mark
+
+Part A §18 governs **icons** (Lucide, functional glyphs). This part governs the **brand mark**, which
+is not an icon: it is never used to mean an action, never appears in a row, and has exactly the
+placements listed in §C4.
+
+Sections in this part are numbered **§C1–§C6**; a bare `§n` without the letter refers to Part A.
+
+The mark has been seen on a device (Pixel 10a, Android 17), and the two questions that could only be
+answered by eye are now regression tests rather than a memory of having looked.
+`MarkLegibilityConformanceTest` (`:core:ui`, instrumented) rasterises each build on the device's real
+canvas and counts opaque/transparent alternations down the mark's centre line — separation *is* the
+figure — and it holds at 24 dp and at §C1's 16 dp floor.
+`NotificationIconConformanceTest` (`:core:download`, instrumented) reduces the icon to what the
+system keeps, alpha only, and asserts both that the figure still alternates and that the outer margin
+is empty. The luminance switch in §C6 was verified live in exactly the case a resource qualifier gets
+wrong: phone in dark mode with the app's own theme set to Light, S1 and S4 correctly showed the
+*two-colour* mark.
+
+---
+
+## C1. The mark
+
+Red bars falling into an open black vessel. It reads as a signal being caught and stored — the app's
+whole job in one figure.
+
+**Settled 2026-08-08: the mark is the _silo_ build** — a tall, silo-proportioned vessel with two bars
+still falling and one band already stored. It was chosen over the *catch* build (a wide tray with
+three falling bars, emphasising the catching) because the name pays off in the figure: a silo is
+where things are kept, which is the half of the app the user actually lives with.
+
+The catch set has been deleted and the `-silo` suffix dropped from every filename, per the rule this
+section used to state — no build should ever have to choose at a call site.
+
+### Construction
+
+A 100-unit square, 10-unit stroke, no curve and no radius anywhere. Everything sits on the same grid
+as the Modernist rules used throughout the UI, so a 2 dp app-bar rule and the mark's stroke are
+optically the same weight. Colours are the two brand constants only:
+
+- Bars — accent `#ec3013`
+- Vessel — ink `#201e1d`
+- On the accent field or on ink, the whole mark is `#ffffff`
+
+Never a third colour, never a gradient, never a tint. The mark is either two-colour, all-white, or
+all-`currentColor` (mono).
+
+### Clearance and minimum size
+
+- **Clearance** — one grid unit (10 % of the mark's height) clear on all four sides. Nothing crosses
+  it, including the app bar's own rule.
+- **Minimum size** — mark 16 dp; horizontal lockup 96 dp wide; stacked lockup 64 dp wide. Below 16 dp
+  the three bars stop separating; use nothing rather than a smaller mark.
+
+---
+
+## C2. Files
+
+All under `assets/logos/`. **These are source material, not shipped assets** — Android renders no SVG
+at runtime (§B17), so each one that the app actually uses has a `VectorDrawable`
+counterpart listed in §C6.
+
+| File | Use |
+|---|---|
+| `podsilo-mark.svg` | two-colour mark on a light ground |
+| `podsilo-mark-inverse.svg` | all-white, for the accent field and dark surfaces |
+| `podsilo-mark-mono.svg` | `currentColor` — takes the theme's `onSurface`; the themed-icon source |
+| `podsilo-notification.svg` | the mono mark at 18 units inside a 24-unit canvas — the notification small icon (§C3) |
+| `podsilo-icon.svg` | white mark on the accent field, 144 pt, square |
+| `podsilo-lockup-horizontal.svg` | mark + wordmark, one line — **reference only**, see §C6 |
+| `podsilo-lockup-stacked.svg` | mark over wordmark, both flush left — **reference only**, see §C6 |
+| `ic_launcher_foreground.xml` | Android adaptive-icon foreground layer, 108 dp, mark inside the 66 dp safe zone |
+
+**Wordmark** — Archivo 700, all lowercase, letter-spacing −0.04 em, always flush left, never centred
+and never title-cased. The lockup SVGs carry live `<text>`; convert to outlines before shipping any
+asset that leaves the app (store listing, README, press), so the file does not depend on Archivo being
+installed.
+
+**Inside the app the wordmark is set as type, not imported as art** — §C4.1 already required this of
+the app bar, and §C6 extends it to both lockups for a reason that turned out to be structural rather
+than stylistic: a `VectorDrawable` cannot hold text at all, so the two lockup SVGs could only ship as
+drawables if their `<text>` were outlined first, and Archivo is not in this repo. Setting the wordmark
+as type also makes it scale with the user's font setting and follow the theme's `onSurface`, neither
+of which baked-in art does. **Consequence, stated plainly: in-app the wordmark is the platform font,
+not Archivo.** The SVGs remain the reference for everything that leaves the app.
+
+---
+
+## C3. Android launcher and system surfaces
+
+| Surface | Asset | Status |
+|---|---|---|
+| Adaptive icon, foreground | `app/src/main/res/drawable/ic_launcher_foreground.xml` | **shipped.** Already scaled to the 66 dp safe zone; do not re-scale |
+| Adaptive icon, background | `@color/ic_launcher_background` = `#EC3013` | **shipped.** A colour resource, not a drawable — no texture, no rule, no bleed |
+| Themed icon (Android 13+) | `android:monochrome` in `mipmap-anydpi-v26/ic_launcher.xml`, pointing at the same foreground | **shipped.** The system tints it, so the mark must read as a single-colour silhouette — the bars and the vessel both become the tint colour and stay legible by their gaps alone |
+| Notification small icon | `core/download/src/main/res/drawable/ic_podsilo_notification.xml` | **shipped.** Android renders it as an alpha mask; the mark is held at 18 of 24 units, or the system's own padding clips the top bar |
+
+**There is no splash screen, by decision (2026-08-08).** This section originally specified one — the
+mono mark on `#ec3013`, via `core-splashscreen`. The author declined it: the app opens to S1 well
+inside the splash's own minimum, so it would have been a delay dressed as a brand moment, and it cost
+a dependency to add. Do not reintroduce it as a "polish" item.
+
+The notification small icon is the one place the mark carries a functional load. That is acceptable
+because Android gives no alternative — every notification the download service posts (§12.9) is
+stamped with it.
+
+---
+
+## C4. Where the logo appears inside the app
+
+Four places. **That is the complete list.** A logo repeated on every screen stops being a brand and
+starts being noise; the screens are already carrying a lot of state.
+
+### C4.1 S1 app bar — mark + wordmark
+
+S1 is the launcher screen and the only screen whose app-bar title is the product name (§4). Put
+the **24 dp mark** as the leading element and keep `Podsilo` as live type beside it, at the app bar's
+own title style. Do not import the horizontal lockup as an image here: the title has to scale with the
+user's font setting, and an SVG will not.
+
+> **Consequence for §17 — done.** That section recorded one intentional asymmetry: S2–S8 inset
+> their leading icon at 14 dp so its optical edge lands on the 16 dp grid, while S1 inset at 16 dp
+> because its leading element was the title itself. The leading mark removes that exception — S1 now
+> insets at 14 dp like every other screen, and §17 (Part A) has been amended to say so.
+
+Gap between mark and wordmark: 8 dp.
+
+**Correction (2026-08-08): the selection-mode rule this paragraph carried does not apply.** It said
+that when the app bar becomes `n selected` the mark is dropped along with the title, because a count
+is not a brand moment. That reasoning is sound and there is nowhere to apply it: selection mode is an
+**S2** affordance (§5), and S2 never carries the mark in the first place (§5 below). S1 has
+filter chips and no selection mode. Kept as a rule to apply *if* selection mode ever reaches S1 —
+not as a description of anything that exists.
+
+### C4.2 S1 not-configured empty state — stacked lockup
+
+The one large, unhurried appearance. Before any feed exists, S1's empty state led with a `server`
+glyph; it now leads with the **stacked lockup**, above the existing explanatory copy and the *Connect
+Nextcloud* action. This is the user's first screen and the only moment in the app with room to
+introduce itself. `server` has been struck from §18 — that was its only call site.
+
+Sized by its **mark at 56 dp** rather than by a total width. This section originally said "96 dp
+wide", which a composed lockup cannot honour directly: the wordmark is live type, so the total width
+depends on the font and the user's font scale. Fixing the mark and deriving the type from it (§C6)
+keeps the proportion at any scale, and 56 dp clears the 96 dp intent comfortably.
+
+Once even one feed is subscribed the state never returns, so this costs nothing in the steady state.
+The other empty states (filter-empty, `inbox`) keep their glyphs — they are momentary and local, not
+introductions.
+
+### C4.3 S4 → About — horizontal lockup
+
+The ABOUT group leads with the **horizontal lockup**, above the version string and the licence
+notices (including Lucide's ISC). Flush left, on the surface ground, no card and no frame.
+
+Sized by its **mark at 36 dp**, for the same reason as §C4.2 — the "120 dp wide" this originally
+specified is not a dimension a live-type lockup has.
+
+### C4.4 Store listing and README — outside the app
+
+Icon asset for the listing; horizontal lockup, outlined, for the README and any press use. The 1024 pt
+store icon is `podsilo-icon-{v}.svg` re-exported at size — the geometry does not change with scale.
+
+---
+
+## C5. What the logo never does
+
+- Never in the app bar of S2–S8. Those bars carry a back arrow and a context title; a mark there
+  competes with the one thing the user is looking for.
+- Never as an episode-row or feed-row element, and never as the artwork placeholder — a feed with no
+  image gets its **monogram tile** (§18), not the brand mark. Repeating the logo down a list
+  makes every podcast look like it is ours.
+- Never as an affordance. It is not tappable, and it never means *home*, *refresh* or *sync*.
+- Never recoloured, tinted, outlined, rounded, given a shadow, set on a photograph, or placed on any
+  ground other than the light surface, ink, or the accent field.
+- Never in a container with a corner radius. `--radius-md` is 0 across the system and the mark's own
+  geometry assumes it.
+- Never stretched — always uniform scale, always the exported viewBox.
+
+---
+
+## C6. Compose integration
+
+The mark ships as `VectorDrawable`s and reaches the screen through **`core/ui/.../PodsiloLogo.kt`** —
+`PodsiloMark` and `PodsiloLockup`. It does not belong in the Lucide allow-list (§18); that table
+is an allow-list of *functional* glyphs, and adding a brand asset to it invites call sites to use the
+logo as an icon. `PodsiloLogo.kt` deliberately sits beside `PodsiloIcons` rather than inside it.
+
+```
+core/ui/src/main/res/drawable/
+  ic_podsilo_mark.xml            // two-colour, light grounds
+  ic_podsilo_mark_inverse.xml    // all-white, ink and accent grounds
+  ic_podsilo_mark_mono.xml       // tintable silhouette
+core/download/src/main/res/drawable/
+  ic_podsilo_notification.xml    // 18-in-24 canvas, alpha-masked by the system
+app/src/main/res/
+  drawable/ic_launcher_foreground.xml
+  values/ic_launcher_background.xml   // #EC3013
+```
+
+**Two drawables, chosen by the ground rather than by the system.** The two-colour mark's vessel is ink
+`#201E1D`, invisible against the dark scheme's `#14110F` surface, and §C1 says the whole mark is white
+on ink. `PodsiloMark` therefore picks the inverse build from the *theme's* surface luminance — not
+from a `drawable-night` qualifier, because the theme is a user preference in DataStore (§12.7)
+and can disagree with the device's night mode; a qualifier would then paint a white mark onto a light
+surface.
+
+**No lockup drawables.** The two lockups are composed — mark drawable plus live type — for the reasons
+in §C2. `ic_podsilo_lockup.xml` and `ic_podsilo_lockup_stacked.xml` were specified here and are not
+buildable as written.
+
+**Content description: `null` at every placement**, including the empty-state lockup. This section
+previously asked for `"Podsilo"` there because it expected a text-free image; a lockup built from live
+type is not text-free, and the wordmark is the announcement. A description on top of it produces
+exactly the doubled reading the rule was written to avoid.
+
+Neither mark drawable is tinted at the call site. If a surface needs a single-colour mark, use the
+mono drawable and tint that — tinting the two-colour one flattens the bars into the vessel and
+destroys the figure.

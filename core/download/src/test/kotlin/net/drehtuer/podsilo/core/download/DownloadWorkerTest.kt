@@ -40,7 +40,7 @@ private const val NOW_MILLIS = 1_784_019_600_000
 /**
  * [DownloadWorker]'s ledger contract: the states it writes, in what order, and what it refuses to
  * do. Robolectric supplies the Android `Context` WorkManager needs; there is no emulator involved
- * (CLAUDE.md §4). The SAF write is [FakeDownloadTarget] (`docs/decisions/0011`).
+ * (CLAUDE.md §4). The SAF write is [FakeDownloadTarget] (`docs/architecture.md` §11).
  */
 @RunWith(RobolectricTestRunner::class)
 class DownloadWorkerTest {

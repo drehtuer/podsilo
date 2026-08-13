@@ -11,7 +11,20 @@ This file was created empty-ish on 2026-08-01 during a documentation consistency
 had referenced it since the beginning and it had never existed, so anything that *should* have been
 noted here before that date was instead either built, declined in conversation, or lost.
 
+Finished items are **deleted**, not struck through: `docs/journal.md` is the record of what was
+done and when, and a backlog that also keeps that record is two records (2026-08-13).
+
 ## Open items
+
+- **The error log has two write points missing.** `FeedRefresher` records feed failures and
+  `ConnectViewModel` records auth failures, so S8 is real but quiet: **`SyncOrchestrator`/`SyncWorker`
+  and `EpisodeDownloader`/`DownloadWorker` record nothing**. A download that fails after its retries
+  are exhausted leaves a row `lastError` and no log entry, which is exactly the case the screen was
+  built for. Carried over from `TODO.md` when that file was retired; it is the last unbuilt item from
+  the UI work.
+  - With it: **the test that no entry ever contains a credential** — not the app password, not the
+    Basic-auth header, not a URL carrying either. `docs/UI.md` §11 states the rule and nothing
+    asserts it.
 
 - **Nothing lints `src/androidTest/`.** Verified 2026-08-11:
   `runKtlintCheckOverAndroidTestDebugSourceSet` reports **`NO-SOURCE`** (the Kotlin dir is never
@@ -55,7 +68,7 @@ noted here before that date was instead either built, declined in conversation, 
 
 - **Non-MP3 tagging fixtures.** `audio/silence.mp3` is the only audio fixture, so M4A, OGG and Opus
   tag and artwork writing is supported by jaudiotagger but never exercised by our tests
-  (`docs/decisions/0006`). Needs an encoder the dev container lacks; a few tiny committed fixtures
+  (`docs/architecture.md` §11). Needs an encoder the dev container lacks; a few tiny committed fixtures
   would close it permanently.
 - **A device test for the download pipeline end to end** — enclosure fetch → tag write → SAF copy →
   ledger → outbox. Blocked on nothing but a subscription: subscriptions come only from Nextcloud, and
@@ -63,7 +76,7 @@ noted here before that date was instead either built, declined in conversation, 
   shows the *not configured* empty state instead of the list (`docs/UI.md` §4). Do it alongside the
   real-device Nextcloud login.
 - **Paging 3 for the episode list.** CLAUDE.md §3/§5 mandate it for long lists; the UI contract
-  currently says "paging or a keyed `LazyColumn`" (`docs/UI_interface.md` §14.3). A 500-episode feed
+  currently says "paging or a keyed `LazyColumn`" (`docs/UI.md` §B14.3). A 500-episode feed
   under the `All` filter is the case that decides it — measure before adding the dependency.
 - **Split `EpisodeLedgerRepository` into two ports.** It now carries eleven methods covering two
   roles: the ledger and its outbox, and the UI-facing episode queries (`observeEpisodes`,
@@ -75,7 +88,7 @@ noted here before that date was instead either built, declined in conversation, 
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.
 - **Revoke the app password when the account is rejected.** S5 now confirms the account before
-  storing it (ADR 0019), so *Use a different account* throws away a password that Nextcloud has
+  storing it (UI.md §8), so *Use a different account* throws away a password that Nextcloud has
   already issued and still lists under *Security*. `DELETE /ocs/v2.php/core/apppassword`
   authenticated with that password would clean it up. Left out of the fix deliberately: it is a new
   endpoint with its own failure modes, added to the one code path whose job is to store nothing, and
@@ -87,30 +100,17 @@ Against [developer.android.com/studio/publish](https://developer.android.com/stu
 [F-Droid quick start](https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/). What
 already holds is in `docs/dev-environment.md` §10; these are the gaps, in the order they bite.
 
-- ~~**The app has no icon.**~~ **Done 2026-08-04, replaced 2026-08-08.** The placeholder adaptive
-  icon has given way to the real brand mark (`docs/logo.md`): the silo build, vector-only, with a
-  `<monochrome>` layer for Android 13 themed icons. What is still missing is a **512×512 PNG for
-  store listings** — Play and F-Droid both want a raster, and neither reads it from the APK. It
-  belongs with the Fastlane metadata below; the dev container has no image tooling, so it needs
-  generating elsewhere. Source is `assets/logos/podsilo-icon.svg`, whose geometry does not change
-  with scale.
-- ~~**Espresso is too old for the phone.**~~ **Fixed 2026-08-09.** Compose UI tests pull
-  `androidx.test.espresso:espresso-core` transitively, and nothing pinned it — so it resolved to
-  **3.5.0** (2022) while `androidx.test:core` had been bumped to 1.7.0. On Android 17 every Compose
-  instrumented test died inside `Espresso.onIdle()` with
-  `NoSuchMethodException: android.hardware.input.InputManager.getInstance`, before running a line of
-  its own. That silently killed the **entire** Tier 3 Compose suite — 21 tests across `:feature:*`,
-  including conformance tests that had been passing on older devices. Pinned to 3.7.0 in the version
-  catalog. Worth remembering as a shape: a transitive test dependency nobody pinned is one Android
-  release away from taking a whole tier with it, and the failure names a platform method rather than
-  anything about this project.
-- **Outline the wordmark in the lockup SVGs.** `docs/logo.md` §2: anything leaving the app — store
+- **No 512×512 PNG for the store listings.** Play and F-Droid both want a raster and neither
+  reads it from the APK, so it belongs with the Fastlane metadata below. The dev container has no
+  image tooling, so it has to be generated elsewhere; the source is `assets/logos/podsilo-icon.svg`,
+  whose geometry does not change with scale.
+- **Outline the wordmark in the lockup SVGs.** `docs/UI.md` §C2: anything leaving the app — store
   listing, README, press — must not depend on Archivo being installed. Nothing in-app is blocked,
   since the in-app lockups are composed from live type.
 - **jaudiotagger comes from JitPack.** F-Droid builds everything from source in its own buildserver
   and treats a JitPack coordinate as a third-party prebuilt binary. Expect to either add a `srclibs`
   entry that builds `Adonai/jaudiotagger` from source, or vendor it. This is the substantive F-Droid
-  blocker, and it is a consequence of ADR 0006 — worth reopening only if F-Droid is actually wanted.
+  blocker, and it is a consequence of architecture §11 — worth reopening only if F-Droid is actually wanted.
 - **No Fastlane metadata.** F-Droid reads `fastlane/metadata/android/en-US/` (title,
   short_description, full_description, changelogs, screenshots) straight from the repository. None
   exists.
@@ -121,41 +121,12 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   commit differ. F-Droid does not require reproducibility, but it forecloses the verified-build
   badge, and the timestamp is the only obstacle.
 
-## Closed
-
-- ~~**Two device tests are stale after the 2026-08-10 row changes, and fail.**~~ **Fixed 2026-08-11**,
-  the same day they were found. `aLostFolderGrantOffersChooseFolderRatherThanRetry` opens the row
-  overflow before looking for *Choose folder*, and now also asserts no bare *Retry* — the half its
-  name promised and never checked. `aPopulatedListCanBePulledToRefresh` swipes the feed row by an
-  explicit distance instead of `onNode(hasScrollAction())`, which is **the same correction
-  `PodcastListScreenTest` already carried** for the identical cause; the Robolectric suite fixed it
-  on 2026-08-10 and the device copy was not updated alongside, because nothing runs it
-  automatically. 60 device tests: 54 passed, 0 failed, 6 skipped.
-
-- ~~**A `scripts/adb-connect-host.sh` helper for Tier 3.**~~ **Done — the item was stale when
-  removed on 2026-08-11.** The script has existed since 2026-08-02 and `docs/dev-environment.md` §9
-  is built around it; the note had simply never been struck through. Its wireless-path gap is a live
-  item above, not this one.
-
-- ~~**S1's filter chips have the same shape as the row #48 reported on S2.**~~ ~~**The S2 row
-  overflow `⋮` does not exist.**~~ ~~**S2's feed-error banner is connected at neither end.**~~
-  **All three done 2026-08-10.** The chip row scrolls on both screens and `ChipRowPadding` moved to
-  `:core:ui` so they cannot drift; the row overflow exists and **replaced** the inline buttons, which
-  §5's row anatomy never had; and the banner reads the plain sentence `FeedRefresher` already writes
-  to the error log, shown while it is newer than the last successful refresh.
-
-  Two things fell out of doing them, both recorded here because they were not part of the ask:
-  **`COPY_LINK` emitted `OpenUrl` in both S2 and S3**, so *Copy episode link* opened a browser and
-  `SnackbarText.LinkCopied` had no producer at all — found the moment the overflow gave that action
-  its first row-level call site. And **a 304 did not move `lastRefreshedAt`**, so a feed that is
-  reached and unchanged looked ever-staler on S1 and could never clear the new banner.
-
 ## Declined, with reasons
 
 - **An "alternative log in using app password" form.** Nextcloud offers one on its own flow page, and
   it is the only way to name an account directly instead of inheriting the browser's session
-  (ADR 0019). **Declined by the author on 2026-08-04: grant-by-browser stays, and no login or
-  password field goes in the app.** That keeps ADR 0010 and CLAUDE.md §5 intact — the app never
+  (UI.md §8). **Declined by the author on 2026-08-04: grant-by-browser stays, and no login or
+  password field goes in the app.** That keeps architecture §2 and CLAUDE.md §5 intact — the app never
   handles the account password — at the known cost that a wrong browser session can only be fixed in
   the browser.
 - **The batch actions issue #46 asked for beyond triage.** *Add to queue*, *add to playlist* and
@@ -165,15 +136,15 @@ already holds is in `docs/dev-environment.md` §10; these are the gaps, in the o
   it is not a non-goal, it simply has no representation. An undecided episode is one with **no**
   ledger row, so "unmark" means *deleting* the record that stops an episode being downloaded twice
   (CLAUDE.md §11). The ledger stays append-only, and undo (#49) was designed to need no delete
-  either — see `TODO.md` Tier 5, decisions D1 and D4.
+  either — see `docs/UI.md` §12.3.
 
 - **"Download all visible" as a prominent button.** CLAUDE.md §1 names this specifically as the kind
   of thing that looks helpful and isn't. The UI design's per-podcast *Download all (n)* overflow item
   is a narrower version, and was accepted as a *command* rather than a rule — ADR 0014.
 - **A two-pane tablet layout.** Not an omission: `docs/UI.md` §19 explains why the triage model makes
   it the wrong shape. The content-width cap is the part of it worth keeping.
-- **A splash screen.** `docs/logo.md` §3 originally specified one — the mono mark on `#EC3013`, via
+- **A splash screen.** `docs/UI.md` §C3 originally specified one — the mono mark on `#EC3013`, via
   `androidx.core:core-splashscreen`. **Declined by the author on 2026-08-08.** The app reaches S1
   well inside the splash's own minimum duration, so it would be a delay dressed as a brand moment,
-  and it costs a dependency. `logo.md` §3 no longer describes one; do not reintroduce it as polish.
+  and it costs a dependency. `docs/UI.md` §C3 no longer describes one; do not reintroduce it as polish.
 - **Anything that writes to the subscription list.** Permanently out of scope (CLAUDE.md §1).

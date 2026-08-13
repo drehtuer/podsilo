@@ -95,7 +95,7 @@ internal fun FailedRow(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // ADR 0011: a failure the user must fix offers the fix, never a Retry that cannot work.
+            // architecture §11: a failure the user must fix offers the fix, never a Retry that cannot work.
             val remedy = episode.lastError?.remedy
             TextButton(
                 onClick = {

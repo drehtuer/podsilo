@@ -65,7 +65,7 @@ fun PodsiloNavHost(
                 EpisodesDestination(feedUrl, factory, host)
             }
             composable(Routes.SETTINGS) { SettingsDestination(factory, host) }
-            // A dialog destination: S5 sits over S4 rather than replacing it (docs/UI_interface.md §9).
+            // A dialog destination: S5 sits over S4 rather than replacing it (docs/UI.md §B9).
             dialog(Routes.CONNECT) { ConnectDestination(factory, host) }
             composable(Routes.NAMING) { NamingDestination(factory, host) }
             composable(Routes.ACTIVITY) { ActivityDestination(factory, host) }
@@ -157,7 +157,7 @@ private fun EpisodesDestination(
             is EpisodeListEffect.CopyLink -> host.actions.copy(effect.url)
             EpisodeListEffect.ResolvePausedQueue -> host.onChooseFolder()
             is EpisodeListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
-            // The one snackbar with a reply. The view model still owns the window (ADR 0021); this
+            // The one snackbar with a reply. The view model still owns the window (UI.md §12.3); this
             // only reports a tap, and a tap that arrives after the write finds nothing to undo.
             is EpisodeListEffect.ShowUndo -> {
                 val result =
@@ -219,7 +219,7 @@ private suspend fun SnackbarHostState.showMessage(text: SnackbarText) {
  * What the undo snackbar says a swipe did.
  *
  * Past tense, because as far as the user is concerned it *has* happened — the row already shows it.
- * That the write is still five seconds away is the app's business, not theirs (ADR 0021).
+ * That the write is still five seconds away is the app's business, not theirs (UI.md §12.3).
  */
 private fun EpisodeUiAction.undoMessage(): String =
     when (this) {

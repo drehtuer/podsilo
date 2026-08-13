@@ -75,7 +75,7 @@ object DatabaseModule {
     fun provideSyncStateRepository(database: PodsiloDatabase): SyncStateRepository =
         SyncStateRepositoryImpl(database.syncStateDao())
 
-    /** The zip backup of the whole database (`docs/decisions/0018`). */
+    /** The zip backup of the whole database (`docs/UI.md` §7). */
     @Provides
     @Singleton
     fun provideDatabaseArchive(

@@ -86,7 +86,7 @@ class ActivityScreenTest {
 
     @Test
     fun `a downloading row with no live progress says resuming, not zero percent`() {
-        // After process death WorkManager's progress is gone (docs/UI_interface.md §7).
+        // After process death WorkManager's progress is gone (docs/UI.md §B7).
         render(ActivityUiState(downloading = listOf(episode(ledgerState = LedgerState.DOWNLOADING))))
 
         compose.onNodeWithContentDescription("resuming").assertIsDisplayed()
@@ -105,7 +105,7 @@ class ActivityScreenTest {
 
     @Test
     fun `a folder failure offers Choose folder, never Retry`() {
-        // ADR 0011 again, on a third screen — reusing FailureUi.remedy is what keeps them agreeing.
+        // architecture §11 again, on a third screen — reusing FailureUi.remedy is what keeps them agreeing.
         render(
             ActivityUiState(
                 failed =

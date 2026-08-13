@@ -7,12 +7,12 @@ import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.ErrorCause
 
 /**
- * A failure as a row renders it (`docs/UI_interface.md` §1).
+ * A failure as a row renders it (`docs/UI.md` §B1).
  *
  * @property message passed through **verbatim** from whatever produced it, per the seam's rule that
  *   a server-supplied string is the one thing the view model does not re-word.
  * @property retryable whether another attempt could plausibly work. This is the field
- *   `docs/UI.md` §12.11 and `docs/decisions/0011` hang a real guarantee on: a lost folder grant must
+ *   `docs/UI.md` §12.11 and `docs/architecture.md` §11 hang a real guarantee on: a lost folder grant must
  *   offer **Choose folder** and never a bare **Retry**, because retrying cannot succeed until the
  *   user acts. Historical rows written before the classification existed have no verdict, and
  *   default to retryable — offering a Retry that fails is recoverable; hiding the only useful button

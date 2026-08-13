@@ -14,7 +14,7 @@ or carrying a non-commercial / field-of-use restriction is permitted (CLAUDE.md 
 
 AntennaPod (GPL-3.0) has been *read* as the reference implementation for gpodder-sync conventions —
 its `SynchronizationQueueImpl.enqueueEpisodePlayed` is quoted in
-`docs/decisions/0002-skip-as-play-encoding.md` and its behaviour is what our skip encoding matches.
+`docs/architecture.md` §6 and its behaviour is what our skip encoding matches.
 Reading an implementation and matching its wire behaviour is not derivation, so no attribution
 header is required; the ADR names the file and commit anyway, which is what makes the claim
 checkable. If any AntennaPod code is ever pasted or transliterated, it needs a header naming the
@@ -32,10 +32,10 @@ acceptable*, not the current version, so it does not need touching on a version 
 | AndroidX Test (`compose.ui:ui-test-junit4`/`-manifest`, `test:runner`, `test.ext:junit`) | Apache-2.0 | ✅ (test-only) | The Compose UI test harness CLAUDE.md §3 names; drives both the Robolectric and the instrumented runs |
 | Hilt / Dagger | Apache-2.0 | ✅ | |
 | Retrofit, OkHttp, MockWebServer | Apache-2.0 | ✅ | OkHttp pinned above Retrofit's transitive version deliberately — see the catalog's header comment |
-| `com.prof18.rssparser:rssparser` | Apache-2.0 | ✅ | Chosen over Stalla — `docs/decisions/0005` |
-| `com.github.Adonai:jaudiotagger` | LGPL-2.1-or-later | ✅ | Android-compatible fork of `net.jthink:jaudiotagger`; original copyright (Paul Taylor) retained. Distributed via **JitPack**, which builds from GitHub source rather than a reviewed registry release — a different trust model, recorded in `docs/decisions/0006` |
-| Coil (`io.coil-kt.coil3:coil-compose` + `:coil-network-okhttp`) | Apache-2.0 (confirmed in the 3.5.0 POM) | ✅ | Feed/episode artwork. `coil-network-okhttp` is what makes it reuse the OkHttp already pinned instead of bringing a second HTTP stack — the reason it was chosen over Glide. `docs/decisions/0015` |
-| `com.composables:icons-lucide-android` | MIT (the artifact, per its POM); the Lucide icon set itself is ISC | ✅ | Icons; `docs/UI.md` §18 is the allow-list — `docs/decisions/0015` |
+| `com.prof18.rssparser:rssparser` | Apache-2.0 | ✅ | Chosen over Stalla — `docs/architecture.md` §7 |
+| `com.github.Adonai:jaudiotagger` | LGPL-2.1-or-later | ✅ | Android-compatible fork of `net.jthink:jaudiotagger`; original copyright (Paul Taylor) retained. Distributed via **JitPack**, which builds from GitHub source rather than a reviewed registry release — a different trust model, recorded in `docs/architecture.md` §11 |
+| Coil (`io.coil-kt.coil3:coil-compose` + `:coil-network-okhttp`) | Apache-2.0 (confirmed in the 3.5.0 POM) | ✅ | Feed/episode artwork. `coil-network-okhttp` is what makes it reuse the OkHttp already pinned instead of bringing a second HTTP stack — the reason it was chosen over Glide. `docs/UI.md` §18 |
+| `com.composables:icons-lucide-android` | MIT (the artifact, per its POM); the Lucide icon set itself is ISC | ✅ | Icons; `docs/UI.md` §18 is the allow-list |
 | JUnit 4 | EPL-1.0 | ✅ (test-only) | Not linked into the shipped app |
 | Robolectric | Apache-2.0 | ✅ (test-only) | Downloads an `android-all` jar at first use |
 | MockK, Turbine, Truth/AssertJ | Apache-2.0 | ✅ (test-only) | |
@@ -53,13 +53,13 @@ acceptable*, not the current version, so it does not need touching on a version 
 - **`kotlinx-datetime`** — would have been a third time vocabulary in a codebase that already uses
   `java.time` throughout, for a multiplatform benefit this project does not want. `java.time` is free
   at `minSdk 33`; the conversion to the `Long`s in storage lives in one `EpochTime` object.
-  `docs/decisions/0016`.
+  `docs/architecture.md` §5.
 - **`androidx.security:security-crypto`** (`EncryptedSharedPreferences`) — deprecated by Jetpack, and
   it would have put a second settings store beside the DataStore already in use.
-  `docs/decisions/0010`.
-- **Glide** — brings its own HTTP stack where Coil reuses the pinned OkHttp. `docs/decisions/0015`.
+  `docs/architecture.md` §2.
+- **Glide** — brings its own HTTP stack where Coil reuses the pinned OkHttp. `docs/UI.md` §18.
 - **`net.jthink:jaudiotagger`** (upstream) and **`RouHim/jaudiotagger`** — the first has no confirmed
   Android support and no release since 2021, the second explicitly removed Android compatibility.
-  `docs/decisions/0006`.
+  `docs/architecture.md` §11.
 - **`dev.stalla:stalla`** — CLAUDE.md's original primary pick; no release since 2021.
-  `docs/decisions/0005`.
+  `docs/architecture.md` §7.

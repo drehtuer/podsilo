@@ -24,7 +24,7 @@ import java.time.Instant
  * S2's behaviour, as a plain object with fakes — no Robolectric, no `WorkManager`, no Compose.
  * That is the payoff of `EpisodeScheduler` being an interface the feature module owns.
  *
- * The cases here are the ones `HANDOVER.md` calls traps: a tap must never triage, a swipe must obey
+ * The cases here are the ones the UI design calls traps: a tap must never triage, a swipe must obey
  * the *configured* mapping, bulk writes must be one transaction, and only an explicit *Download
  * again* may carry the flag that gets past `DownloadWorker`'s terminal-row refusal.
  */
@@ -151,7 +151,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
             runCurrent()
 
             vm.onEvent(EpisodeListEvent.SwipeCommitted("e1", SwipeDirection.RIGHT))
-            // The write is deferred by the undo window now (docs/decisions/0021); *which* action it
+            // The write is deferred by the undo window now (`docs/UI.md` §12.3); *which* action it
             // is remains this test's point, so it waits the window out rather than changing subject.
             advanceTimeBy(UNDO_WINDOW_FOR_TEST + 1)
             runCurrent()
@@ -183,7 +183,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     fun `a bulk action is one write, not one per episode`() =
         runTest {
             // 412 upserts would be 412 transactions and 412 list emissions into a LazyColumn
-            // (HANDOVER trap 7).
+            // (`docs/UI.md` §B7).
             val keys = (1..50).map { "e$it" }
             seed(*keys.map { episode(it) }.toTypedArray())
             val vm = viewModel()
@@ -341,7 +341,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     @Test
     fun `a lost folder grant offers Choose folder, never a bare Retry`() =
         runTest {
-            // The guarantee `docs/decisions/0011` and docs/UI.md §12.11 make, and the reason the cause
+            // The guarantee `docs/architecture.md` §11 and docs/UI.md §12.11 make, and the reason the cause
             // is stored rather than parsed out of the message: retrying cannot possibly succeed until
             // the user re-picks the folder, so a Retry button here would be a button that lies.
             seed(episode("e1"))
@@ -571,7 +571,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
             assertTrue(ledger.writes.isEmpty())
         }
 
-    // ---- Live download progress (issue #47), per docs/UI_interface.md §7's table ----
+    // ---- Live download progress (issue #47), per docs/UI.md §B7's table ----
 
     @Test
     fun `a live update gives the row its real percentage`() =
@@ -736,7 +736,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
 
     /**
      * The two app-bar routes (`docs/UI.md` §3), as effects rather than as navigation the screen
-     * performs itself — S2 owns no `NavController` (`docs/UI_interface.md` §0.2).
+     * performs itself — S2 owns no `NavController` (`docs/UI.md` §B0.2).
      */
     @Test
     fun `the app bar navigates and decides nothing`() =

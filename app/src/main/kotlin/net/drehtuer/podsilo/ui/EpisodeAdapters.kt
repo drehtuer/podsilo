@@ -37,7 +37,7 @@ import javax.inject.Singleton
 /**
  * The screens' ports, implemented over the adapters `:app` already owns. These exist so
  * `:feature:episodes` depends on neither WorkManager nor `:core:download`
- * (`docs/UI_interface.md` §0.2, `docs/architecture.md` §2).
+ * (`docs/UI.md` §B0.2, `docs/architecture.md` §2).
  */
 @Singleton
 class WorkEpisodeScheduler
@@ -211,7 +211,7 @@ class WorkManagerDownloadMonitor
                     val key = DownloadWorker.episodeKeyOf(info.tags) ?: return@forEach
                     live += key
                     // Absent until the worker's first 1 Hz tick, and gone again after process death
-                    // — which is exactly the distinction docs/UI_interface.md §7 renders as
+                    // — which is exactly the distinction docs/UI.md §B7 renders as
                     // *resuming* rather than as a stale percentage.
                     val bytes = info.progress.getLong(DownloadWorker.KEY_PROGRESS_BYTES, UNSET)
                     if (bytes >= 0) {

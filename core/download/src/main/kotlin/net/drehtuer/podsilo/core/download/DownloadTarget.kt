@@ -14,7 +14,7 @@ import java.io.File
  * unit test. Without this interface the entire pipeline — naming, collision suffixing, tagging,
  * retry reuse of `writtenFileName`, cache cleanup — would be testable only on an emulator, and this
  * project has never successfully booted one (`docs/dev-environment.md` §6). See
- * `docs/decisions/0011`.
+ * `docs/architecture.md` §11.
  */
 interface DownloadTarget {
     /**

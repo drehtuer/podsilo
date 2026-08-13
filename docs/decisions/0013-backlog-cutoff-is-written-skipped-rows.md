@@ -90,7 +90,7 @@ than left to contradict the built behaviour.
 - `docs/architecture.md` §4/§5's description of the "New" filter is amended; `firstSeenAt` keeps its
   column and its KDoc changes to say what it is now for.
 - `:core:database` loses the cutoff clause and gains `upsertAll`/`previewUndecided`
-  (`docs/UI_interface.md` §8.6).
+  (`docs/UI.md` §B8.6).
 - `FeedRefresher` gains the after-refresh application of the rule, which makes it — for the first
   time — a component that writes ledger rows. **The no-auto-download invariant is unaffected**:
   these rows are `SKIPPED`, never `QUEUED`, and `NoAutoDownloadInvariantTest` should be extended to

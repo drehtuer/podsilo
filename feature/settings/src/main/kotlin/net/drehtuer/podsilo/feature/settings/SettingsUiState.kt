@@ -12,7 +12,7 @@ import net.drehtuer.podsilo.core.model.port.ThemePreference
 import java.time.Instant
 
 /**
- * S4 — settings (`docs/UI_interface.md` §5).
+ * S4 — settings (`docs/UI.md` §B5).
  *
  * **There is no Save button**: every control commits on change (`docs/UI.md` §7), so this state is a
  * projection of what is already persisted rather than a form buffer. The one exception is

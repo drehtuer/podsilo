@@ -40,7 +40,7 @@ private val loginJson = Json { ignoreUnknownKeys = true }
  * the user authenticates in a browser against their own server, and what comes back is an **app
  * password**, never their account password (CLAUDE.md §5).
  *
- * Stays in the JVM module (`docs/decisions/0007`) — nothing here touches an Android API. Opening
+ * Stays in the JVM module (`docs/architecture.md` §2) — nothing here touches an Android API. Opening
  * the browser is the UI's job, delivered as a one-shot effect; this client only starts the flow,
  * polls it, and verifies the result.
  *

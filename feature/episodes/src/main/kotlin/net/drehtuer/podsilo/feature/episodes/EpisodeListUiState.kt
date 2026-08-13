@@ -9,7 +9,7 @@ import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
 
 /**
- * S2's whole state (`docs/UI_interface.md` §3).
+ * S2's whole state (`docs/UI.md` §B3).
  *
  * One non-null state type with **sealed content variants** — never an `isLoading` flag beside a
  * nullable payload, which is the shape that lets a screen render "empty" and "not loaded yet"
@@ -55,7 +55,7 @@ data class EpisodeListUiState(
      */
     val pendingSelectionAction: EpisodeUiAction? = null,
     /**
-     * A swipe decision inside its undo window — **not yet written anywhere** (`docs/decisions/0021`).
+     * A swipe decision inside its undo window — **not yet written anywhere** (`docs/UI.md` §12.3).
      *
      * The row renders as though the decision had been made, because a swipe that appeared to do
      * nothing for five seconds would read as the app ignoring it. The ledger, the outbox and the
@@ -85,7 +85,7 @@ data class Selection(
 )
 
 /**
- * A swipe decision being held for its undo window (`docs/decisions/0021`).
+ * A swipe decision being held for its undo window (`docs/UI.md` §12.3).
  *
  * Exactly one at a time: a second swipe commits this one first. Two live undo windows would need two
  * snackbars and an answer to "which does *Undo* mean", and neither is worth having.
@@ -195,7 +195,7 @@ sealed interface EpisodeListEvent {
 
 /**
  * One-shot effects, delivered over a `Channel` rather than held in state so a snackbar or a
- * navigation cannot replay on rotation (`docs/UI_interface.md` §0.7).
+ * navigation cannot replay on rotation (`docs/UI.md` §B0.7).
  */
 sealed interface EpisodeListEffect {
     data class OpenDetail(
@@ -225,7 +225,7 @@ sealed interface EpisodeListEffect {
     ) : EpisodeListEffect
 
     /**
-     * The snackbar that carries *Undo* (`docs/decisions/0021`).
+     * The snackbar that carries *Undo* (`docs/UI.md` §12.3).
      *
      * Its own effect rather than a [ShowMessage] variant because it needs an action button and a
      * reply — the host turns a tap into [EpisodeListEvent.UndoRequested]. The **view model** owns the
@@ -242,7 +242,7 @@ sealed interface EpisodeListEffect {
 
 /**
  * A snackbar's *identity*, not its text — the string is resolved at render, so nothing here holds a
- * user-facing sentence (`docs/UI_interface.md` §0.6).
+ * user-facing sentence (`docs/UI.md` §B0.6).
  */
 sealed interface SnackbarText {
     data class Queued(

@@ -127,7 +127,7 @@ class EpisodeDetailSheetTest {
 
     @Test
     fun `a lost folder grant offers Choose folder here too, never Retry`() {
-        // The same guarantee as the row (docs/decisions/0011) — reusing `labelFor` is what makes the
+        // The same guarantee as the row (`docs/architecture.md` §11) — reusing `labelFor` is what makes the
         // two impossible to drift apart, and this test is what proves the reuse is wired up.
         render(
             episode =

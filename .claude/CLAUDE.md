@@ -113,16 +113,16 @@ don't quietly hand-roll one.
 | Background work | WorkManager | own `AlarmManager`/`JobScheduler` scheduling, own retry/backoff |
 | HTTP | OkHttp (+ Retrofit for the GPodder REST API) | own HTTP client, own connection pool |
 | JSON | kotlinx.serialization or Moshi (pick one, be consistent) | own JSON parser |
-| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`docs/decisions/0005`) | **own XML/RSS parser, ever** |
+| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`docs/architecture.md` §7) | **own XML/RSS parser, ever** |
 | DI | Hilt | own service locator |
 | Preferences | Jetpack DataStore (Preferences) | SharedPreferences wrappers, own config file format |
 | Folder access | `DocumentFile` / SAF APIs | `java.io.File` paths into external storage |
-| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`docs/decisions/0006`) | **hand-written ID3/MP4 frame code, ever** |
+| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`docs/architecture.md` §11) | **hand-written ID3/MP4 frame code, ever** |
 | Filename sanitising | a small, well-tested internal util is acceptable here — see §6 | ad-hoc `replace()` calls scattered across the codebase |
 | Long lists | Paging 3 | manual offset/limit paging in the ViewModel |
-| Image loading | Coil (`docs/decisions/0015`) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
-| Icons | Lucide's Compose artifact (`docs/decisions/0015`); `docs/UI.md` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
-| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`docs/decisions/0016`) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
+| Image loading | Coil (`docs/UI.md` §18) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
+| Icons | Lucide's Compose artifact; `docs/UI.md` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
+| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`docs/architecture.md` §5) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
 | Logging | Timber (or plain `Log` — do not build an abstraction layer) | own logging framework |
 | Testing | JUnit5 or JUnit4 + Truth/AssertJ, Turbine (Flows), MockK, Robolectric, OkHttp `MockWebServer`, Room in-memory DB, Compose UI test | own test harness, own fakes where MockWebServer suffices |
 | Dev container / emulator | existing published images and scripts (see §4) | own from-scratch Dockerfile for the emulator |
@@ -667,8 +667,8 @@ Work in this order; each step should be green before moving on.
    compose. Read AntennaPod's implementation first.
 7. **`:core:sync`.** Outbox draining, reconciliation, explicit conflict rules, heavy unit tests.
 8. **UI.** Designed in full before any of it was written: **`docs/UI.md` is the canonical UX
-   document** and `docs/UI_interface.md` the code seam. Build in dependency order, not screen order —
-   see `TODO.md` Tier 4c.
+   document** and `docs/UI.md` Part B the code seam. Build in dependency order, not screen order —
+   see `docs/UI.md` and `docs/architecture.md` §13.
    - **Amended 2026-08-01: eight screens, not two destinations.** This step originally said "two
      destinations is the target". The design pass found that the missing six were not decoration —
      an episode's description is raw HTML that no list row can render (S3), and download progress,

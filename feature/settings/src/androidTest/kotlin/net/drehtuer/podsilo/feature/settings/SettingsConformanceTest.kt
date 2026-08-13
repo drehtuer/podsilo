@@ -59,7 +59,7 @@ class SettingsConformanceTest {
     }
 
     /**
-     * `docs/decisions/0018`'s 2026-08-02 amendment, and the author's rule: **no backup is loaded
+     * `docs/UI.md` §7's 2026-08-02 amendment, and the author's rule: **no backup is loaded
      * until the Nextcloud login has succeeded.** The row says why rather than silently doing nothing.
      */
     @Test

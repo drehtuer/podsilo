@@ -36,7 +36,7 @@ private const val PULL_DISTANCE_PX = 1_000f
  * classpath. A conformance claim about the UI is worth making where the UI actually runs.
  *
  * Each test names the clause of the design document it enforces. If one fails, either the screen
- * drifted or the document did — and the document is canonical (`HANDOVER.md`), so the screen moves.
+ * drifted or the document did — and the document is canonical (`docs/UI.md`), so the screen moves.
  */
 @RunWith(AndroidJUnit4::class)
 class PodcastListConformanceTest {

@@ -30,7 +30,7 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * S1 — the launcher screen (`docs/UI_interface.md` §2).
+ * S1 — the launcher screen (`docs/UI.md` §B2).
  *
  * **The ordering is frozen**, and that is the one rule in this class worth reading twice: the sort
  * is computed on cold start and on each explicit refresh, then held as a list of feed URLs into

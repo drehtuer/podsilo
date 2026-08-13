@@ -36,7 +36,7 @@ object DownloadModule {
     @Singleton
     fun provideAudioTagWriter(): AudioTagWriter = AudioTagWriter()
 
-    /** The only production [DownloadTarget]; the interface exists to keep the pipeline testable (ADR 0011). */
+    /** The only production [DownloadTarget]; the interface exists to keep the pipeline testable (architecture §11). */
     @Provides
     @Singleton
     fun provideDownloadTarget(
@@ -75,7 +75,7 @@ object DownloadModule {
             downloadTarget = downloadTarget,
             cacheDir = File(context.cacheDir, DOWNLOAD_CACHE_DIR),
             // The device's zone, fixed here rather than re-resolved per call, so one episode always
-            // formats to the same date across retries (docs/decisions/0004).
+            // formats to the same date across retries (`docs/architecture.md` §11).
             zoneId = clock.zone,
             artworkFetcher = artworkFetcher,
         )

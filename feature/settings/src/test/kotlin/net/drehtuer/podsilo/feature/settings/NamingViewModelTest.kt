@@ -52,7 +52,7 @@ class NamingViewModelTest {
     @Test
     fun `a missing date renders 00000000, never an empty segment`() =
         runTest {
-            // ADR 0004. If this ever renders an empty segment the engine regressed, not the screen —
+            // architecture §11. If this ever renders an empty segment the engine regressed, not the screen —
             // a filename must never begin with a partial date (CLAUDE.md §6).
             val resolved =
                 viewModel()

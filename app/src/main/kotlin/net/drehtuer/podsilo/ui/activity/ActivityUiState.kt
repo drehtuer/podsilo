@@ -7,7 +7,7 @@ import net.drehtuer.podsilo.feature.episodes.QueueStatus
 import java.time.Instant
 
 /**
- * S7 — activity (`docs/UI_interface.md` §6). The one place that answers *what is the app doing, and
+ * S7 — activity (`docs/UI.md` §B6). The one place that answers *what is the app doing, and
  * what is stuck?*
  *
  * @property recent the last ~20 delivered files. It exists to answer "did it actually land?" and

@@ -16,7 +16,7 @@ import java.time.temporal.ChronoField
  * the API (`docs/architecture.md` section 6).
  *
  * **Servers disagree on whether it carries an offset**, so parsing is deliberately lenient
- * (verified against both reference implementations -- see `docs/decisions/0003`):
+ * (verified against both reference implementations -- see `docs/architecture.md` §6):
  * - `nextcloud-gpodder` emits an offset (PHP `format("c")` -> `2021-10-06T11:49:23+00:00`)
  * - `opodsync` emits a trailing `Z` (`2021-10-06T11:49:23Z`)
  * - the gpodder API README shows a bare form (`2009-12-12T09:00:00`), which is what CLAUDE.md

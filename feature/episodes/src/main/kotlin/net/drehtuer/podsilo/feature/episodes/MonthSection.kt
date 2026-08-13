@@ -4,7 +4,7 @@ package net.drehtuer.podsilo.feature.episodes
 
 import java.time.ZoneId
 
-/** A month grouping key. `kotlinx.datetime` has no `YearMonth` and we added no date library (ADR 0016). */
+/** A month grouping key. `kotlinx.datetime` has no `YearMonth` and we added no date library (architecture §5). */
 data class YearMonth(
     val year: Int,
     val month: Int,

@@ -5,11 +5,11 @@ package net.drehtuer.podsilo.core.model.port
 /**
  * Port for **Nextcloud Login Flow v2**, implemented in `:core:gpodder` (still a JVM module —
  * nothing here touches an Android API; launching the browser is the UI's concern, delivered as a
- * one-shot effect, `docs/decisions/0007`).
+ * one-shot effect, `docs/architecture.md` §2).
  *
  * This is the *only* way Podsilo obtains credentials. The app never sees, asks for, or stores a
  * user's Nextcloud password: the flow hands back an **app password**, which is what gets encrypted
- * and persisted (CLAUDE.md §5, `docs/decisions/0010`). There is no username/password form anywhere
+ * and persisted (CLAUDE.md §5, `docs/architecture.md` §2). There is no username/password form anywhere
  * in the UI and there must never be one.
  *
  * Distinct from [GpodderClient], which speaks the three gpoddersync endpoints — these three live

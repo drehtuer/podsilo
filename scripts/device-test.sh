@@ -21,7 +21,7 @@
 #      SQLite. `docs/decisions/0017` exists because one of these shipped a bug past 437 green tests.
 #   2. **Platform surfaces with no test double worth trusting** — SAF writes, the Keystore cipher,
 #      a foreground service actually starting, the cleartext-traffic policy.
-#   3. **UI conformance to `docs/UI.md` and `docs/UI_interface.md`** on a real Compose runtime.
+#   3. **UI conformance to `docs/UI.md`** on a real Compose runtime.
 #
 # ⚠ THIS UNINSTALLS AND REINSTALLS THE APP, SO IT WIPES ITS DATA
 #

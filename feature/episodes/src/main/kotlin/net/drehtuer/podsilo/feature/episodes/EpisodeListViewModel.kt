@@ -42,7 +42,7 @@ import java.time.ZoneId
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * How long a swipe decision is held before it is written (`docs/decisions/0021`).
+ * How long a swipe decision is held before it is written (`docs/UI.md` §12.3).
  *
  * Matched to a Material `SnackbarDuration.Short`, so the window closes at roughly the moment the
  * undo affordance leaves the screen. The view model is the authority on when it actually closes.
@@ -51,7 +51,7 @@ private const val UNDO_WINDOW_MS = 5_000L
 
 /**
  * S2. Observes the ledger join, projects it into rows, and turns events into ledger writes plus
- * scheduling requests — never into network calls (`docs/UI_interface.md` §0.1/§0.3).
+ * scheduling requests — never into network calls (`docs/UI.md` §B0.1/§0.3).
  *
  * Not a `@HiltViewModel`: the feed URL is a construction parameter, so `:app` builds it through a
  * factory. That also keeps `:feature:episodes` free of a Hilt dependency, so this whole class is
@@ -77,7 +77,7 @@ class EpisodeListViewModel(
      *
      * A scope that **outlives this view model**, because `viewModelScope` is already cancelled by
      * the time `onCleared` runs — a write launched there would never happen. Injected so tests can
-     * pass the test scope rather than waiting on a real dispatcher (`docs/decisions/0021`).
+     * pass the test scope rather than waiting on a real dispatcher (`docs/UI.md` §12.3).
      */
     private val commitScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : ViewModel() {
@@ -179,7 +179,7 @@ class EpisodeListViewModel(
         )
 
     /**
-     * `docs/UI_interface.md` §7's third case: a `DOWNLOADING` row with no work behind it was killed
+     * `docs/UI.md` §B7's third case: a `DOWNLOADING` row with no work behind it was killed
      * mid-download, so the work is re-enqueued **on first observation**.
      *
      * This does not weaken the no-auto-download invariant (CLAUDE.md §1). It resumes a download the
@@ -214,7 +214,7 @@ class EpisodeListViewModel(
             items
                 .map { it.toUi(feedTitle = feedTitle, feedArtworkUrl = feedArtwork, work = work) }
                 // The held decision is shown as though it had been taken. Nothing is written yet
-                // (docs/decisions/0021) — but a swipe that appeared to do nothing for five seconds
+                // (`docs/UI.md` §12.3) — but a swipe that appeared to do nothing for five seconds
                 // would read as the app ignoring it, and the user would swipe again.
                 .map { row ->
                     pendingUndo?.takeIf { it.episodeKey == row.episodeKey }?.let { row.asPending(it) } ?: row
@@ -306,7 +306,7 @@ class EpisodeListViewModel(
             EpisodeListEvent.MarkAllDismissed -> pendingMarkAll.value = null
             EpisodeListEvent.UndoRequested -> {
                 // Nothing was written, so there is nothing to revert: the held decision is simply
-                // dropped and the row returns to undecided (docs/decisions/0021).
+                // dropped and the row returns to undecided (`docs/UI.md` §12.3).
                 undoJob?.cancel()
                 pendingUndo.value = null
             }
@@ -321,7 +321,7 @@ class EpisodeListViewModel(
 
     /**
      * A swipe decision, **held for [UNDO_WINDOW_MS] before anything is written**
-     * (`docs/decisions/0021`).
+     * (`docs/UI.md` §12.3).
      *
      * The deferral is the whole design. A skip becomes a `PLAY` action in an append-only log that
      * other clients act on, and the GPodder API has no retraction — so the only reliably reversible
@@ -500,7 +500,7 @@ class EpisodeListViewModel(
 /**
  * The scheduling surface a screen is allowed to touch.
  *
- * A view model never sees `WorkManager` (`docs/UI_interface.md` §0.2); `:app`'s `WorkScheduler`
+ * A view model never sees `WorkManager` (`docs/UI.md` §B0.2); `:app`'s `WorkScheduler`
  * implements this, which also keeps `:feature:episodes` free of a WorkManager dependency and
  * therefore testable without Robolectric.
  */

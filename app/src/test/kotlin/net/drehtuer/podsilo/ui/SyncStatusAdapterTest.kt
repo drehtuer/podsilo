@@ -19,7 +19,7 @@ import java.time.Instant
  * read it with `EpochTime.ofMillisOrNull`, so a sync that had just succeeded rendered on the Pixel 5
  * as **"20647 d ago"**: 1785703652 milliseconds after the epoch is 21 January 1970.
  *
- * `docs/decisions/0016` exists to stop exactly this, by giving `EpochTime` two functions whose names
+ * `docs/architecture.md` §5 exists to stop exactly this, by giving `EpochTime` two functions whose names
  * carry the unit — and the one call site that needed `ofServerSeconds` used `ofMillis` anyway. A
  * comment would not have caught it; this does.
  */

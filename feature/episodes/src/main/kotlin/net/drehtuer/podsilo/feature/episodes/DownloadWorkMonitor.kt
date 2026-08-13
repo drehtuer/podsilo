@@ -22,7 +22,7 @@ fun interface DownloadWorkMonitor {
 /**
  * A snapshot of the queue, keyed by `episodeKey`.
  *
- * The two fields answer different questions and `docs/UI_interface.md` §7's table needs both: [live]
+ * The two fields answer different questions and `docs/UI.md` §B7's table needs both: [live]
  * is "is there work for this episode at all", [progress] is "and has it told us how far along it is
  * *in this process*". A `DOWNLOADING` ledger row that is in [live] but absent from [progress] reads
  * *resuming*; one in neither is stranded — the process died before the worker could resume — and the
