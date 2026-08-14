@@ -5,12 +5,18 @@
 [![Release](https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver)](https://github.com/drehtuer/podsilo/releases/latest)
 [![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue)](LICENSE)
 
-The **CI** badge covers six checks — yamllint, shellcheck, ktlint, detekt, the Tier 1 unit tests and
-both APK builds — and the whole workflow is one job, so a green badge means all six passed and a red
-one means at least one did not. The first two lint the languages Gradle cannot see: the YAML that
-carries the release signing and the dependency policy, and the bash scripts that set up the
-container and drive a real phone. Rules live in `.yamllint.yml` and `.shellcheckrc`, and the dev
+The **CI** badge covers seven checks — yamllint, shellcheck, ktlint, detekt, Android lint, the Tier 1
+unit tests and both APK builds — and the whole workflow is one job, so a green badge means all seven
+passed and a red one means at least one did not. The first two lint the languages Gradle cannot see:
+the YAML that carries the release signing and the dependency policy, and the bash scripts that set up
+the container and drive a real phone. Rules live in `.yamllint.yml` and `.shellcheckrc`, and the dev
 container carries both tools, so the same two commands run locally.
+
+Android lint is the fifth and the newest, and it asks a different question from the two Kotlin
+linters: they read the code as text and as a syntax tree, it knows the platform — API levels,
+manifest merging, SAF, WorkManager. It joined once it was green in every module, which took removing
+one false positive it could not have resolved on its own (`core/download/build.gradle.kts` says
+which, and names the two tests that assert the same thing for real).
 
 The badge deliberately says nothing about the device tests: those live in `src/androidTest/` and no
 hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
