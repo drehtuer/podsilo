@@ -40,7 +40,7 @@ private val TERMINAL_STATES = setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED,
  * sentinel has already been normalised to `null` at the client boundary. That is the same answer
  * RePod gives such an action, which is the point of copying the rule.
  */
-private fun EpisodeAction.meansHandledElsewhere(): Boolean =
+fun EpisodeAction.meansHandledElsewhere(): Boolean =
     when (action) {
         EpisodeActionType.DOWNLOAD, EpisodeActionType.DELETE -> true
         EpisodeActionType.PLAY -> hasEnded()

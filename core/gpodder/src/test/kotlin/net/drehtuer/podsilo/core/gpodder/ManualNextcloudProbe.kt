@@ -7,6 +7,7 @@ import net.drehtuer.podsilo.core.model.port.EpisodeAction
 import net.drehtuer.podsilo.core.model.port.EpisodeActionPage
 import net.drehtuer.podsilo.core.model.port.EpisodeActionType
 import net.drehtuer.podsilo.core.model.port.LoginResult
+import net.drehtuer.podsilo.core.sync.meansHandledElsewhere
 import net.drehtuer.podsilo.core.sync.parseGpodderTimestamp
 import net.drehtuer.podsilo.core.sync.toGpodderTimestamp
 import okhttp3.OkHttpClient
@@ -175,15 +176,19 @@ private fun reportRecent(
     newest.forEach { action ->
         val authored = parseGpodderTimestamp(action.timestamp)
         val rePod = if (action.isEndedByRePodsRule()) "played" else "NOT played"
-        // Every DOWNLOAD/PLAY/DELETE is terminal to reconcile() — the type alone decides.
-        val podsilo = "HANDLED_REMOTELY"
+        // The *real* predicate, imported rather than restated. This column was the hardcoded string
+        // "HANDLED_REMOTELY", which was true when the probe was written and became a lie the moment
+        // `docs/decisions/0022` landed — a diagnostic describing last week's behaviour is worse than
+        // none, and this one printed "← DISAGREE" against a disagreement that no longer existed.
+        val podsilo = if (action.meansHandledElsewhere()) "HANDLED_REMOTELY" else "left in To decide"
         val skew = authored?.let { (it - serverNowMillis) / MILLIS_PER_SECOND }
         println("  ${action.timestamp}  ${action.action}")
         println(
             "    guid=${action.guid ?: "(none)"}  started=${action.started} " +
                 "position=${action.position} total=${action.total}",
         )
-        println("    RePod: $rePod   |   Podsilo: $podsilo${if (rePod == "NOT played") "  ← DISAGREE" else ""}")
+        val agree = (rePod == "played") == (podsilo == "HANDLED_REMOTELY")
+        println("    RePod: $rePod   |   Podsilo: $podsilo${if (agree) "" else "  ← DISAGREE"}")
         skew?.let { println("    authored ${it}s relative to the server clock") }
     }
 }
