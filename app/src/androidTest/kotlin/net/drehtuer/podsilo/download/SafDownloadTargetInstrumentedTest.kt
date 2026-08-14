@@ -7,17 +7,8 @@ import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.download.SafDownloadTarget
-import net.drehtuer.podsilo.core.model.port.NamingSettings
-import net.drehtuer.podsilo.core.model.port.NextcloudAccount
-import net.drehtuer.podsilo.core.model.port.NextcloudCredentials
-import net.drehtuer.podsilo.core.model.port.OlderThan
-import net.drehtuer.podsilo.core.model.port.SettingsRepository
-import net.drehtuer.podsilo.core.model.port.SwipeMapping
-import net.drehtuer.podsilo.core.model.port.ThemePreference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -61,7 +52,7 @@ class SafDownloadTargetInstrumentedTest {
             granted != null,
         )
         treeUri = granted!!
-        target = SafDownloadTarget(context, FixedFolderSettings(treeUri))
+        target = SafDownloadTarget(context, GrantedFolderSettings(treeUri))
     }
 
     private fun sourceFile(
@@ -156,44 +147,3 @@ class SafDownloadTargetInstrumentedTest {
 }
 
 /** Only the folder URI matters here; everything else is a default the target never reads. */
-private class FixedFolderSettings(
-    private val uri: String,
-) : SettingsRepository {
-    override fun observeDownloadFolderUri(): Flow<String?> = MutableStateFlow(uri)
-
-    override suspend fun setDownloadFolderUri(uri: String?) = Unit
-
-    override fun observeNaming(): Flow<NamingSettings> = MutableStateFlow(NamingSettings())
-
-    override suspend fun setNaming(settings: NamingSettings) = Unit
-
-    override fun observeSyncIntervalMinutes(): Flow<Long> = MutableStateFlow(60)
-
-    override suspend fun setSyncIntervalMinutes(minutes: Long) = Unit
-
-    override fun observeTheme(): Flow<ThemePreference> = MutableStateFlow(ThemePreference.SYSTEM)
-
-    override suspend fun setTheme(theme: ThemePreference) = Unit
-
-    override fun observeSwipeMapping(): Flow<SwipeMapping> = MutableStateFlow(SwipeMapping())
-
-    override suspend fun setSwipeMapping(mapping: SwipeMapping) = Unit
-
-    override fun observeAllowMobileData(): Flow<Boolean> = MutableStateFlow(false)
-
-    override suspend fun setAllowMobileData(allowed: Boolean) = Unit
-
-    override fun observeDeliveredClearedAt(): kotlinx.coroutines.flow.Flow<Long> = kotlinx.coroutines.flow.flowOf(0L)
-
-    override suspend fun setDeliveredClearedAt(millis: Long) = Unit
-
-    override fun observeMarkOldOlderThan(): Flow<OlderThan> = MutableStateFlow(OlderThan.OFF)
-
-    override suspend fun setMarkOldOlderThan(value: OlderThan) = Unit
-
-    override fun observeNextcloudAccount(): Flow<NextcloudAccount?> = MutableStateFlow(null)
-
-    override suspend fun nextcloudCredentials(): NextcloudCredentials? = null
-
-    override suspend fun setNextcloudCredentials(credentials: NextcloudCredentials?) = Unit
-}

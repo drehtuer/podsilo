@@ -54,6 +54,11 @@ private const val ZIP_MIME = "application/zip"
  * A picked file is still validated before anything is replaced — `DatabaseArchive.importFrom` is
  * all-or-nothing and reports a typed failure — so the filter is about finding the file, not about
  * trusting it.
+ *
+ * **Measured on 2026-08-14**, which is what turned this from reasoning into a fact: a real Podsilo
+ * backup sitting in a Pixel 10a's Downloads folder is reported by the provider as `application/zip`
+ * — the first entry below, so the picker shows it. The other three stay as the cheap insurance they
+ * were: `EXTRA_MIME_TYPES` is a union, so a spelling that never matches costs nothing.
  */
 private val BACKUP_MIME_TYPES =
     arrayOf(

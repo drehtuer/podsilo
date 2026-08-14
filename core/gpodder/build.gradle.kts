@@ -45,5 +45,7 @@ tasks.register<JavaExec>("nextcloudProbe") {
             project.findProperty("write")?.toString().orEmpty(),
             // Read-only: dump the newest N actions in full — see reportRecent().
             project.findProperty("recent")?.toString().orEmpty(),
+            // -Prevoke=yes: delete the app password this run was granted, then prove it is dead.
+            project.findProperty("revoke")?.toString().orEmpty(),
         )
 }

@@ -53,6 +53,11 @@ fun main(args: Array<String>) {
     // Read-only detail dump: the newest N actions, with RePod's reading and ours side by side.
     val recent = args.getOrNull(3)?.toIntOrNull() ?: 0
 
+    // Deletes the app password THIS RUN was granted, and proves it is dead afterwards. Opt-in even
+    // though it only ever touches the probe's own credential: it is still a DELETE against someone's
+    // server, and this file's contract is that writes are asked for, never assumed.
+    val revoke = args.getOrNull(4)?.takeIf { it.isNotBlank() }?.lowercase() in setOf("yes", "true", "1")
+
     // Generous timeouts: the poll deliberately blocks until a human acts.
     val http =
         OkHttpClient
@@ -109,7 +114,39 @@ fun main(args: Array<String>) {
             verifyActionWrites(http, result)
             realDataSyncPass(http, result)
         }
+        if (revoke) revokeAndProveItIsDead(loginFlow, result)
     }
+}
+
+/**
+ * The one thing `RetrofitNextcloudLoginFlowClientTest` cannot prove: that Nextcloud actually accepts
+ * this request. The `OCS-APIRequest` header requirement and the shape of the response were read from
+ * the OCS documentation, and a MockWebServer will agree with whatever the client sends.
+ *
+ * **The second GET is the real assertion.** A 200 from the DELETE proves the server answered, not
+ * that the password is gone; re-using it afterwards and being refused is what proves that. This is
+ * also exactly what the app does when the user declines an account (`docs/UI.md` §8) — the same
+ * method, on the same credentials, at the same point in the flow.
+ */
+private suspend fun revokeAndProveItIsDead(
+    loginFlow: RetrofitNextcloudLoginFlowClient,
+    result: LoginResult,
+) {
+    println()
+    println("→ DELETE /ocs/v2.php/core/apppassword (revoking THIS run's password)")
+    loginFlow.revokeAppPassword(result.credentials).fold(
+        onSuccess = { println("✓ server accepted the delete") },
+        onFailure = {
+            println("✗ revoke failed: ${it.message}")
+            return
+        },
+    )
+
+    println("→ re-using the revoked password against gpoddersync — this MUST now fail")
+    loginFlow.verifyGpodderSync(result.credentials).fold(
+        onSuccess = { println("✗ THE PASSWORD STILL WORKS — the delete did not take effect") },
+        onFailure = { println("✓ refused (${it.message}) — the password is gone from the server") },
+    )
 }
 
 /**

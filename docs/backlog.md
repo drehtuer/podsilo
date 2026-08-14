@@ -21,35 +21,20 @@ entirely** (`docs/decisions/0026`). The author's call on D1 was neither "shorter
 "no automatic sync; any sync will happen manually". `DEFAULT_SYNC_INTERVAL_MINUTES` survives under its
 old name timing only the **feed refresh**.
 
-- **The device scripts' wireless path has never been run against a phone.** The guard that used to
-  refuse it was narrowed on 2026-08-14 and everything reachable without hardware was exercised — the
-  no-server path, the container-local-server-with-no-devices path, the `<ip>:<port>` classification —
-  but the case the change exists for, an actually attached wireless device, was verified only by
-  reasoning. Worth ten minutes the next time a phone is to hand
-  (`docs/dev-environment.md` §9.4).
-
-- **The restore picker's MIME list has only been reasoned about.** `*/*` was dropped on 2026-08-14
-  and four explicit zip spellings kept in its place (`MainActivity.BACKUP_MIME_TYPES`), which is
-  strictly wider than the two the note proposed — but "which type does *your* file manager report for
-  a `.zip`" is answerable only on a device with a real backup in a real Downloads folder. Our own
-  exports always match, since `CreateDocument` writes `application/zip`. If a backup ever turns out
-  to be un-pickable, the fix is one more string in that array.
-
-- **A device test for the download pipeline end to end** — enclosure fetch → tag write → SAF copy →
-  ledger → outbox. Blocked on nothing but a subscription: subscriptions come only from Nextcloud, and
-  seeding the SQLite file directly does not help, because with no account configured S1 correctly
-  shows the *not configured* empty state instead of the list (`docs/UI.md` §4). Do it alongside the
-  real-device Nextcloud login.
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
-  that ADR 0008 stays source-read-only, permanently.
+  that ADR 0008 stays source-read-only, permanently. **Re-declined by the author on 2026-08-14**, on
+  better grounds than before: there is now a real Nextcloud to probe against
+  (`./gradlew :core:gpodder:nextcloudProbe`), and a real server is stronger evidence than a local one
+  would be — that same run re-confirmed the ±hh:mm timestamp contract of `docs/decisions/0009`
+  against it.
 
-- **The revoke-on-decline call has never met a real Nextcloud.** `DELETE
-  /ocs/v2.php/core/apppassword` is covered by MockWebServer tests for the path, the method, the Basic
-  auth and the `OCS-APIRequest` header, but the header requirement and the 404-on-older-servers
-  behaviour are read from the OCS docs rather than observed. It is best-effort by contract, so
-  getting it wrong costs the leftover password it was meant to clean up and nothing more — but the
-  manual probe (`./gradlew :core:gpodder:nextcloudProbe`) would settle it in a minute (2026-08-14).
+- **The pipeline device test needs two things a script cannot do.** `DownloadPipelineInstrumentedTest`
+  skips unless a SAF folder has been granted *and* the database holds refreshed episodes, and
+  `device-test.sh` destroys the first of those on every run by reinstalling. The working sequence is
+  in `docs/dev-environment.md` §6 and is entirely manual: run the set, grant the folder, pull to
+  refresh, then re-run the instrumentation *without* reinstalling. Automating it would mean a
+  fixture account and a way to restore a grant, neither of which exists (2026-08-14).
 
 ## Distribution readiness (audited 2026-08-04)
 
