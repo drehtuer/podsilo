@@ -21,30 +21,12 @@ entirely** (`docs/decisions/0026`). The author's call on D1 was neither "shorter
 "no automatic sync; any sync will happen manually". `DEFAULT_SYNC_INTERVAL_MINUTES` survives under its
 old name timing only the **feed refresh**.
 
-- **One compiler warning survived the warnings sweep.**
-  `RealDataSyncProbe.kt:151` calls `it.body?.string()`, and `ResponseBody` is non-null in OkHttp 5 —
-  "unnecessary safe call". The fix is deleting one `?`. Left out of the backlog-items PR only to keep
-  it to what was asked; the sweep on 2026-08-14 covered main sources and this is a test one, which is
-  presumably why it was missed (2026-08-14).
-
-- **ktlint's up-to-date checking ignores a removed file** — investigated 2026-08-14 and left in
-  place, with the workaround documented in `docs/dev-environment.md` §8.7 rather than fixed here.
-  Deleting a Kotlin file leaves `runKtlintCheckOver<SourceSet>SourceSet` `UP-TO-DATE`, so the stale
-  `build/intermediates/ktLint/*_errors.bin` is what gets reported; `rm -rf <module>/build/intermediates/ktLint`
-  clears it. Two facts decided it: it is **not** androidTest-specific (reproduced from a clean state
-  in `src/main/` and `src/test/` too, so the note that raised it had the scope wrong), and it can
-  only ever cause a false *failure* — adding or editing a file re-runs the task correctly, so no
-  violation can hide behind it. The only fix available locally is
-  `outputs.upToDateWhen { false }` on every ktlint task, which takes `ktlintCheck` from under a
-  second to about thirteen on every invocation. 14.2.0 is the current plugin release, so there is no
-  upgrade to wait for; reconsider if one lands.
-
-- **`device-test.sh` and `adb-connect-host.sh` refuse to run over wireless debugging.** Both gate on
-  "no adb server inside the container", which is correct for the usbip path and exactly wrong for the
-  wireless one, where that server is what holds the connection (`docs/dev-environment.md` §9.4). A
-  wireless run currently means executing the script's steps by hand. The distinguishing fact is
-  cheap — a device serial shaped `<ip>:<port>` is a network device, and `adb devices` showing one
-  means the local server is legitimate — so the guard could be narrowed rather than removed.
+- **The device scripts' wireless path has never been run against a phone.** The guard that used to
+  refuse it was narrowed on 2026-08-14 and everything reachable without hardware was exercised — the
+  no-server path, the container-local-server-with-no-devices path, the `<ip>:<port>` classification —
+  but the case the change exists for, an actually attached wireless device, was verified only by
+  reasoning. Worth ten minutes the next time a phone is to hand
+  (`docs/dev-environment.md` §9.4).
 
 - **Two `ErrorCause` values are unreachable by design.** `FEED_PARSE` and `TAG_WRITE` are declared
   and never produced anywhere: a tag-write failure must never fail a download (CLAUDE.md §6), so no
