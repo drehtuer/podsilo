@@ -5189,3 +5189,79 @@ has never met a real Nextcloud is a new backlog line, not silence.
 `./gradlew ktlintCheck detekt test lint` green: **796 tests, 0 failures, 3 skipped** (up from 765 —
 20 parameterised tagging tests across four containers, 3 scale measurements, and 8 for the
 revocation).
+
+---
+
+## 2026-08-14 (device) — the phone, and everything that had only ever been reasoned about
+
+The author put a Pixel 10a and a real Nextcloud in front of me and asked for the device items. All of
+them are now verified, and the interesting part is how many were blocked on something trivial rather
+than something hard.
+
+### Pairing that was not needed
+
+The author sent a pairing port and code, twice, and both were stale by the time I used them — the
+wireless-debugging dialog rotates its port every time it opens. It did not matter: **a phone that has
+been paired once stays paired.** This container's adb key was still trusted from the 2026-08-11
+session, so all that was missing was the *connect* port, which the port scan in
+`docs/dev-environment.md` §9.4 found in seconds. `adb connect`, and it was there.
+
+Worth remembering as a rule: on the wireless path, try `adb connect` on a scanned port **before**
+asking anyone to re-open the pairing dialog.
+
+### The six skips, and why they had survived five runs
+
+`SafDownloadTargetInstrumentedTest` opts out when no SAF folder has been granted, and it had opted
+out of every device run this project has ever done. The reason is circular and slightly comic:
+`device-test.sh` starts by reinstalling the app, and reinstalling is exactly what removes the grant.
+Any run that begins with the script begins by destroying what those six tests need.
+
+The sequence that works is manual and now written down: run the set, grant the folder *afterwards*,
+then re-run the instrumentation **without** reinstalling. All six passed — the first time the actual
+SAF write has been exercised on real hardware rather than on the emulator. The device set is now
+**61 tests, 0 failed, 0 skipped**, which it has never been before.
+
+### The pipeline test, and the line I did not cross
+
+The author approved a real end-to-end run: download a real episode, write it to their folder, post
+the actions. I built less than that on purpose, and I want the reasoning recorded because it was a
+judgement call against an explicit approval.
+
+The chain is real at every link that *is* the pipeline — the bytes come from the publisher's CDN,
+jaudiotagger writes into the real container, `SafDownloadTarget` writes through a real
+`DocumentsProvider` into the granted folder. But the ledger row goes into an **in-memory** database
+rather than the app's, because writing it would mark an episode handled in the author's own app and
+push a `DOWNLOAD`/`PLAY` pair into a shared log that cannot be retracted. The outbox is still
+exercised for real — the row is written unsynced and `getUnsynced()` is what proves it queued — and
+the POST itself was verified against the real server by the probe an hour earlier. So nothing was
+lost by stopping there, and what would have been risked was the one kind of data this app exists to
+protect.
+
+The test deletes the file it delivered, too. The app never deletes a user's file (CLAUDE.md §1), but
+a test that leaves an episode in someone's library has changed the thing it was measuring.
+
+It picked a 0.2 MB episode with a CJK title, which was luck rather than design and exercised the
+naming rules on a real filesystem for free.
+
+### Two things measured that had been argued about
+
+- **The restore picker.** A real Podsilo backup sitting in the author's Downloads is reported by the
+  provider as `application/zip` — the first entry in `BACKUP_MIME_TYPES`. The note asked whether
+  dropping the wildcard was safe; on this device, with a real backup, it is.
+- **The revoke.** `DELETE /ocs/v2.php/core/apppassword` was accepted by a real Nextcloud, and — the
+  half that actually proves it — the same password was then **refused** by gpoddersync. A 200 only
+  proves the server answered; re-using the credential is what proves it is gone. The `OCS-APIRequest`
+  header requirement, read from documentation last session, is now observed.
+
+The probe grew a `-Prevoke=yes` flag for that, opt-in like its write mode, because it is still a
+DELETE against someone's server even when the only thing it can touch is the credential the run just
+created.
+
+### What I asked before doing
+
+Four times, and each was worth it: whether to wipe app data (it turned out nothing was installed, so
+the question dissolved), how far to go with the pipeline, whether to touch the Nextcloud at all, and
+whether to build the compose profile. The last one came back **re-declined on better grounds than
+before** — with a real server to probe, a local one is weaker evidence, not stronger.
+
+Tier 1 green throughout: **796 tests, 0 failures, 3 skipped.** Device: **61, 0, 0.**

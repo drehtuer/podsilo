@@ -42,19 +42,20 @@ below differ enormously in how well-proven they are.
 | **Tier 2 — emulator booting in-container** | ✅ **Verified** | 2026-08-02: `scripts/emulator-start.sh` creates + boots `podsilo-ci` headless in ~28 s from nothing |
 | **Tier 2 — `connectedAndroidTest`** | ✅ **Verified** | 2026-08-02: 6 tests green on `podsilo-ci(AVD) - 15` across `:app` and `:feature:episodes` |
 | **Tier 3 — a real device over adb from the container** | ✅ **Verified** | 2026-08-02: a physical Pixel 5 passed into WSL with usbipd-win, visible in here with no image change — see [§9](#9-attaching-a-real-android-device) |
-| **Tier 3 — a real device over *wireless debugging*** | ✅ **Verified** | 2026-08-11: a Pixel 10a (Android 17 / API 37) paired and driven over Wi-Fi with no USB, no usbipd and no WSL-side server — see [§9.4](#94-wireless-debugging-no-usb-at-all) |
+| **Tier 3 — a real device over *wireless debugging*** | ✅ **Verified** | 2026-08-11, and again 2026-08-14 with `adb-connect-host.sh` and `device-test.sh` **driving it unmodified** — the guard narrowed on 2026-08-14 was until then only reasoned about. See [§9.4](#94-wireless-debugging-no-usb-at-all) |
 | **Tier 3 — adb to an emulator on *Windows*** | ❌ **Never run** | Same mechanism as the USB row above, but the Windows-side `adb -a -P 5037 nodaemon server` half is untested |
 | **A real Nextcloud login from the phone** | ✅ **Verified** | 2026-08-02: Login Flow v2 approved in the phone's browser; 4 subscriptions and 9,565 episodes arrived |
-| **The download pipeline end to end** | ✅ **Verified** | 2026-08-02: two real episodes fetched, tagged (TIT2/TPE1/TALB/TCON/TYER/COMM **and APIC**) and written through SAF on a Pixel 5 |
+| **The download pipeline end to end** | ✅ **Verified, and now automated** | 2026-08-02 by hand: two real episodes fetched, tagged (TIT2/TPE1/TALB/TCON/TYER/COMM **and APIC**) and written through SAF on a Pixel 5. **2026-08-14** it became a test — `DownloadPipelineInstrumentedTest` picks the smallest real episode out of the app's own database, downloads it from the publisher's CDN, tags it, delivers it through real SAF, checks the ledger row and the outbox, and deletes what it wrote |
 | **The foreground-service notification** | ✅ **Verified** | 2026-08-02 — after fixing the manifest crash it caused on API 34 (`docs/journal.md`) |
 | **Backup / restore with real data** | ✅ **Verified** | 2026-08-02: 9,565 episodes round-tripped; a ledger row created after the export was correctly removed by the restore |
-| **The device test set** | ◐ **Partly** | 2026-08-13 over **wireless** on a Pixel 10a / Android 17: **60 declared, 54 passed, 0 failed, 6 skipped** — identical to the 2026-08-11 USB run, which is the useful part: the transport changes nothing. The 6 skips remain `SafDownloadTargetInstrumentedTest` without a SAF grant — still the reason this is not a ✅; see [§6](#the-device-test-set) |
+| **The device test set** | ✅ **Verified, no skips** | 2026-08-14 over **wireless** on a Pixel 10a / Android 17: **61 declared, 61 passed, 0 failed, 0 skipped.** The first clean bill of health — the six `SafDownloadTargetInstrumentedTest` cases that had opted out of every previous run were run by granting a folder by hand between the install and the run; see [§6](#the-device-test-set) |
 | `KeystoreAppPasswordCipher` round-trip | ✅ **Verified** | 2026-08-02: 6 instrumented tests green on `podsilo-ci(AVD)`, incl. a second instance decrypting the first's output (architecture §2) |
-| `SafDownloadTarget` (the actual SAF write) | ✅ **Verified** | 2026-08-02: 6 instrumented tests green; files confirmed on the emulator's filesystem, umlauts intact, retry overwrote (architecture §11) |
+| `SafDownloadTarget` (the actual SAF write) | ✅ **Verified on hardware** | 2026-08-02 on the emulator; **2026-08-14 on a Pixel 10a** — the same 6 tests, run rather than skipped for the first time on a real device: delivery, the feed subfolder, umlauts through SAF, retry overwriting its own partial, `freeBytes` from the tree URI (architecture §11) |
 | SAF grant via the real picker, surviving a restart | ✅ **Verified** | 2026-08-02: driven through S1's checklist; `dumpsys` shows `persistable=0x3 persisted=0x3` (CLAUDE.md §11) |
 | **The app actually running on a device** | ✅ **Verified** | 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`) |
 | **A real Nextcloud (read)** | ✅ **Verified** | 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`) |
 | **A real Nextcloud (write)** | ✅ **Verified** | 2026-08-02: on a dedicated test account — `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/architecture.md` §6) |
+| **Revoking a declined app password** | ✅ **Verified** | 2026-08-14: `DELETE /ocs/v2.php/core/apppassword` accepted by Nextcloud, and the same password then **refused** by gpoddersync — which is the half that proves it, since a 200 only proves the server answered. `./gradlew :core:gpodder:nextcloudProbe -Phost=… -Prevoke=yes` |
 | **A full `SyncOrchestrator` pass on real data** | ✅ **Verified** | 2026-08-02: real subscriptions + a real episode — outbox push, the echo of our own action, and server-clock `since` all confirmed (`docs/journal.md`) |
 
 **In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
@@ -415,9 +416,9 @@ What the set covers, in rough order of what it has actually caught:
 | | `LogoRenderConformanceTest` | the brand mark actually rasterises (`docs/UI.md` Part C), in both feature modules |
 | | `MarkLegibilityConformanceTest`, `NotificationIconConformanceTest` | `:core:ui` and `:core:download` — added to the script on 2026-08-10, having never run before |
 
-### Last run: 2026-08-11, Pixel 10a (Android 17 / API 37), over wireless debugging
+### Last run: 2026-08-14, Pixel 10a (Android 17 / API 37), over wireless debugging
 
-**60 declared — 54 passed, 0 failed, 6 skipped.**
+**61 declared — 61 passed, 0 failed, 0 skipped.** The first run with no skips.
 
 | Module | Class | Result |
 |---|---|---|
@@ -428,17 +429,29 @@ What the set covers, in rough order of what it has actually caught:
 | | `LogoRenderConformanceTest` | 5 ✅ |
 | | `PodcastListConformanceTest` | 6 ✅ |
 | `:feature:settings` | `SettingsConformanceTest` / `LogoRenderConformanceTest` | 6 ✅ / 2 ✅ |
-| `:app` | 5 classes via `am instrument` | 21 declared, 15 ✅, **6 skipped** |
+| `:app` | 6 classes via `am instrument` | 22 declared, **22 ✅, 0 skipped** |
 
-The 6 skips are the documented `SafDownloadTargetInstrumentedTest` opt-out — a fresh install has no
-SAF grant, and the set's own uninstall is what removes it. The runner reports skips as `OK`, which is
-why `device-test.sh` counts them and refuses to call a run with skips green. **That is why this is
-not a clean bill of health:** the six tests covering the actual SAF write are the six that did not
-run, and granting a folder by hand before the run is the only way to change that.
+**How the six skips were finally run**, since it is not automatic and the script cannot do it for
+you. `SafDownloadTargetInstrumentedTest` opts out when no SAF folder has been granted, and the set's
+own uninstall/reinstall is what removes the grant — so the six tests covering the actual SAF write
+were the six that never ran. The sequence that works:
 
-#### The two stale tests this run found, and their fix
+1. `./scripts/device-test.sh` once. It installs the app and reports the six skips as usual.
+2. Open Podsilo on the phone and pick a download folder (S1's **Choose folder**, or Settings).
+3. Re-run just the instrumentation, **without** reinstalling — the install is what would take the
+   grant away again:
 
-The earlier run the same day failed two conformance tests. **Neither was an app bug** — both asserted
+   ```bash
+   adb shell am instrument -w -r \
+       net.drehtuer.podsilo.test/androidx.test.runner.AndroidJUnitRunner
+   ```
+
+That ordering is the whole trick, and it is why this had never been done: any run that starts with
+`device-test.sh` starts by destroying the thing the six tests need.
+
+#### The two stale tests the 2026-08-11 run found, and their fix
+
+The first wireless run, on 2026-08-11, failed two conformance tests. **Neither was an app bug** — both asserted
 a UI shape the 2026-08-10 change deliberately replaced, and neither had run on a device since,
 because these never run on CI.
 
@@ -890,9 +903,14 @@ stop being a Gradle "found 2 devices" failure. Set it yourself to choose:
 ANDROID_SERIAL=192.168.89.201:43169 ./scripts/device-test.sh
 ```
 
-**Verified as far as this environment allows**: the no-server path, the local-server-with-no-devices
-path and the serial classification were exercised directly; the attached-device path has not been
-re-run against a phone since the change.
+**Verified against a real phone on 2026-08-14.** `adb-connect-host.sh` exits 0 with the attached
+device, prints the network-device note above, and `device-test.sh` drove the whole set over the same
+link with no manual steps — which is what the narrowed guard was for.
+
+One thing the scan above is worth for: on that run the phone's **pairing** dialog had already closed,
+and its adb key was still trusted from the 2026-08-11 session, so no `adb pair` was needed at all —
+just `adb connect` on the connect port, which the port scan found in seconds. A phone that has been
+paired once stays paired; only the port moves.
 
 ---
 
