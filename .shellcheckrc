@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# ShellCheck configuration. `shellcheck .devcontainer/*.sh scripts/*.sh` is the
+# whole usage; the tool is in the dev container (.devcontainer/Dockerfile).
+#
+# Five scripts, all `#!/usr/bin/env bash`, and all of them do things that are
+# painful to debug when they go subtly wrong: post-create.sh re-chowns the
+# persisted volumes and re-aligns the kvm/docker GIDs, device-test.sh drives a
+# real phone, adb-connect-host.sh resolves the Windows host across two WSL
+# networking modes. None of it is covered by a test, so static analysis is the
+# only check they have — docs/backlog.md already notes that src/androidTest/ has
+# no linting either, and this is the same gap one directory over.
+#
+# WHY ONLY FOUR OPTIONAL CHECKS. ShellCheck ships nine off-by-default checks. The
+# four enabled below are the ones the existing scripts **already pass**, so they
+# cost nothing today and act as a ratchet tomorrow. Measured, not guessed — the
+# other five would report, on the current scripts:
+#
+#   require-variable-braces     45  ${x} everywhere, a pure restyle
+#   check-extra-masked-returns  13  mostly $(...) inside strings
+#   require-double-brackets     11  [ ] -> [[ ]]
+#   check-set-e-suppressed       4
+#   check-unassigned-uppercase   1
+#
+# Each is defensible and none is worth a 75-hunk diff across working scripts
+# nobody asked to touch. Enable one and fix its findings as a deliberate change
+# if it ever earns its place; do not enable all nine and then add `disable=` lines
+# to make the result quiet, which is how a linter stops meaning anything.
+#
+# NOTHING IS DISABLED HERE, deliberately, and nothing needs to be: the scripts
+# are clean at default severity. The two findings this file was written alongside
+# — an SC2015 `A && B || C` in post-create.sh, an SC2012 `ls` parse in
+# device-test.sh — were **fixed** rather than configured away, which is the only
+# reason `shellcheck` is worth running in CI at all. Keep it that way: a `disable=`
+# line added to make a build green is a finding that stopped being reported, not
+# one that stopped being true.
+
+enable=add-default-case
+enable=avoid-nullary-conditions
+enable=deprecate-which
+enable=quote-safe-variables

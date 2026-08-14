@@ -1,14 +1,31 @@
 # Podsilo
 
 [![CI](https://github.com/drehtuer/podsilo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drehtuer/podsilo/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/drehtuer/podsilo/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main)](https://github.com/drehtuer/podsilo/security/code-scanning)
 [![Release](https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver)](https://github.com/drehtuer/podsilo/releases/latest)
 [![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue)](LICENSE)
 
-The **CI** badge covers ktlint, detekt, the Tier 1 unit tests and both APK builds — the whole
-workflow is one job, so a green badge means all four passed and a red one means at least one did
-not. It deliberately says nothing about the device tests: those live in `src/androidTest/` and no
+The **CI** badge covers six checks — yamllint, shellcheck, ktlint, detekt, the Tier 1 unit tests and
+both APK builds — and the whole workflow is one job, so a green badge means all six passed and a red
+one means at least one did not. The first two lint the languages Gradle cannot see: the YAML that
+carries the release signing and the dependency policy, and the bash scripts that set up the
+container and drive a real phone. Rules live in `.yamllint.yml` and `.shellcheckrc`, and the dev
+container carries both tools, so the same two commands run locally.
+
+The badge deliberately says nothing about the device tests: those live in `src/androidTest/` and no
 hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
 why an emulator is not added there).
+
+The **CodeQL** badge is GitHub code scanning, on default setup rather than a workflow file in this
+repository — which is why its badge URL points at `github-code-scanning/codeql` and not at
+`.github/workflows/`. It analyses `java-kotlin` and `actions` on every push and pull request, plus
+weekly. Green means the analysis ran, **not** that it found nothing; the alert count lives behind the
+badge on the [code scanning page](https://github.com/drehtuer/podsilo/security/code-scanning).
+
+The repository's other security checks — **Dependabot** alerts and security updates, **secret
+scanning** and its push protection — have no badge, and cannot have one. Their state is private to
+the repository even though the code is public, so GitHub publishes no endpoint for them and no
+third-party badge service can read them either. [`SECURITY.md`](SECURITY.md) records what they cover.
 
 An Android **podcast catcher** that downloads episodes into a folder you control — and deliberately
 does not play them.

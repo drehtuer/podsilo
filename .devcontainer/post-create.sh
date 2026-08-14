@@ -187,7 +187,11 @@ if [[ -r /dev/kvm && -w /dev/kvm ]]; then
   echo "/dev/kvm is readable and writable — in-container emulator should work."
   echo "Expect a nested-virtualisation warning and reduced speed; that is normal in WSL2."
   # The authoritative check: the emulator's own probe, not just device permissions.
-  command -v emulator >/dev/null && emulator -accel-check || true
+  # Written as an `if` rather than `A && B || true`, which reads like if-then-else
+  # and is not one (ShellCheck SC2015).
+  if command -v emulator >/dev/null; then
+    emulator -accel-check || true
+  fi
 elif [[ -e /dev/kvm ]]; then
   warn "/dev/kvm exists but is not accessible to $(id -un) (gid $(id -g))."
   echo "  Fix on the WSL2 host: getent group kvm   -> rebuild with KVM_GID=<that gid>"

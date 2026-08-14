@@ -221,6 +221,10 @@ bash .devcontainer/post-create.sh
 
 # 2. Lint, static analysis, and the Tier 1 unit tests.
 ./gradlew ktlintCheck detekt test
+
+# 3. The two languages Gradle cannot see (see below). Both are also CI steps.
+yamllint .
+git ls-files -z '*.sh' | xargs -0 -r shellcheck
 ```
 
 **Verified 2026-08-01** — `BUILD SUCCESSFUL`, exit 0:
@@ -251,6 +255,38 @@ Gradle distribution, the AGP/Kotlin toolchain, and Robolectric's `android-all` j
 
 `./gradlew assembleDebug` additionally produces an installable debug APK (AGP auto-signs it with the
 debug keystore; there is no release signing config).
+
+### YAML and shell linting
+
+`ktlintCheck` and `detekt` cover Kotlin, which leaves two languages in this repository that nothing
+was checking: **YAML** (the CI workflow, `dependabot.yml`, the compose file, detekt's own config) and
+**bash** (the five scripts under `.devcontainer/` and `scripts/`). Between them they carry the
+release signing, the dependency policy, the container provisioning and the device test runner, and
+none of it has a test.
+
+Both tools are in the image, and both read a config from the repository root, so a local run and a CI
+run reach the same verdict:
+
+| Tool | Config | Run it |
+|---|---|---|
+| `yamllint` | `.yamllint.yml` | `yamllint .` |
+| `shellcheck` | `.shellcheckrc` | `git ls-files -z '*.sh' \| xargs -0 -r shellcheck` |
+
+Both are green as of 2026-08-14, with one yamllint **warning** left standing: a
+`echo "::warning::…"` line in `ci.yml` that is 171 characters and cannot be wrapped without changing
+the text it emits. That is why `line-length` is configured as a warning rather than an error — an
+error is reserved for YAML that is actually wrong (bad indentation, a duplicate key, an unparsable
+document), so a non-zero exit is always worth acting on.
+
+`.shellcheckrc` enables four of ShellCheck's nine optional checks: the four the scripts already
+pass, chosen by measuring rather than by taste. The counts for the other five are written into the
+file — `require-variable-braces` alone would report 45 findings — so the decision can be re-taken
+with the numbers in view.
+
+Two caveats worth knowing. The runner installs both tools from Ubuntu's archive rather than using
+whatever the image preinstalls, which keeps the versions close to the container's, but a linter
+version bump on either side can still surface a finding the other does not have. And `yamllint .`
+walks the tree using `ignore-from-file: .gitignore`, so a YAML file that git ignores is not linted.
 
 ---
 
@@ -966,6 +1002,9 @@ Verified inside the container on 2026-07-31.
 | Build tools | 37.0.0 | |
 | Platform tools / adb | **37.0.1** / adb 1.0.41 | Match this on the Windows side for Tier 3 |
 | `gh` (GitHub CLI) | **2.97.0** | Upstream release tarball pinned via the `GH_VERSION` build arg, not apt — noble only packages 2.45.0 (Feb 2024) |
+| Python | **3.12.3** (Ubuntu) | Tooling only, never the app. `python3-yaml` for parsing; `python3-venv`/`pip` because noble enforces PEP 668, so anything beyond distro packages belongs in a venv |
+| yamllint | **1.33.0** (Ubuntu) | Config: `.yamllint.yml`. Also a CI step |
+| ShellCheck | **0.9.0** (Ubuntu) | Config: `.shellcheckrc`. Also a CI step |
 | Emulator | 37.1.11 | |
 | System image | `android-35;google_apis;x86_64` | API 35 while `compileSdk` is 37; the instrumented tests do not depend on 36+ behaviour |
 | cmdline-tools | build 13114758 | |

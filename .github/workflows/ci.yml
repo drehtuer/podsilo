@@ -4,6 +4,11 @@
 # without an emulator (see CLAUDE.md §4/§7). Instrumented tests (Tier 2) are
 # deliberately not run here; §4 asks for Tier 1 + Tier 3 as the supported path.
 #
+# Six checks in one job, in this order: yamllint, shellcheck, ktlint, detekt, the
+# Tier 1 unit tests, then both APK builds. The two cheapest come first and need no
+# JDK. One job rather than six means the badge answers one question — "is main
+# healthy" — and the step that failed is one click away.
+#
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
 # docs/dev-environment.md §6), and it exists precisely to check the things a
@@ -57,6 +62,31 @@ jobs:
           # versionCode is `git rev-list --count HEAD` (app/build.gradle.kts). The
           # default shallow clone would make every build number 1.
           fetch-depth: 0
+
+      # Repository hygiene for the two languages Gradle cannot see: YAML (this
+      # workflow, dependabot.yml, the compose file, detekt's config) and bash (the
+      # scripts under .devcontainer/ and scripts/, which have no tests at all).
+      # Both run before the JDK is set up — neither needs it, and a config typo
+      # should fail in seconds rather than after a full test run.
+      #
+      # Rules live in .yamllint.yml and .shellcheckrc at the repository root, so
+      # these commands behave identically in the dev container, which carries both
+      # tools. Installed from Ubuntu's archive rather than trusting the runner
+      # image's preinstalled set, which also keeps the version close to noble's —
+      # a linter that disagrees with the container is worse than no linter.
+      - name: Install YAML and shell linters
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yamllint shellcheck
+
+      - name: yamllint
+        run: yamllint .
+
+      # `git ls-files` rather than a fixed glob, so a script added anywhere is
+      # covered without editing this file. -z/-0 because a filename may contain
+      # whitespace; -r so an empty list is not an invocation with no arguments.
+      - name: shellcheck
+        run: git ls-files -z '*.sh' | xargs -0 -r shellcheck
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

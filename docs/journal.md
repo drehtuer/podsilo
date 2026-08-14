@@ -4528,3 +4528,138 @@ label, so it keeps the name and gains a KDoc saying what it actually does. Docum
 migration nobody asked for, but it is drift, and it is written down as such.
 
 `./gradlew ktlintCheck detekt test` green, 749 JVM tests.
+
+## 2026-08-14 (docs) — a security policy, and the two checks that can't have a badge
+
+Three files, no Kotlin: `SECURITY.md`, a CodeQL badge in the README, `.github/dependabot.yml`.
+
+### The policy is mostly a list of things already true
+
+Writing `SECURITY.md` needed almost no decisions, because the answers were already in the repo:
+Login Flow v2 means no account password ever reaches the app, `KeystoreAppPasswordCipher` means the
+app password is AES-256/GCM at rest, UI.md §8 has the https-upgrade rule, `DatabaseArchive`'s KDoc
+already says the backup holds no credentials but does hold a readable subscription list. The file
+cites each one rather than restating it, so a reader can check the claim instead of trusting it.
+
+The one thing that was *not* already written down anywhere: `android:allowBackup="true"` with no
+`dataExtractionRules`, so the platform backup can carry the database and DataStore off the device.
+The app password's ciphertext is inert without the Keystore key, but the ledger and subscription list
+are not. Disclosed under "known limitations" rather than fixed — a manifest change is a code change
+nobody asked for. Also listed there: JitPack's trust model, the cleartext-feed question, the leftover
+app password after a rejected login, and that the device tier has no CI. All four were already in
+`docs/backlog.md`; the value is having them in the place a reporter looks first.
+
+### Badge availability is not a matter of opinion
+
+The author asked whether GitHub's security and quality checks can be badged. Answer, checked with
+`gh api` rather than recalled: **CodeQL yes, the other two never.** Code scanning runs here on
+*default setup*, so there is no workflow file and the usual
+`actions/workflows/<file>.yml/badge.svg` form does not exist — the working URL is the dynamic path
+`actions/workflows/github-code-scanning/codeql/badge.svg`, which I fetched before committing to it
+(200, `<title>CodeQL - passing</title>`, and it honours `?branch=main`). Dependabot alerts and secret
+scanning have no badge and cannot: their state is private to the repository even though the code is
+public, so there is no endpoint for GitHub or shields.io to read. The README says so, because "why is
+there no Dependabot badge" is a question that would otherwise get re-asked.
+
+Worth stating in the README too: a green CodeQL badge means the analysis *ran*, not that it found
+nothing. A repo with open alerts still shows green.
+
+### The Dependabot file is shaped by the version catalog
+
+Every version lives behind a `version.ref`, and several artifacts share one — okhttp with
+mockwebserver, the four room artifacts, both hilt compilers. Ungrouped, that is several PRs all
+editing the same TOML key and conflicting with each other. So the groups follow the *ref families*,
+not tidiness: androidx, kotlin (+KSP), dagger-hilt, network, static-analysis. AGP, rssparser,
+jaudiotagger, coil and lucide stay ungrouped on purpose — single-artifact decisions with their own
+blast radius.
+
+Docker is left out with the reason in the file: both base images are rolling tags that already get
+patches on pull, so the only PR Dependabot could open is `ubuntu:24.04` → `26.04`, which is the exact
+change the LTS pin exists to prevent.
+
+**Unverified, and only observable once this is on `main`:** whether Dependabot resolves the JitPack
+coordinate `com.github.Adonai:jaudiotagger` at all (JitPack tags are not reliably semver, and no
+`registries` entry is declared), and whether it updates the catalog's `[plugins]` block as well as
+`[libraries]`. If either misbehaves it will show up as a config error under Insights → Dependency
+graph, not as silence. Nothing else in the repo changes either way.
+
+No test run: these three files contain no Kotlin, so `ktlintCheck detekt test` has nothing new to say
+about them.
+
+### The gap that found itself: no scripting language in the container
+
+Writing `dependabot.yml` and reaching for a parser turned up `python3: command not found` — and then
+`node`, `ruby` and `yq` too. The image had `perl` and `awk` and nothing else, so the config went in
+checked by eye for tabs and indentation, which I said so in the summary rather than claiming it was
+validated. The author's answer was to fix the container, which is the right end of the problem.
+
+`python3`, `python3-venv`, `python3-pip`, `python3-yaml` and `yamllint` added to the Dockerfile's
+everyday-CLI layer, distro packages only — the header's rule, and the reason there are no pip
+packages baked in. Noble enforces PEP 668, so a system-wide `pip install` refuses outright; venv and
+pip are there to make `python3 -m venv` work when something ad-hoc is genuinely needed.
+
+Installed into the *running* container as well, so it works now rather than after the next rebuild.
+Those two states can drift — the Dockerfile is the record, and a rebuild is what makes them agree.
+
+It immediately paid for itself: `yamllint` found a comment indented off its content in the file I had
+just written by hand, and `python3 -c "yaml.safe_load(...)"` confirmed the structure Dependabot will
+actually read (two ecosystems, five gradle groups). Both are now clean. The lint also flags three
+over-long lines and a `truthy` warning on `on:` in `ci.yml` — the `on:` one is a YAML 1.1 quirk and
+correct as written, so `ci.yml` was left alone rather than churned to satisfy a linter nobody had
+configured yet.
+
+### Then the configs, and one rule for both of them
+
+`.yamllint.yml` and `.shellcheckrc`, plus `shellcheck` alongside the python packages in the image.
+Both files are written to the same rule: **an error has to mean the file is wrong**, not that it
+disagrees with someone's taste. A linter that is red for cosmetic reasons gets ignored, and an
+ignored linter is not a check.
+
+For YAML that meant three overrides. `document-start` off (no file here is a multi-document stream),
+`truthy: {check-keys: false}` so a workflow's `on:` stops being read as a boolean, and `line-length`
+at 120 — .editorconfig's Kotlin limit, the only line length this project has settled — but demoted to
+**warning**, because `ci.yml` embeds shell and its `echo "::warning::…"` lines cannot be wrapped
+without changing the text they emit. One warning remains, on exactly that line. `ignore-from-file:
+.gitignore` keeps `yamllint .` out of `app/build/`.
+
+For shell it meant *measuring* instead of guessing. ShellCheck has nine off-by-default checks;
+enabling all nine reports 75 findings on the current scripts. Enabled the four the scripts already
+pass (`add-default-case`, `avoid-nullary-conditions`, `deprecate-which`, `quote-safe-variables`) —
+free today, a ratchet tomorrow — and left the other five off with their exact counts written into the
+file, so the next person can see it was a measurement and not an aesthetic. `require-variable-braces`
+alone is 45 hunks across working scripts nobody asked to touch.
+
+`shellcheck` exited 1 on the first run and the config did not hide it: an `A && B || C` in
+`post-create.sh` and an `ls | head -1` parse in `device-test.sh`. Both left visible rather than
+configured away, and put to the author as their call, since fixing them meant editing working
+scripts nobody had asked to touch.
+
+### The author's call: fix them, and make CI run both
+
+Both fixed at the source, which is what makes the checks worth having:
+
+- `command -v emulator >/dev/null && emulator -accel-check || true` → a plain `if`. Behaviour is
+  identical (`C` was `true`, so the SC2015 trap never fired here), but the line no longer *reads*
+  like an if-then-else that it isn't.
+- `ls -1 …/podsilo-*-debug.apk | head -1` → a `nullglob` array and `${matches[0]:-}`. Verified both
+  branches by hand under `set -euo pipefail`: with the APK present it resolves the same path, with no
+  match it yields empty, which is exactly what the loud-failure check below it is waiting for. Glob
+  expansion is sorted, so "first match" still means what it meant.
+
+CI gained three steps — one apt install, then `yamllint .` and `git ls-files -z '*.sh' | xargs -0 -r
+shellcheck` — placed **before** `setup-java`, because neither needs a JDK and a config typo should
+fail in seconds rather than after the test run. `git ls-files` rather than a fixed glob so a script
+added in a new directory is covered without editing the workflow. The linters are installed from
+Ubuntu's archive rather than trusted from the runner image, which keeps their versions near the
+container's; that they can still drift apart is written down in `docs/dev-environment.md` §5 rather
+than assumed away.
+
+The workflow is now six checks in one job. Three places claimed otherwise and were updated with it —
+the README's badge paragraph ("all four passed" → six, and what the two new ones are for),
+`ci.yml`'s own header, and `device-test.sh`'s "CI runs ktlintCheck, detekt, test and assembleDebug —
+and nothing else", which is load-bearing: that comment is the argument for why the device set stays
+out of CI, and an argument resting on a stale premise is worse than none.
+
+Green locally on every check the runner will run: `yamllint .` exit 0 (one warning, the unwrappable
+`::warning::` line), `shellcheck` exit 0 across all five scripts, `./gradlew ktlintCheck detekt test`
+BUILD SUCCESSFUL. No Kotlin changed in any of this, so the test count is unmoved.
