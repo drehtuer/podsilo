@@ -4803,3 +4803,80 @@ with the reason the order matters written next to them, because the order is not
 here.
 
 Test count unchanged at 749; no Kotlin changed in this release.
+
+---
+
+## 2026-08-14 (backlog) — three notes cleared, and one of them was wrong
+
+The instruction was "work on the first three backlog items", which meant `./gradlew lint`'s false
+positive, the untyped GPodder failure, and the claim that nothing lints `src/androidTest/`. Two were
+real. The third was half true and half a misreading, which turned out to be the interesting part.
+
+### The typed failure was the item worth doing
+
+`GpodderClient`'s two `GET`s used to return their DTO and let Retrofit's `HttpException` propagate.
+That exception is not an `IOException`, so `SyncOrchestrator`'s classification — network shaped means
+retry, anything else means bug — put an expired app password in the *unexpected error* branch and in
+S8 under `SYNC`. The `AUTH` chip existed and could not be reached from a sync pass at all.
+
+All three port methods now return `Result`, and every failure inside one is a `GpodderException`
+carrying a `GpodderFailure`: `UNAUTHORIZED`, `SERVER_ERROR`, `REJECTED`, `UNREACHABLE`, `TIMED_OUT`,
+`MALFORMED`. Two decisions read off it and nothing else does — `retryable` picks `Retry` vs
+`Failure`, and `UNAUTHORIZED` picks `AUTH` over `SYNC`. The vocabulary is deliberately modelled on
+`LoginFlowFailure`, which already answered the same question for the login endpoints; there was no
+reason for the two halves of the same server to be shaped differently.
+
+Two things fell out of it that I had not planned:
+
+- **A failed push is not always retryable either.** `pushRows` returned `SyncOutcome.Retry` for every
+  failure. A revoked password will still be revoked on the next attempt, so it now returns `Failure`
+  in that case — the rows stay unsynced regardless, which is what makes that safe.
+- **`SerializationException` is an `IllegalArgumentException`.** It is not IO-shaped at all, so a
+  truncated response was reaching the generic branch. The catch order in the client's `guarded` is
+  load-bearing and now says so.
+
+The orchestrator unwraps with `getOrThrow()` inside its own `guarded` block rather than threading a
+`Result` through five sequential steps. That is a real tension with CLAUDE.md §8 and I want it on the
+record: the *port* returns its failures as values, which is the part the rule is protecting; the
+unwrapping is local to one function whose entire job is to be the classification boundary.
+
+### The lint false positive: suppressed at the module, guarded by tests
+
+`SpecifyForegroundServiceType` cannot be satisfied from inside `:core:download` — it asks for a
+manifest entry that lives in `:app`, and a library module is linted against its own manifest. A
+baseline would have frozen every current warning silently, so it is a targeted `disable` with the
+reasoning next to it, and the thing lint was guarding is asserted directly by
+`ForegroundServiceManifestTest` (Robolectric, merged manifest) and `PlatformSurfacesTest` (device,
+installed manifest). `./gradlew lint` is now green across every module. I did **not** add it to CI:
+the README says six checks and means it, and that is an edit the author should make deliberately.
+
+### The item that was wrong, and how I found out
+
+"Nothing lints `src/androidTest/`" was half right. detekt's default roots really are `src/main` +
+`src/test`, so the device tests had no complexity or style checking — fixed in the root
+`subprojects` block, and the surprise is that it surfaced **zero** existing violations, where the
+note predicted a backlog of them.
+
+ktlint was the wrong half. The note pointed at `runKtlintCheckOverAndroidTestDebugSourceSet` being
+`NO-SOURCE`, but that is the *variant* source set (`src/androidTestDebug/`), which is empty and
+always will be. The non-variant `runKtlintCheckOverAndroidTestSourceSet` has been checking these
+files all along. I proved it both ways rather than reasoning about it: a deliberately over-long line
+dropped into `app/src/androidTest/` and again into `core/ui/src/androidTest/` failed `ktlintCheck` in
+both modules.
+
+So why did the note's author see a violation slip through? I think I hit the cause by accident while
+cleaning up the probe files. **Deleting** a source file does not invalidate
+`runKtlintCheckOverAndroidTestSourceSet`: it stays `UP-TO-DATE` while the check task replays the
+previous report, so the build kept failing on a file that no longer existed, through a daemon
+restart, through `--rerun`, and through deleting the report by hand. Only removing the module's
+`build/` cleared it. That task's up-to-date checking is not trustworthy, and a stale *pass* is the
+same bug as the stale *fail* I was looking at. It is in `docs/backlog.md` now, described as what I
+actually observed rather than as a theory about the original note.
+
+The lesson is the ordinary one and I keep relearning it: a backlog note is a claim made once, and
+the cheapest thing to do with a claim before acting on it is to try to reproduce it. Ten minutes of
+probe files turned "add ktlint source dirs" — which would have done nothing, because they were
+already there — into a real finding about task staleness.
+
+`./gradlew ktlintCheck detekt test lint` green: **757 tests, 0 failures, 3 skipped** (up from 749 —
+four new failure-classification tests in `:core:gpodder`, four in `:core:sync`).
