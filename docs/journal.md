@@ -4324,3 +4324,48 @@ here. This device's user pressing a button is a decision; a row arriving over th
   a boundary rather than a nuisance.
 
 730 tests, 0 failures, 3 skipped.
+
+---
+
+## 2026-08-14 (device) — the round trip, on a real phone and a real server
+
+**Attempted:** verify #65 on the author's Pixel 10a against `cloud.drehtuer.net`, by driving the real
+app over adb rather than asking for taps.
+
+Both changes work end to end.
+
+- **Mark as unplayed.** The row overflow on a played episode offered it; the episode left *Played /
+  handled*; the ledger row reads `UNPLAYED, synced=1` with its `writtenFileName` intact — on an
+  episode that had actually been downloaded, so the field a delete would have destroyed was really
+  there. `synced=1` only happens after a confirmed 2xx, so the unread `PLAY` reached Nextcloud.
+- **Played on download.** The same episode came back into *To decide* (the feed's badge went 53 → 54),
+  downloaded in under ten seconds, and produced a 29,947,412-byte file under
+  `/sdcard/podsilo/Trash Talk... with Count Binface/` with the naming template applied. The server
+  now holds `position=1854 total=1854` for that guid — which the reading client renders as **played**.
+  That is the bug the author reported, closed against the real server rather than a fake.
+
+### Two corrections I had to make to my own claims
+
+**I read a SQLite database without its write-ahead log.** `adb exec-out … cat databases/podsilo.db`
+copies the main file and leaves `podsilo.db-wal` behind, so recent writes are simply missing. On that
+incomplete file I announced "67 of 72 actions — exactly your five unread marks, none with a ledger
+row", which was arithmetic on a stale snapshot. The true state was 71 rows, and two of those five had
+been decided on the phone by the author the night before. The conclusion survived — three of the five
+really are row-less — but I had stated it far more cleanly than the data supported, and only noticed
+because a later pull disagreed with the earlier one.
+
+Pull all three files, or none.
+
+**My own diagnostic had gone stale and was reporting a fixed bug as still present.** `reportRecent`
+printed a hardcoded `Podsilo: HANDLED_REMOTELY` column, with `← DISAGREE` whenever the reading client
+said *not played*. That was true the day it was written and became false the moment
+`docs/decisions/0022` landed — so the probe cheerfully flagged three disagreements that no longer
+exist, while the phone's database showed those episodes correctly sitting in *To decide*.
+
+Fixed by making `meansHandledElsewhere` public in `:core:sync` and calling it, so the probe reports
+what the code does rather than what it did. The transcription of the *other* client's rule stays a
+copy — that one is theirs and cannot be imported — but ours had no excuse.
+
+Worth generalising: **a diagnostic that restates behaviour instead of invoking it will eventually
+describe a version of the system that no longer exists**, and it will do so with total confidence,
+in the exact place where someone is trying to work out what is true.
