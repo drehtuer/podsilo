@@ -36,6 +36,34 @@ import javax.inject.Inject
 private const val ZIP_MIME = "application/zip"
 
 /**
+ * What the restore picker will show.
+ *
+ * The wildcard type `&#42;&#47;&#42;` used to be on this list, which made the whole filter a no-op:
+ * in a real Downloads folder the picker listed PDFs, APKs and photos, and the one file the user came
+ * for was somewhere among them.
+ * It was there for a real reason — a backup that cannot be picked is worse than a cluttered picker,
+ * and file managers genuinely do report zips under several types — so the fix is to name those types
+ * rather than to give up on filtering.
+ *
+ * The list is what providers actually report for a `.zip`: the standard type (which is also what
+ * [ZIP_MIME] writes, so our own backups always match), the generic fallback for a file whose type a
+ * provider cannot place, and the two `x-zip` spellings that come from Windows-influenced file
+ * managers. `Intent.EXTRA_MIME_TYPES` is a union, so adding a spelling only ever widens what is
+ * offered.
+ *
+ * A picked file is still validated before anything is replaced — `DatabaseArchive.importFrom` is
+ * all-or-nothing and reports a typed failure — so the filter is about finding the file, not about
+ * trusting it.
+ */
+private val BACKUP_MIME_TYPES =
+    arrayOf(
+        ZIP_MIME,
+        "application/octet-stream",
+        "application/x-zip-compressed",
+        "application/zip-compressed",
+    )
+
+/**
  * Single activity, as `docs/UI.md` §B9 specifies: one `NavHost`, S1 the start destination.
  *
  * The activity owns the two things a Composable cannot do for itself — launching the SAF picker
@@ -104,9 +132,7 @@ class MainActivity : ComponentActivity() {
                             },
                             openBackupFile = { onPicked ->
                                 pendingPick = onPicked
-                                // Some file managers hand zips out under other types, so the
-                                // wildcard is there to stop a real backup looking un-pickable.
-                                backupOpener.launch(arrayOf(ZIP_MIME, "application/octet-stream", "*/*"))
+                                backupOpener.launch(BACKUP_MIME_TYPES)
                             },
                         ),
                 )
