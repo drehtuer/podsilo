@@ -12,6 +12,8 @@ import net.drehtuer.podsilo.core.model.port.EpisodeAction
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.GpodderClient
+import net.drehtuer.podsilo.core.model.port.GpodderException
+import net.drehtuer.podsilo.core.model.port.GpodderFailure
 import net.drehtuer.podsilo.core.model.port.LedgerFilter
 import net.drehtuer.podsilo.core.model.port.LedgerFilterState
 import net.drehtuer.podsilo.core.model.port.LogCategory
@@ -83,6 +85,42 @@ private fun <T> List<Pair<T, List<EpisodeAction>>>.chunkedByActionCount(
 }
 
 /**
+ * The one place a [GpodderFailure] becomes words a person reads. Short noun phrases rather than
+ * sentences, so the two contexts that need them — a failed pass and a failed push — can each supply
+ * their own frame instead of duplicating a message per failure per caller.
+ *
+ * Neither half ever contains a URL or a header: `docs/UI.md` §11 puts the technical detail in the
+ * entry's collapsed half, and that half is the exception's own message.
+ */
+private fun GpodderFailure.reason(): String =
+    when (this) {
+        GpodderFailure.UNAUTHORIZED -> "Nextcloud rejected the stored app password"
+        GpodderFailure.SERVER_ERROR -> "the server reported an error"
+        GpodderFailure.REJECTED -> "the server refused the request"
+        GpodderFailure.UNREACHABLE -> "the server could not be reached"
+        GpodderFailure.TIMED_OUT -> "the server did not answer in time"
+        GpodderFailure.MALFORMED -> "the server's answer could not be read"
+    }
+
+/** The [reason] of a failure that may not be a [GpodderException] at all — `null` when it is not one. */
+private fun Throwable.reasonOrNull(): String? = (this as? GpodderException)?.failure?.reason()
+
+/** An untyped failure is assumed transient, which is what this class assumed about everything before. */
+private fun Throwable.retryable(): Boolean = (this as? GpodderException)?.failure?.retryable ?: true
+
+/**
+ * S8's headline for a whole failed pass. [GpodderFailure.UNAUTHORIZED] gets its own sentence rather
+ * than the shared frame, because it is the only failure here the user can do something about, and
+ * naming the *something* is the difference between an error and an instruction.
+ */
+private fun GpodderException.plainMessage(): String =
+    if (failure == GpodderFailure.UNAUTHORIZED) {
+        "Nextcloud rejected the stored app password. Connect the account again in Settings."
+    } else {
+        "Sync with Nextcloud failed: ${failure.reason()}."
+    }
+
+/**
  * Runs one full sync pass in the exact order CLAUDE.md section 5 mandates: pull subscriptions
  * (full) -> push unsynced ledger rows -> pull episode actions since last timestamp -> reconcile ->
  * persist new timestamps. See `docs/architecture.md` section 6 for the sequence diagram this
@@ -92,11 +130,12 @@ private fun <T> List<Pair<T, List<EpisodeAction>>>.chunkedByActionCount(
  * section 2's ports-and-adapters rule), so it's constructed here with plain interfaces and tested
  * with hand-written in-memory fakes, not a real database or `MockWebServer`.
  *
- * Exception classification (network `IOException` -> retryable, anything else -> non-retryable) is
- * still coarser than the adapter it now runs against: a failed GET surfaces as Retrofit's own
- * `HttpException`, which is not an `IOException`, so an expired app password lands in the
- * non-retryable branch and in the log as a plain SYNC failure. Typing that failure in the port is
- * tracked in `docs/backlog.md`.
+ * **Failure classification comes from the port, not from this class guessing.** Every
+ * [GpodderClient] method returns a `Result` whose failure is a [GpodderException], so
+ * [GpodderFailure.retryable] decides `Retry` vs `Failure` and [GpodderFailure.UNAUTHORIZED] is what
+ * files an entry under [LogCategory.AUTH]. The remaining `IOException` / `RuntimeException` branches
+ * in [guarded] are the net for everything that is *not* the GPodder client -- a repository write, a
+ * bug -- and no longer carry the whole classification on their own.
  */
 class SyncOrchestrator(
     private val feedRepository: FeedRepository,
@@ -155,12 +194,29 @@ class SyncOrchestrator(
             pushRows(rows) ?: SyncOutcome.Success
         }
 
-    /** The failure classification every pass shares — see the class KDoc for why it is this coarse. */
+    /**
+     * The failure classification every pass shares.
+     *
+     * A [GpodderException] is caught **first and separately**: it is the only failure here that
+     * already knows what it is, and the two things this method has to decide — retry or not, and
+     * which S8 chip the entry files under — are both read off it rather than inferred. The
+     * `IOException` and `RuntimeException` branches below stay as the net for everything that is not
+     * the GPodder client.
+     *
+     * Every port method returns its failure rather than throwing it, so the `getOrThrow()` calls in
+     * the private steps below are what turn that back into control flow. The unwrapping is
+     * deliberate and local: one classification boundary for a sequence of steps that must stop at
+     * the first failure, instead of threading a `Result` through each of them.
+     */
     private suspend inline fun guarded(block: () -> SyncOutcome): SyncOutcome =
         try {
             block()
         } catch (cancellation: CancellationException) {
             throw cancellation
+        } catch (gpodder: GpodderException) {
+            record(message = gpodder.plainMessage(), failure = gpodder)
+            val why = gpodder.message ?: "GPodder request failed"
+            if (gpodder.failure.retryable) SyncOutcome.Retry(why) else SyncOutcome.Failure(why)
         } catch (network: IOException) {
             record(
                 message = "Sync with Nextcloud failed: the server could not be reached.",
@@ -170,10 +226,10 @@ class SyncOrchestrator(
         } catch (
             @Suppress("TooGenericExceptionCaught") unexpected: RuntimeException,
         ) {
-            // Deliberately broad: this is the outermost classification boundary between
-            // "worth retrying" (network-shaped) and "not" (everything else), not a swallowed bug --
-            // see the class KDoc's note that this classification is provisional pending
-            // :core:gpodder's real exception types.
+            // Deliberately broad: this is the outermost boundary between "worth retrying" and "not"
+            // for the failures no port typed for us -- a repository write, a bug -- not a swallowed
+            // exception. Nothing that reaches here is retried, because nothing that reaches here is
+            // known to be transient.
             record(
                 message = "Sync with Nextcloud failed.",
                 failure = unexpected,
@@ -191,10 +247,10 @@ class SyncOrchestrator(
      * is [detail] and never the headline — "unable to resolve host" is not a sentence the user asked
      * for. Credentials are stripped by the store, not here ([LogRepository.record]).
      *
-     * Every sync failure is [LogCategory.SYNC], including an expired app password. Distinguishing
-     * `AUTH` needs a typed failure from the GPodder port — the client currently throws Retrofit's
-     * own `HttpException` for a failed `GET` — and sniffing "401" out of a message string is the
-     * kind of thing that works until a server rewords it. Noted in `docs/backlog.md`.
+     * The category is [failure]'s to determine: a [GpodderFailure.UNAUTHORIZED] is an
+     * [LogCategory.AUTH] entry and everything else is [LogCategory.SYNC]. That separation is why the
+     * port carries a typed failure at all — it is the difference between S8's *Account* chip telling
+     * the user to sign in again and a wall of indistinguishable sync errors.
      */
     private suspend fun record(
         message: String,
@@ -202,7 +258,12 @@ class SyncOrchestrator(
     ) {
         logRepository.record(
             NewLogEntry(
-                category = LogCategory.SYNC,
+                category =
+                    if ((failure as? GpodderException)?.failure == GpodderFailure.UNAUTHORIZED) {
+                        LogCategory.AUTH
+                    } else {
+                        LogCategory.SYNC
+                    },
                 message = message,
                 detail = "${failure::class.simpleName}: ${failure.message}",
             ),
@@ -216,7 +277,7 @@ class SyncOrchestrator(
      * [Feed] with `title = url` and `firstSeenAt = now`.
      */
     private suspend fun pullSubscriptions() {
-        val delta = gpodderClient.fetchSubscriptions(since = null)
+        val delta = gpodderClient.fetchSubscriptions(since = null).getOrThrow()
         val currentUrls = delta.add.toSet() - delta.remove.toSet()
         val existingByUrl = feedRepository.observeAll().first().associateBy { it.url }
         val now = clock.millis()
@@ -236,8 +297,8 @@ class SyncOrchestrator(
         feedRepository.replaceAll(feeds)
     }
 
-    /** Returns a [SyncOutcome.Retry] on a failed push, or `null` if there was nothing to push or it succeeded. */
-    private suspend fun pushUnsyncedLedgerRows(): SyncOutcome.Retry? = pushRows(episodeLedgerRepository.getUnsynced())
+    /** Returns the failing [SyncOutcome] on a failed push, or `null` if there was nothing to push or it succeeded. */
+    private suspend fun pushUnsyncedLedgerRows(): SyncOutcome? = pushRows(episodeLedgerRepository.getUnsynced())
 
     /**
      * Posts [rows] in chunks, marking each chunk synced only on its own confirmed 2xx.
@@ -253,7 +314,7 @@ class SyncOrchestrator(
      * really were accepted) and everything after stays unsynced for the next pass. Partial progress
      * is the correct outcome of a partial success, and the outbox is what makes it safe to resume.
      */
-    private suspend fun pushRows(rows: List<EpisodeLedgerRow>): SyncOutcome.Retry? {
+    private suspend fun pushRows(rows: List<EpisodeLedgerRow>): SyncOutcome? {
         // One row can produce more than one action -- a completed download emits both `DOWNLOAD` and
         // `PLAY` (`docs/decisions/0023`) -- so the row and its actions are kept paired: the actions
         // are what gets posted, the rows are what gets marked synced.
@@ -273,19 +334,30 @@ class SyncOrchestrator(
         return failure?.let {
             // Named separately from the generic sync failure because the reassurance is the point:
             // nothing was lost, the remaining rows are still unsynced, and the next pass sends them.
+            // The cause is still named, so an expired app password does not read as a network blip.
             record(
                 message =
-                    "$remaining decision(s) could not be sent to Nextcloud. " +
-                        "They are kept here and will be sent again.",
+                    buildString {
+                        append("$remaining decision(s) could not be sent to Nextcloud")
+                        it.reasonOrNull()?.let { cause -> append(": ").append(cause) }
+                        append(". They are kept here and will be sent again.")
+                    },
                 failure = it,
             )
-            SyncOutcome.Retry(it.message ?: "failed to push episode actions")
+            val why = it.message ?: "failed to push episode actions"
+            // The rows survive either way -- `syncedToServer` is still false. What differs is
+            // whether WorkManager should keep asking: a revoked app password will keep being
+            // revoked, and backing off against it just delays the log entry that explains it.
+            if (it.retryable()) SyncOutcome.Retry(why) else SyncOutcome.Failure(why)
         }
     }
 
     private suspend fun pullAndReconcileEpisodeActions(since: Long? = null) {
         val syncState = syncStateRepository.get()
-        val page = gpodderClient.fetchEpisodeActions(since = since ?: syncState.lastEpisodeActionSyncTs.rewound())
+        val page =
+            gpodderClient
+                .fetchEpisodeActions(since = since ?: syncState.lastEpisodeActionSyncTs.rewound())
+                .getOrThrow()
         val localLedger =
             episodeLedgerRepository
                 .observe(LedgerFilter(state = LedgerFilterState.ALL))

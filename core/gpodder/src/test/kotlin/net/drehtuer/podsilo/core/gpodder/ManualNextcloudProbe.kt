@@ -127,13 +127,13 @@ private suspend fun listSubscriptions(
 
     // add - remove, exactly as the sync pass computes it: a follower needs what currently is,
     // not what changed (CLAUDE.md §5).
-    val delta = client.fetchSubscriptions()
+    val delta = client.fetchSubscriptions().getOrThrow()
     val current = (delta.add - delta.remove.toSet()).sorted()
     println()
     println("SUBSCRIPTIONS (${current.size}; add=${delta.add.size} remove=${delta.remove.size}):")
     current.forEach { println("  $it") }
 
-    val actions = client.fetchEpisodeActions(since = 0)
+    val actions = client.fetchEpisodeActions(since = 0).getOrThrow()
     println()
     println("EPISODE ACTIONS: ${actions.actions.size} (server timestamp ${actions.timestamp})")
     actions.actions
@@ -265,7 +265,11 @@ private suspend fun verifyActionWrites(
     println()
     println("WRITE PROBE (synthetic feed $feed — touches no real subscription)")
 
-    val before = client.fetchEpisodeActions(since = 0).actions.size
+    val before =
+        client
+            .fetchEpisodeActions(since = 0)
+            .getOrThrow()
+            .actions.size
     val posted =
         client.postEpisodeActions(
             listOf(
@@ -291,7 +295,7 @@ private suspend fun verifyActionWrites(
         )
     println("→ POST episode_action/create: ${if (posted.isSuccess) "2xx" else "failed: ${posted.exceptionOrNull()}"}")
 
-    val after = client.fetchEpisodeActions(since = 0).actions
+    val after = client.fetchEpisodeActions(since = 0).getOrThrow().actions
     val mine = after.filter { it.podcast == feed }
     println("→ read back since=0: ${after.size} actions total (was $before), ${mine.size} of them ours")
     mine.forEach {

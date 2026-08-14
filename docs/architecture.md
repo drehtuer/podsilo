@@ -505,11 +505,26 @@ interface SyncStateRepository {
     suspend fun save(state: SyncState)
 }
 
+// Every method returns a Result whose failure is a GpodderException carrying a GpodderFailure —
+// never Retrofit's own HttpException, which is not an IOException and so reached SyncOrchestrator
+// looking exactly like a bug. GpodderFailure.retryable decides Retry vs Failure; UNAUTHORIZED is
+// what files an entry under LogCategory.AUTH instead of SYNC (§6).
 interface GpodderClient {
-    suspend fun fetchSubscriptions(since: Long? = null): SubscriptionDelta
+    suspend fun fetchSubscriptions(since: Long? = null): Result<SubscriptionDelta>
     suspend fun postEpisodeActions(actions: List<EpisodeAction>): Result<Unit>
-    suspend fun fetchEpisodeActions(since: Long): EpisodeActionPage
+    suspend fun fetchEpisodeActions(since: Long): Result<EpisodeActionPage>
 }
+
+enum class GpodderFailure(val retryable: Boolean) {
+    UNAUTHORIZED(false), // 401/403 — the only AUTH-category failure, and the only one the user can fix
+    SERVER_ERROR(true), // 5xx
+    REJECTED(false), // any other non-2xx — a 404 from a Nextcloud without gpoddersync, a 413
+    UNREACHABLE(true), // DNS, refused, no route, TLS
+    TIMED_OUT(true), // separate from UNREACHABLE: Nextcloud's bruteforce delay makes slow normal
+    MALFORMED(false), // a 2xx whose body could not be parsed
+}
+
+class GpodderException(val failure: GpodderFailure, message: String, val statusCode: Int? = null) : Exception(message)
 
 data class SubscriptionDelta(val add: List<String>, val remove: List<String>, val timestamp: Long)
 enum class EpisodeActionType { DOWNLOAD, PLAY, DELETE, NEW }
@@ -573,6 +588,14 @@ above, with DTOs and mapping that absorb the differences between the two referen
 (action-name casing, the `-1` absent-playback-value sentinel, `opodsync`'s extra `update_urls`
 field). `RetrofitGpodderClientTest` drives it against MockWebServer — exact paths, query params,
 bare-array POST body, Basic auth header, and the 401/500/timeout/malformed-body paths.
+
+**Amended 2026-08-14: every failure is typed** (`GpodderFailure`, §5). The two `GET`s previously let
+Retrofit's `HttpException` propagate — which is *not* an `IOException`, so an expired app password
+landed in `SyncOrchestrator`'s non-retryable branch and in the error log as a plain `SYNC` failure,
+the one category S8's chips exist to separate it from. The service methods now return
+`Response<...>`, the client maps status and transport failures onto `GpodderFailure`, and the
+orchestrator reads `retryable` and `UNAUTHORIZED` off it rather than sniffing "401" out of a message
+string. That guessing is what the typed failure replaces: it works until a server rewords itself.
 
 ⚠️ **`POST episode_action/create` is not as reliable as a 2xx implies.** `nextcloud-gpodder` >=
 3.13.3 discards any non-`PLAY` action and still returns 200, so `DOWNLOAD` never lands on a real

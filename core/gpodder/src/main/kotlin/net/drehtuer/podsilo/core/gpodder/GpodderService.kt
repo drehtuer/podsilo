@@ -17,16 +17,23 @@ import retrofit2.http.Query
  * Paths are relative to a base URL of `<nextcloud-root>/index.php/apps/gpoddersync/`.
  */
 internal interface GpodderService {
-    /** [since] is Unix **seconds**; omitted entirely when `null`, which requests the full list. */
+    /**
+     * [since] is Unix **seconds**; omitted entirely when `null`, which requests the full list.
+     *
+     * `Response<...>` rather than the bare DTO, here and below, so a non-2xx is a *value* this
+     * module classifies into a [net.drehtuer.podsilo.core.model.port.GpodderFailure] instead of
+     * Retrofit throwing its own `HttpException` — which is not an `IOException`, and so reached the
+     * sync pass looking exactly like a bug (see [RetrofitGpodderClient]).
+     */
     @GET("subscriptions")
     suspend fun subscriptions(
         @Query("since") since: Long? = null,
-    ): SubscriptionsResponseDto
+    ): Response<SubscriptionsResponseDto>
 
     @GET("episode_action")
     suspend fun episodeActions(
         @Query("since") since: Long,
-    ): EpisodeActionPageDto
+    ): Response<EpisodeActionPageDto>
 
     /**
      * The body is a **bare JSON array**, not an envelope object -- `nextcloud-gpodder`'s controller

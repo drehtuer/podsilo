@@ -59,7 +59,7 @@ class OpodsyncIntegrationTest {
     @Test
     fun `fetching subscriptions without since returns a well-formed delta`() {
         runBlocking {
-            val delta = client.fetchSubscriptions(since = null)
+            val delta = client.fetchSubscriptions(since = null).getOrThrow()
 
             // The shape open decision #2 turned on: a no-`since` call must yield a usable full set,
             // and `add`/`remove` must be disjoint so `add - remove` is meaningful (decisions/0009).
@@ -88,7 +88,7 @@ class OpodsyncIntegrationTest {
             val posted = client.postEpisodeActions(listOf(action))
             assertTrue("POST failed: ${posted.exceptionOrNull()}", posted.isSuccess)
 
-            val page = client.fetchEpisodeActions(since = 0)
+            val page = client.fetchEpisodeActions(since = 0).getOrThrow()
             val echoed = page.actions.firstOrNull { it.episode == episodeUrl }
 
             // Whether an action for a feed we are NOT subscribed to comes back is version-dependent:
