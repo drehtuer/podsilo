@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Dependabot **version** updates. Security updates were already on (a repository
+# setting, not a file), and they only ever fire on a published advisory — this
+# file is the other half: routine bumps, opened as PRs that CI has to pass like
+# any other. Nothing here merges anything.
+#
+# Why it fits a project that pins deliberately (CLAUDE.md §3: "pin versions in
+# gradle/libs.versions.toml, no floating +"): a PR is a proposal, and the pin
+# stays a pin until the author takes it. The catalog remains the single place a
+# version is written.
+#
+# GROUPING IS THE POINT, NOT TIDINESS. Everything is pinned through a
+# `version.ref` in the catalog, and several artifacts share one ref — okhttp and
+# mockwebserver, every room artifact, both hilt compilers. Ungrouped, that is a
+# handful of PRs all editing the same TOML key, each one making the others
+# conflict. The groups below follow the ref families, so one family is one PR.
+#
+# NOT COVERED, deliberately:
+#   - Docker (.devcontainer/Dockerfile: ubuntu:24.04, opodsync.Dockerfile:
+#     php:8.3-apache). Both are rolling tags that already receive patches on
+#     `docker pull`, so the only PR Dependabot could open is the major/minor jump
+#     — 24.04 -> 26.04 — which is exactly the change the LTS pin exists to
+#     prevent. Dev-container images also ship in nothing (docs/dev-environment.md).
+#   - Dev container features: devcontainer.json declares none, on purpose.
+#   - The Gradle wrapper. Dependabot does not update gradle-wrapper.properties in
+#     any ecosystem; `./gradlew wrapper --gradle-version=x.y` stays a manual step.
+
+version: 2
+
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    # Monday morning, author's timezone: a week's bumps land together, before
+    # anything else is in flight, rather than trickling in mid-task.
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    # Conventional Commits (CLAUDE.md §9). Dependabot appends its own subject, so
+    # this yields `chore(deps): bump ... from x to y`.
+    commit-message:
+      prefix: "chore(deps)"
+    # Anything NOT matched below gets its own PR by design: AGP, rssparser,
+    # jaudiotagger, coil, lucide, junit, robolectric. Each is a single-artifact
+    # decision with its own blast radius, and AGP has never been a quiet bump.
+    groups:
+      androidx:
+        # Room, DataStore, WorkManager, DocumentFile, Compose (via the BOM),
+        # Lifecycle, Navigation, androidx.hilt, the test runners — eleven refs
+        # that AndroidX releases in step and that break in step when they don't.
+        patterns:
+          - "androidx*"
+      kotlin:
+        # `org.jetbrains.kotlin*` covers kotlinx (coroutines, serialization) by
+        # prefix as well. KSP is versioned independently of Kotlin (2.3.x against
+        # Kotlin 2.4.x — the catalog header explains why), but it is the thing
+        # that breaks when Kotlin moves, so it is reviewed in the same PR.
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      dagger-hilt:
+        patterns:
+          - "com.google.dagger*"
+      network:
+        # okhttp and mockwebserver share one ref, and okhttp is pinned *above*
+        # Retrofit's transitive version on purpose (catalog header) — reviewing
+        # the two together is what keeps that deliberate.
+        patterns:
+          - "com.squareup.retrofit2*"
+          - "com.squareup.okhttp3*"
+      static-analysis:
+        patterns:
+          - "io.gitlab.arturbosch.detekt*"
+          - "org.jlleitschuh.gradle.ktlint*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(actions)"
+    groups:
+      actions:
+        # Four actions, all pinned to a major tag, all in one workflow. One PR.
+        patterns:
+          - "*"
