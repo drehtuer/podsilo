@@ -33,12 +33,12 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: [v0.5.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
+> **Status: [v0.5.1 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
 > end to end, and sync now closes the loop.** Subscription mirroring, feed refresh, the download
 > pipeline, GPodder sync, Nextcloud login, naming and tagging are built and tested (749 JVM tests,
 > green), and all eight screens in `docs/UI.md` render and are reachable. Verified against a **real
 > Nextcloud on a real phone** — login, ~9,500 episodes across four feeds, reconciliation,
-> downloading, tagging and backup/restore. `podsilo-0.5.0.apk` is a signed, minified release build;
+> downloading, tagging and backup/restore. `podsilo-0.5.1.apk` is a signed, minified release build;
 > sideload it on your own device.
 >
 > This release makes a downloaded episode stop coming back: a completed download now emits `PLAY`
