@@ -2,7 +2,8 @@
 
 # 0025 — Two directional sync passes, and why the pull needs no new rule
 
-**Status:** Accepted (2026-08-14). Implements `docs/TODO.md` §7, settled by **D4**, **D5** and **D6**.
+**Status:** Accepted (2026-08-14). Implements the two directional buttons the author asked for, settled by their decisions D4, D5 and
+D6 in the working plan for #60.
 
 ## Context
 
@@ -69,7 +70,7 @@ Both rows confirm first, for different reasons.
 - **The push names its count.** It writes to a shared log other clients act on and the API cannot
   retract — the safeguard `docs/decisions/0013` established for every bulk write here. The count is a
   ledger query, so it costs nothing.
-- **The pull names none.** `docs/TODO.md` §7.3 asked for a two-phase dialog — *"3,022 actions from
+- **The pull names none.** The plan asked for a two-phase dialog — *"3,022 actions from
   Nextcloud. 87 change something here."* — and that number cannot be produced without fetching,
   while a view model may not touch the network (`docs/UI.md` §B0.3). Rather than smuggle a fetch into
   a view model or invent a plausible figure, the dialog says what the operation can and cannot do.
@@ -82,8 +83,10 @@ holds however the event arrives.
 
 - **The author's stranded downloads become fixable.** One press of *Send this device's state* re-posts
   them with the `PLAY` that `docs/decisions/0023` added.
-- **`docs/TODO.md` §7 is complete**, and with it every step of the #60 plan except the device
-  verification of these two buttons.
+- **Every step of the #60 plan is complete**, including the device verification: both buttons were
+  driven on the author's phone against their own Nextcloud on 2026-08-14, and the push repaired a
+  download stranded since before `docs/decisions/0023` — `position=0` became `position=2766
+  total=2766`, which RePod reads as played.
 - The NEXTCLOUD group on S4 is now long enough that its buttons sit below the fold in a test
-  viewport. That is a real consequence of the placement §7.3 chose, and the tests scroll rather than
-  the rows moving.
+  viewport. That is a real consequence of the placement chosen, and the tests scroll rather than the
+  rows moving.

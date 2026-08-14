@@ -16,6 +16,19 @@ done and when, and a backlog that also keeps that record is two records (2026-08
 
 ## Open items
 
+- **A failed `GET` is not an `IOException`.** Retrofit throws its own `HttpException` for a non-2xx
+  response on the two `GET`s, so an expired app password lands in `SyncOrchestrator`'s
+  *non-retryable* branch and in the error log as a plain `SYNC` failure rather than `AUTH` — the one
+  category S8's filter chips exist to separate. Sniffing "401" out of a message string works until a
+  server rewords it, so the fix is a typed failure on the `GpodderClient` port. Carried over from
+  `docs/TODO.md` when the #60 work landed and that file was retired (2026-08-14).
+
+- **The default sync interval is four hours** (`DEFAULT_SYNC_INTERVAL_MINUTES = 240`). Since the
+  triage triggers and pull-to-refresh both run a pass now, the user-visible delay is gone and this
+  only governs unattended background catch-up; 15 minutes is WorkManager's floor and Doze stretches
+  it anyway. Left as the author's call on battery and traffic — it was D1 in `docs/TODO.md`, and
+  nothing depends on it.
+
 - **Nothing lints `src/androidTest/`.** Verified 2026-08-11:
   `runKtlintCheckOverAndroidTestDebugSourceSet` reports **`NO-SOURCE`** (the Kotlin dir is never
   registered with ktlint), and detekt's default source roots are `src/main` + `src/test` only, which
