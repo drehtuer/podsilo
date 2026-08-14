@@ -677,7 +677,30 @@ The settlement, in two places:
 Still true, and still good advice: prefer extracting a local variable over clever multiline
 wrapping.
 
-### 8.7 Robolectric can't download `android-all`
+### 8.7 ktlint keeps failing on a file you deleted
+
+`./gradlew ktlintCheck` reports violations in a file that is no longer on disk, and keeps reporting
+them through a daemon restart, a `--rerun`, and deleting the report by hand.
+
+The cause is a gap in the plugin's up-to-date checking, verified against ktlint-gradle 14.2.0 (the
+current release) on 2026-08-14. `runKtlintCheckOver<SourceSet>SourceSet` writes its findings to
+`build/intermediates/ktLint/*_errors.bin`, and `ktlint<SourceSet>SourceSetCheck` turns that file into
+the report and the failure. **Adding or editing** a Kotlin file re-runs the first task correctly;
+**removing** one leaves it `UP-TO-DATE`, so the stale `.bin` is what the second task reports. It is
+not specific to `src/androidTest/` — `src/main/` and `src/test/` behave the same way.
+
+The fix is one command:
+
+```bash
+rm -rf <module>/build/intermediates/ktLint
+```
+
+**It can only ever cause a false failure, never a false pass**, which is why the incremental
+behaviour is left alone rather than turned off: forcing every ktlint task to re-run takes the check
+from under a second to about thirteen, on every invocation, to spare an occasional stale error about
+a file you already know you deleted.
+
+### 8.8 Robolectric can't download `android-all`
 
 Needs network from the Gradle test worker specifically. On a healthy network this is automatic. If
 the worker cannot reach Maven Central while `curl` can, pre-fetch the jar and run Robolectric in
