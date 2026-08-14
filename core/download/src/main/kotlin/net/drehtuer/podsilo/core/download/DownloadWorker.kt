@@ -59,8 +59,7 @@ private fun ErrorCause.sentence(): String =
         ErrorCause.AUTH -> "This episode could not be downloaded: the podcast server refused access."
         ErrorCause.DISK_FULL -> "There is not enough space left to download this episode."
         ErrorCause.FOLDER_UNAVAILABLE -> "The download folder is not available. Choose it again in Settings."
-        ErrorCause.FEED_PARSE, ErrorCause.TAG_WRITE, ErrorCause.UNKNOWN ->
-            "This episode could not be downloaded."
+        ErrorCause.UNKNOWN -> "This episode could not be downloaded."
     }
 
 /**
