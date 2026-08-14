@@ -30,6 +30,22 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    lint {
+        // `SpecifyForegroundServiceType` cannot be satisfied from inside this module, and is a false
+        // positive here rather than a rule being waived. It asks that the manifest override
+        // WorkManager's `SystemForegroundService` entry with `android:foregroundServiceType`, which
+        // `:app`'s manifest does — with a long comment on the hard process crash it prevents. A
+        // library module is linted against its own manifest, which cannot see `:app`'s, so the check
+        // fires on `DownloadWorker`'s `ForegroundInfo` no matter what any manifest says.
+        //
+        // Suppressed at the module rather than at the call site so this note is the only place the
+        // reasoning lives, and because the thing lint is guarding is asserted directly by two tests:
+        // `:app`'s `ForegroundServiceManifestTest` (Robolectric, reads the merged manifest) and
+        // `PlatformSurfacesTest` (on a real device, reads the installed one). Delete this block if
+        // either of them goes, not before.
+        disable += "SpecifyForegroundServiceType"
+    }
 }
 
 dependencies {
