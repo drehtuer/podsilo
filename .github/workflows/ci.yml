@@ -57,7 +57,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # versionCode is `git rev-list --count HEAD` (app/build.gradle.kts). The
           # default shallow clone would make every build number 1.
@@ -89,13 +89,13 @@ jobs:
         run: git ls-files -z '*.sh' | xargs -0 -r shellcheck
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: ktlint
         run: ./gradlew ktlintCheck
@@ -154,7 +154,7 @@ jobs:
       # by every build — so if it is not kept alongside the APK it is shipped
       # with, it is gone.
       - name: Upload APK build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: podsilo-apks
           path: |
