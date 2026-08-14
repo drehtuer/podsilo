@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# yamllint configuration. `yamllint .` from the repository root is the whole
+# usage; the tool is in the dev container (.devcontainer/Dockerfile).
+#
+# There are five YAML files here — the CI workflow, dependabot.yml, the compose
+# file, detekt's config, and this one — and between them they carry the release
+# signing, the dependency policy and the static-analysis rules. A silently
+# malformed one fails at a moment where the error is attributed to something
+# else, which is the reason to lint them at all.
+#
+# THE POINT OF THE THREE OVERRIDES BELOW: keep an *error* meaning "this YAML is
+# wrong" — bad indentation, a duplicate key, an unparsable document — so that a
+# non-zero exit is always worth acting on. House style disagreements are either
+# turned off or demoted to a warning. A linter that is red for cosmetic reasons
+# gets ignored, and then it is not a check.
+
+extends: default
+
+# Skips build outputs and everything else git already ignores, so `yamllint .`
+# does not walk app/build/ and the Gradle caches.
+ignore-from-file: .gitignore
+
+rules:
+  # No `---` on any file in this repo, and none of them is a multi-document
+  # stream, so the marker would be ceremony.
+  document-start: disable
+
+  # 120 matches .editorconfig's limit for Kotlin, which is the only line length
+  # this project has ever settled on. A warning rather than an error because
+  # YAML here embeds shell: ci.yml's `run: |` blocks contain `echo "::warning::…"`
+  # lines that cannot be wrapped without changing the text they emit. Length is
+  # advice; being unparsable is not.
+  line-length:
+    max: 120
+    level: warning
+
+  # `on:` in a GitHub Actions workflow is a YAML 1.1 truthy token, so the default
+  # rule reads the trigger block of every workflow as a boolean key and complains.
+  # The workflow is correct as written — it is the 1.1 legacy that is wrong — so
+  # keys are exempt while values are still checked.
+  truthy:
+    check-keys: false

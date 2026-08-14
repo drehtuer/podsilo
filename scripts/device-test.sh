@@ -6,8 +6,9 @@
 #
 # WHY THIS IS SEPARATE FROM CI, AND STAYS SEPARATE
 #
-# `.github/workflows/ci.yml` runs `ktlintCheck`, `detekt`, `test` and `assembleDebug` — and nothing
-# else. `connectedDebugAndroidTest` is not in it and must not be added: GitHub's runners have no
+# `.github/workflows/ci.yml` runs yamllint, shellcheck, `ktlintCheck`, `detekt`, `test` and
+# `assembleDebug` — and nothing else.
+# `connectedDebugAndroidTest` is not in it and must not be added: GitHub's runners have no
 # device, so the job could only ever be skipped, fail, or spin up an emulator whose whole purpose is
 # to *not* be the thing these tests exist to check. The isolation is therefore structural rather
 # than a matter of tagging: a test in `src/test/` runs on CI, a test in `src/androidTest/` runs here.
@@ -104,7 +105,14 @@ echo "==> :app via adb + am instrument (see the comment in this script for why)"
 # This was a real fault: the hardcoded `app-debug.apk` kept resolving to a months-old file left in
 # that directory from before the rename, so the run silently tested a stale build. Failing loudly
 # when the glob matches nothing is the point.
-app_apk="$(ls -1 app/build/outputs/apk/debug/podsilo-*-debug.apk 2>/dev/null | head -1)"
+#
+# A `nullglob` array rather than `ls | head -1`: the glob expands to nothing when there is no match
+# (which the check below is waiting for) and it never parses a filename out of ls's output
+# (ShellCheck SC2012). Expansion is sorted, so "first match" means what it meant before.
+shopt -s nullglob
+app_apk_matches=(app/build/outputs/apk/debug/podsilo-*-debug.apk)
+shopt -u nullglob
+app_apk="${app_apk_matches[0]:-}"
 test_apk=app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
 if [ -z "$app_apk" ] || [ ! -f "$test_apk" ]; then
