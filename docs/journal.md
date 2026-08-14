@@ -5296,3 +5296,41 @@ the release and attach the assets, write the notes, publish last. The one thing 
 before tagging was that `assembleRelease` produced a *signed* APK locally — `apksigner verify` rather
 than looking for a `META-INF/*.RSA`, which v1 signing is off for and which is exactly the check that
 would have passed a broken build.
+
+---
+
+## 2026-08-14 — a run-driver for the app, so an agent can see the screen
+
+Added `.claude/skills/run-podsilo/` — a `SKILL.md` and a `driver.py` that boot the AVD, build,
+install, seed and then *drive* the app over adb: tap by on-screen label, screenshot, query the
+ledger. The gap it fills is narrow but real: everything the repository had was either a test suite
+or instructions for a human with a phone, and neither lets an agent look at a screen.
+
+The interesting problem was the first one. Every screen in the app is gated on being connected to
+Nextcloud, and this container has none — the login is Login Flow v2 in a browser, and cleartext to a
+fake server is blocked anyway. But `observeNextcloudAccount()` only reads the server URL and the
+username; the encrypted app password is fetched separately and its absence degrades to a null
+credential rather than an unconfigured app. So writing two DataStore keys is enough to reach every
+screen, and the driver hand-encodes androidx's `preferences_pb` protobuf to do it. It **merges**
+rather than rewrites, because `download_folder_uri` lives in that same file and a wholesale write
+drops the SAF grant silently.
+
+Two adb behaviours cost the most time, and both fail *quietly*:
+
+- `run-as PKG sqlite3 db < file.sql` exits 0 and does nothing — the redirected stdin does not reach
+  the run-as'd process. Piping through `cat` works.
+- `run-as PKG cp /sdcard/x .` is a permission error: the app uid cannot read the shell user's files.
+  Same fix.
+
+The grant itself cannot be faked at all, so the driver taps through DocumentsUI instead, which
+turned out to be scriptable in three taps. With that, `driver.py smoke` runs the whole thing from a
+wiped app: seed, grant, mark one episode played, download another for real (100 KB over HTTPS →
+ID3 rewrite → SAF delivery), and assert both ledger rows. It asserts against `episode_ledger` rather
+than pixels, on the grounds that the row is the feature.
+
+One accident was informative: a mis-quoted `adb shell rm -rf "/sdcard/Podcasts/Silo Stories"` (adb
+re-parses quoting on the device) deleted two wrong paths and left the old file, and the next
+download came out as `… (2).mp3`. The collision suffixing was right; the cleanup was not.
+
+`./gradlew test` green, exit 0. No app code changed — the driver is agent tooling and nothing in the
+app depends on it.
