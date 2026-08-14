@@ -25,6 +25,16 @@ subprojects {
         buildUponDefaultConfig = true
         parallel = true
         config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+
+        // detekt's default roots are `src/main` + `src/test` only, so until this line the device
+        // tests under `src/androidTest/` — the ones CI cannot run either (`.github/workflows/ci.yml`)
+        // — were the only Kotlin in the repository with no complexity or style checking at all. An
+        // over-length line in one of them passed `./gradlew ktlintCheck detekt` and had to be found
+        // by hand, which is what put this in `docs/backlog.md`.
+        //
+        // ktlint needs no equivalent: its Android plugin registers the `androidTest` source set
+        // itself (`runKtlintCheckOverAndroidTestSourceSet`), which is why only detekt is named here.
+        source.from(files("src/androidTest/kotlin", "src/androidTest/java"))
     }
 
     tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
