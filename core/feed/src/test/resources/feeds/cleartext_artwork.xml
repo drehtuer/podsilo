@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A feed that advertises its artwork over plain http://, which real feeds still do — the author's
+  own `heute journal` is one, and it is why that podcast rendered a monogram instead of a cover.
+  Android blocks cleartext at targetSdk 28+, so the parser upgrades artwork URLs to https.
+
+  The enclosures here are deliberately http:// too, and must come back UNCHANGED: an enclosure URL
+  is episodeKey's fallback and the `episode` field of every posted action, so rewriting one would
+  make this a different episode to every other gpodder client.
+-->
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Heute Journal</title>
+    <itunes:image href="http://example.org/podcast-cover.jpg"/>
+    <item>
+      <title>Cleartext everywhere</title>
+      <guid>ep-cleartext</guid>
+      <enclosure url="http://example.org/ep-cleartext.mp3" type="audio/mpeg" length="1"/>
+      <itunes:image href="http://example.org/ep-cleartext.jpg"/>
+    </item>
+    <item>
+      <title>Already secure</title>
+      <guid>ep-secure</guid>
+      <enclosure url="https://example.org/ep-secure.mp3" type="audio/mpeg" length="1"/>
+      <itunes:image href="https://example.org/ep-secure.jpg"/>
+    </item>
+    <item>
+      <title>Uppercase scheme, because feeds do that too</title>
+      <guid>ep-uppercase</guid>
+      <enclosure url="https://example.org/ep-uppercase.mp3" type="audio/mpeg" length="1"/>
+      <itunes:image href="HTTP://example.org/ep-uppercase.jpg"/>
+    </item>
+  </channel>
+</rss>

@@ -254,7 +254,7 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 |---|---|---|---|---|
 | `url` | `String` | No (PK) | GPodder `subscriptions.add[i]` | Also the value written into `EpisodeAction.podcast` on outbound actions. |
 | `title` | `String` | No | RSS `<channel><title>` | GPodder API has no titles — only known after the first successful feed fetch; use the URL as a placeholder until then. |
-| `imageUrl` | `String` | Yes | RSS `<itunes:image>` / `<image><url>` | |
+| `imageUrl` | `String` | Yes | RSS `<itunes:image>` / `<image><url>` | Stored with `http://` upgraded to `https://` (§7). Artwork only — never the enclosure URL, which is identity. |
 | `firstSeenAt` | `Long` | No | Local clock, set once when the URL first appears in `add[]` | **No longer a query predicate** (ADR 0013): the "New" filter is `no ledger row`, full stop. It is now the default cutoff date offered for a newly-appearing feed in S4's *Mark old episodes as played*. Never updated after first write. |
 | `lastRefreshedAt` | `Long` | Yes | Local clock, after a successful (200, not 304) feed fetch | |
 | `httpEtag` | `String` | Yes | Response `ETag` header | For conditional `GET`. |
@@ -699,7 +699,7 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 | Local field | RSS/Atom source (via rssparser) | Fallback chain |
 |---|---|---|
 | `Feed.title` | `<channel><title>` | — |
-| `Feed.imageUrl` | `<itunes:image>` or `<image><url>` | none → `null` |
+| `Feed.imageUrl` | `<itunes:image>` or `<image><url>` | none → `null`; `http://` upgraded to `https://` (below) |
 | `Episode.guid` | `<guid>` | none → `null` (falls back to enclosure URL for `episodeKey`) |
 | `Episode.enclosureUrl` | `<enclosure url="">` | episode without an enclosure is not downloadable — exclude or flag, decide during `:core:feed` implementation |
 | `Episode.title` | `<title>` | — |
@@ -707,6 +707,22 @@ One feed per `Feed.url`, fetched independently — the GPodder API has no episod
 | `Episode.pubDate` | `<pubDate>` | other date field the parser exposes → date first locally seen (§6) |
 | `Episode.durationMs` | `<itunes:duration>` | none → `null`, never invented |
 | `Episode.link` | `<item><link>` / Atom `<link rel="alternate">` | none → `null` |
+
+**Cleartext artwork is upgraded; cleartext enclosures are not** (2026-08-14). Android blocks
+`http://` at `targetSdk` 28+, and feeds still publish artwork that way — the author's `heute journal`
+does, which is why that podcast rendered a monogram instead of a cover. Both `imageUrl` fields are
+therefore stored with the scheme upgraded to `https://`: requesting the same path over TLS either
+works, or fails exactly as the blocked request did and `PodsiloArtwork` falls back to the monogram it
+already draws, so there is no case where it is worse. That is the whole of the decision — **no
+network-security config**, which would weaken every request in the app, and no per-domain allow-list
+to maintain.
+
+`Episode.enclosureUrl` is deliberately excluded, and the exclusion is the important half. An
+enclosure URL is `episodeKey`'s fallback when a feed omits `<guid>` (§4) and the `episode` field of
+every action posted to the shared log (§6), so an upgraded one is a *different episode* to AntennaPod
+and to Nextcloud. A cleartext enclosure is instead reported as `ErrorCause.CLEARTEXT_BLOCKED` —
+non-retryable, with a sentence naming the cause, because the request never leaves the device and no
+retry can change that.
 
 **Why rssparser and not Stalla.** CLAUDE.md §3 names `dev.stalla:stalla` first and
 `com.prof18.rssparser` as the fallback to evaluate. Stalla's last release is 1.1.0 from 2021 with no

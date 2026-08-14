@@ -28,29 +28,12 @@ old name timing only the **feed refresh**.
   reasoning. Worth ten minutes the next time a phone is to hand
   (`docs/dev-environment.md` §9.4).
 
-- **Two `ErrorCause` values are unreachable by design.** `FEED_PARSE` and `TAG_WRITE` are declared
-  and never produced anywhere: a tag-write failure must never fail a download (CLAUDE.md §6), so no
-  ledger row can carry `TAG_WRITE`; and feed failures are recorded in the *error log*
-  (`LogCategory.FEED`) rather than on an episode ledger row, so `FEED_PARSE` has no writer either.
-  They are safe to delete — nothing has ever persisted them, so no stored `lastErrorCause` can hold
-  one — but `ErrorCause` is a persisted vocabulary, which makes it the author's call rather than a
-  tidy-up. Found by a repo-wide producer scan on 2026-08-03.
-
-- **Cleartext `http://` URLs in feeds.** Android blocks them by default at `targetSdk` 28+, and the
-  author's `heute journal` feed advertises its cover art over `http://` — so that one podcast shows
-  the monogram rather than its image. Harmless there, since `PodsiloArtwork` falls back cleanly. The
-  question is **enclosures**: none of the author's 9,565 episodes currently use `http://`, but a feed
-  that did would fail to download with a network error and no obvious cause. Options are a
-  network-security config permitting cleartext (weakens every request), permitting it per-domain
-  (unmaintainable), or upgrading `http://` to `https://` and falling back — decide when a feed
-  actually needs it, not before.
-
-- **The restore file picker shows every file, not just zips.** `MainActivity` passes
-  `arrayOf("application/zip", "application/octet-stream", "*/*")` to `OpenDocument`, and the `*/*`
-  makes the filter a no-op — in a real Downloads folder the picker lists PDFs, APKs and photos. The
-  wildcard is there because some file managers report zips under other MIME types, so a real backup
-  must never be un-pickable; the question is whether dropping `*/*` and keeping the first two is
-  enough coverage. Verified as a real annoyance on-device, not theorised.
+- **The restore picker's MIME list has only been reasoned about.** `*/*` was dropped on 2026-08-14
+  and four explicit zip spellings kept in its place (`MainActivity.BACKUP_MIME_TYPES`), which is
+  strictly wider than the two the note proposed — but "which type does *your* file manager report for
+  a `.zip`" is answerable only on a device with a real backup in a real Downloads folder. Our own
+  exports always match, since `CreateDocument` writes `application/zip`. If a backup ever turns out
+  to be un-pickable, the fix is one more string in that array.
 
 - **Non-MP3 tagging fixtures.** `audio/silence.mp3` is the only audio fixture, so M4A, OGG and Opus
   tag and artwork writing is supported by jaudiotagger but never exercised by our tests

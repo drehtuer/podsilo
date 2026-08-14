@@ -353,6 +353,10 @@ private fun EnclosureDownloadResult.toFailure(): DownloadOutcome.Failed =
             )
         is EnclosureDownloadResult.NetworkError ->
             DownloadOutcome.Failed(reason, retryable = true, cause = ErrorCause.NETWORK)
+        // Not retryable, and the one failure here that is neither the server's fault nor the disk's:
+        // the connection was refused by this device before it was made.
+        is EnclosureDownloadResult.CleartextBlocked ->
+            DownloadOutcome.Failed(reason, retryable = false, cause = ErrorCause.CLEARTEXT_BLOCKED)
         // A lost folder grant is raised as an exception and classified at the call site, so a write
         // failure reaching here is the disk itself.
         is EnclosureDownloadResult.WriteError ->

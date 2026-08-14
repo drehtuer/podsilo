@@ -38,6 +38,29 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
             assertEquals(LedgerState.DOWNLOADED, ledger.get("a")?.state)
         }
 
+    /**
+     * `ErrorCause` is a **persisted vocabulary**, so removing a value has to be safe against a row
+     * that already holds it. `FEED_PARSE` and `TAG_WRITE` were removed on 2026-08-14 having never
+     * been produced by anything, but "nothing ever wrote it" is an argument about today's code and
+     * this is the property that makes the change safe regardless: an unrecognised name reads back as
+     * `null`, which the UI already renders as `UNKNOWN`. A `valueOf` here would instead throw while
+     * mapping a row, taking out the whole list rather than one field.
+     */
+    @Test
+    fun `a lastErrorCause the enum no longer has reads back as null rather than throwing`() =
+        runTest {
+            ledger.upsert(ledgerRow("a", "f", LedgerState.ERROR))
+            // Written straight to the column: the domain type cannot express a value it no longer has.
+            db.openHelper.writableDatabase.execSQL(
+                "UPDATE episode_ledger SET lastErrorCause = 'TAG_WRITE' WHERE episodeKey = 'a'",
+            )
+
+            val row = ledger.get("a")
+
+            assertEquals(LedgerState.ERROR, row?.state)
+            assertNull("an unknown cause degrades to null, it does not fail the read", row?.lastErrorCause)
+        }
+
     @Test
     fun `upsert then getUnsynced returns only rows awaiting the server`() =
         runTest {

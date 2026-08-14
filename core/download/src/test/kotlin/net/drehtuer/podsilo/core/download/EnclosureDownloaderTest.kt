@@ -4,6 +4,8 @@ package net.drehtuer.podsilo.core.download
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.ConnectionSpec
+import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -215,5 +217,34 @@ class EnclosureDownloaderTest {
 
             assertNull("a cancelled download must not report an outcome", outcome)
             assertTrue("a cancelled download must leave its bytes behind to resume from", file.length() > 0)
+        }
+
+    /**
+     * A cleartext refusal is **not** a network error, and this asserts the whole reason it has its
+     * own result type: the request never leaves the device, so retrying it on a backoff can only
+     * fail identically for ever while reporting "the server did not respond".
+     *
+     * Faithful rather than mocked. Android raises `UnknownServiceException` from its network
+     * security policy, and OkHttp raises the *same* exception from a client whose connection specs
+     * exclude cleartext — so restricting the client here exercises the real catch branch on a plain
+     * JVM, with no emulator and no `targetSdk` involved.
+     */
+    @Test
+    fun `a refused cleartext connection is its own result, not a network error`() =
+        runBlocking {
+            val tlsOnly =
+                EnclosureDownloader(
+                    OkHttpClient
+                        .Builder()
+                        .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
+                        .build(),
+                )
+
+            val result = tlsOnly.download(url(), destination())
+
+            assertTrue(
+                "expected CleartextBlocked, got $result",
+                result is EnclosureDownloadResult.CleartextBlocked,
+            )
         }
 }

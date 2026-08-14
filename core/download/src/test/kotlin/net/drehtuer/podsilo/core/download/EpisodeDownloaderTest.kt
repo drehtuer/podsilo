@@ -4,9 +4,11 @@ package net.drehtuer.podsilo.core.download
 
 import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.Episode
+import net.drehtuer.podsilo.core.model.ErrorCause
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.TitleCleanupRuleSetting
+import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -50,15 +52,17 @@ class EpisodeDownloaderTest {
         server.shutdown()
     }
 
-    private fun downloader(artworkFetcher: ArtworkFetcher? = null) =
-        EpisodeDownloader(
-            enclosureDownloader = EnclosureDownloader(),
-            audioTagWriter = AudioTagWriter(),
-            downloadTarget = target,
-            cacheDir = cacheDir,
-            zoneId = ZoneId.of("Europe/Berlin"),
-            artworkFetcher = artworkFetcher,
-        )
+    private fun downloader(
+        artworkFetcher: ArtworkFetcher? = null,
+        enclosureDownloader: EnclosureDownloader = EnclosureDownloader(),
+    ) = EpisodeDownloader(
+        enclosureDownloader = enclosureDownloader,
+        audioTagWriter = AudioTagWriter(),
+        downloadTarget = target,
+        cacheDir = cacheDir,
+        zoneId = ZoneId.of("Europe/Berlin"),
+        artworkFetcher = artworkFetcher,
+    )
 
     private fun feed() =
         Feed(
@@ -216,6 +220,36 @@ class EpisodeDownloaderTest {
             val outcome = downloader().download(DownloadRequest(feed(), episode(), NamingSettings()))
 
             assertFalse((outcome as DownloadOutcome.Failed).retryable)
+        }
+
+    /**
+     * The classification the whole `CLEARTEXT_BLOCKED` value exists for: **not retryable**, and its
+     * own cause rather than `NETWORK`. Reported as a network error it retried on a backoff for ever
+     * and told the user "the server did not respond" about a request that never left the device.
+     *
+     * The cleartext refusal is produced the same faithful way as in `EnclosureDownloaderTest` — an
+     * OkHttp client whose connection specs exclude cleartext raises the same
+     * `UnknownServiceException` Android's network security policy does.
+     */
+    @Test
+    fun `a cleartext enclosure fails without retrying and says so`() =
+        runBlocking {
+            val tlsOnly =
+                EnclosureDownloader(
+                    OkHttpClient
+                        .Builder()
+                        .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
+                        .build(),
+                )
+
+            val outcome =
+                downloader(enclosureDownloader = tlsOnly)
+                    .download(DownloadRequest(feed(), episode(), NamingSettings()))
+
+            val failed = outcome as DownloadOutcome.Failed
+            assertFalse("every retry is refused identically", failed.retryable)
+            assertEquals(ErrorCause.CLEARTEXT_BLOCKED, failed.cause)
+            assertEquals(emptyList<String>(), target.deliveries)
         }
 
     @Test
