@@ -35,33 +35,21 @@ old name timing only the **feed refresh**.
   exports always match, since `CreateDocument` writes `application/zip`. If a backup ever turns out
   to be un-pickable, the fix is one more string in that array.
 
-- **Non-MP3 tagging fixtures.** `audio/silence.mp3` is the only audio fixture, so M4A, OGG and Opus
-  tag and artwork writing is supported by jaudiotagger but never exercised by our tests
-  (`docs/architecture.md` §11). Needs an encoder the dev container lacks; a few tiny committed fixtures
-  would close it permanently.
 - **A device test for the download pipeline end to end** — enclosure fetch → tag write → SAF copy →
   ledger → outbox. Blocked on nothing but a subscription: subscriptions come only from Nextcloud, and
   seeding the SQLite file directly does not help, because with no account configured S1 correctly
   shows the *not configured* empty state instead of the list (`docs/UI.md` §4). Do it alongside the
   real-device Nextcloud login.
-- **Paging 3 for the episode list.** CLAUDE.md §3/§5 mandate it for long lists; the UI contract
-  currently says "paging or a keyed `LazyColumn`" (`docs/UI.md` §B14.3). A 500-episode feed
-  under the `All` filter is the case that decides it — measure before adding the dependency.
-- **Split `EpisodeLedgerRepository` into two ports.** It now carries eleven methods covering two
-  roles: the ledger and its outbox, and the UI-facing episode queries (`observeEpisodes`,
-  `observeUndecidedCounts`, `previewUndecided`, `undecided`). The DAOs were already split along that
-  line for the same reason. detekt flags the Room implementation's function count, suppressed there
-  with this note, because splitting the *port* touches `:core:sync`, `:core:download` and
-  `:feature:episodes` and does not belong inside a UI change.
 - **Full Nextcloud + `gpoddersync` as an opt-in compose profile.** CLAUDE.md §4 offers it as an
   option; `docs/dev-environment.md` §7 records the deliberate decision not to build it. The cost is
   that ADR 0008 stays source-read-only, permanently.
-- **Revoke the app password when the account is rejected.** S5 now confirms the account before
-  storing it (UI.md §8), so *Use a different account* throws away a password that Nextcloud has
-  already issued and still lists under *Security*. `DELETE /ocs/v2.php/core/apppassword`
-  authenticated with that password would clean it up. Left out of the fix deliberately: it is a new
-  endpoint with its own failure modes, added to the one code path whose job is to store nothing, and
-  the leftover is harmless and user-revocable. Worth doing if rejection turns out to be common.
+
+- **The revoke-on-decline call has never met a real Nextcloud.** `DELETE
+  /ocs/v2.php/core/apppassword` is covered by MockWebServer tests for the path, the method, the Basic
+  auth and the `OCS-APIRequest` header, but the header requirement and the 404-on-older-servers
+  behaviour are read from the OCS docs rather than observed. It is best-effort by contract, so
+  getting it wrong costs the leftover password it was meant to clean up and nothing more — but the
+  manual probe (`./gradlew :core:gpodder:nextcloudProbe`) would settle it in a minute (2026-08-14).
 
 ## Distribution readiness (audited 2026-08-04)
 

@@ -498,6 +498,9 @@ interface NextcloudLoginFlowClient {
     suspend fun start(baseUrl: String): Result<LoginFlow>
     suspend fun poll(flow: LoginFlow): Result<LoginResult>
     suspend fun verifyGpodderSync(creds: NextcloudCredentials): Result<Unit> // 200 or it did not work
+    // Deletes an app password the user declined, authenticated with that password. Best-effort:
+    // the caller's job at that moment is to store nothing, so nothing waits for this (docs/UI.md §8).
+    suspend fun revokeAppPassword(creds: NextcloudCredentials): Result<Unit>
 }
 
 interface SyncStateRepository {
@@ -1063,6 +1066,7 @@ and deleted (2026-08-13).
 | [0024](decisions/0024-mark-as-unplayed-is-a-state-not-a-delete.md) | *Mark as unplayed* is a new `UNPLAYED` ledger state, not a row deletion — the row outlives the decision, so the dedup authority is untouched | §4, §9 |
 | [0025](decisions/0025-two-directional-sync-passes.md) | Two directional passes — the pull is `since = 0` over the **unchanged** reconciliation, the push re-asserts every row and is chunked | §6, `docs/UI.md` §7 |
 | [0026](decisions/0026-manual-sync-only.md) | **No periodic sync pass** — every pass is one the user asked for, and the schedule an older build persisted is *cancelled* on start, not merely un-scheduled | §6, §10, CLAUDE.md §11 |
+| [0027](decisions/0027-no-paging-3-the-list-is-already-fast-enough.md) | **No Paging 3** — measured: 9,500 episodes reach the screen in 82–132 ms, so a keyed `LazyColumn` is the requirement rather than one of two options. Amends CLAUDE.md §3's table | `docs/UI.md` §B14.3 |
 
 ### Decisions folded into this document
 

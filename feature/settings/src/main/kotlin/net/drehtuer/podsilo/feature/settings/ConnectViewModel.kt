@@ -41,6 +41,7 @@ import net.drehtuer.podsilo.core.model.port.SyncTrigger
  * account the *browser* was signed into, which is not a choice the app gets to make or even
  * influence — so the one thing it can do is show the name before acting on it.
  */
+@Suppress("TooManyFunctions") // One private function per user-visible step of the flow; see the KDoc.
 class ConnectViewModel(
     private val loginFlowClient: NextcloudLoginFlowClient,
     private val settingsRepository: SettingsRepository,
@@ -145,16 +146,50 @@ class ConnectViewModel(
      *
      * That detour is the actual fix, unintuitive as it looks: the flow has no account chooser, so a
      * second attempt against a live browser session returns the same account however many times it is
-     * retried. The session is the thing to change, and only the browser can change it. The password
-     * granted here is left behind on the server — harmless, revocable under *Security* in Nextcloud,
-     * and noted in `docs/backlog.md` as worth revoking automatically one day.
+     * retried. The session is the thing to change, and only the browser can change it.
+     *
+     * The password Nextcloud already issued is **revoked** rather than abandoned — see
+     * [discardPendingCredentials]. The UI does not wait for that.
      */
     private fun rejectAccount() {
         val server = pendingCredentials?.serverUrl
-        pendingCredentials = null
+        discardPendingCredentials()
         _state.value =
             _state.value.copy(phase = ConnectUiState.Phase.Editing, showSwitchAccountHint = true)
         server?.let { effects.trySend(ConnectEffect.OpenBrowser(it)) }
+    }
+
+    /**
+     * Forgets the granted-but-unconfirmed credentials, and asks the server to delete the app
+     * password it already issued.
+     *
+     * Nextcloud hands the password over *before* the user is asked "is this the right account?", so
+     * every decline used to leave a live password listed under *Security* belonging to an account the
+     * user had just refused. Deleting it needs that same password to authenticate, which is why this
+     * is the last possible moment to do it — after this returns, the app cannot.
+     *
+     * **Nothing waits for it.** The caller's contract here is to store nothing and move on, so the
+     * request is launched and the state transition happens regardless. A server that is unreachable,
+     * or old enough not to have the endpoint, leaves exactly the harmless, hand-revocable leftover
+     * that existed before this method — which is why the failure is a log line and not a dialog.
+     */
+    private fun discardPendingCredentials() {
+        val credentials = pendingCredentials ?: return
+        pendingCredentials = null
+        viewModelScope.launch {
+            loginFlowClient.revokeAppPassword(credentials).onFailure {
+                logRepository.record(
+                    NewLogEntry(
+                        category = LogCategory.AUTH,
+                        message =
+                            "The app password for the account you declined could not be deleted " +
+                                "from Nextcloud. It is unused here; remove it under Settings → " +
+                                "Security if you want it gone.",
+                        detail = it.message,
+                    ),
+                )
+            }
+        }
     }
 
     private fun submit() {
@@ -166,7 +201,9 @@ class ConnectViewModel(
         flowJob?.cancel()
         pollJob?.cancel()
         pendingFlow = null
-        pendingCredentials = null
+        // Re-submitting from the confirmation screen abandons that grant just as surely as declining
+        // it does, so it is revoked on the same terms.
+        discardPendingCredentials()
         flowJob = viewModelScope.launch { connect(normaliseHost(host)) }
     }
 
@@ -181,8 +218,9 @@ class ConnectViewModel(
         pollJob = null
         pendingFlow = null
         // Backing out of the confirmation must not leave a granted password sitting in memory for a
-        // later Submit to pick up and store against a host the user has since retyped.
-        pendingCredentials = null
+        // later Submit to pick up and store against a host the user has since retyped — and the copy
+        // on the server is the same leftover a decline would have left, so it goes the same way.
+        discardPendingCredentials()
         if (_state.value.phase == ConnectUiState.Phase.Editing) {
             effects.trySend(ConnectEffect.Dismiss)
         } else {

@@ -5087,3 +5087,105 @@ the backlog too rather than into a claim. Our own exports always match: `CreateD
 `./gradlew ktlintCheck detekt test lint` green: **765 tests, 0 failures, 3 skipped** (up from 757 —
 one for the enum-removal property, five for the artwork upgrade and the enclosure it must not touch,
 two for the cleartext classification).
+
+---
+
+## 2026-08-14 (backlog, fifth pass) — an encoder, a measurement, and a note that was already done
+
+Four items touched this time, because the ordering did not cooperate: the first two open notes are
+both waiting on a phone (the wireless script path, the restore picker's MIME list), and the third
+actionable one turned out to be **already finished**. So: fixtures, the Paging measurement, the stale
+note deleted, and the app-password revocation as the third piece of real work.
+
+### The blocker in the note was the whole task
+
+"Non-MP3 tagging fixtures — needs an encoder the dev container lacks" is a note about a missing tool,
+and I read it for two sessions as *therefore blocked*. It is not: the fixtures are **committed**, so
+the encoder is needed exactly once. `apt-get install --no-install-recommends ffmpeg`, three
+`anullsrc` invocations, three files totalling under 5 KB, and the container never needs it again. The
+Dockerfile is untouched deliberately — adding a permanent 99-package dependency to regenerate three
+files that will not change would be the wrong trade — and the exact commands are in the test's KDoc
+so they are reproducible.
+
+Then the interesting part. The first green run reported this:
+
+```
+silence.mp3  -> Success
+silence.m4a  -> Success
+silence.ogg  -> PartialSuccess(skippedFields=[], artworkSkipped=true)
+silence.opus -> PartialSuccess(skippedFields=[], artworkSkipped=true)
+```
+
+Which looks like a finding: *Ogg and Opus cannot carry cover art*. **It is not true.** Writing
+artwork into a Vorbis comment goes through `AndroidArtwork`, which calls
+`BitmapFactory.decodeByteArray` to fill in the width/height a `METADATA_BLOCK_PICTURE` requires — and
+on the plain JVM unit-test classpath that throws *"not mocked"*, which `AudioTagWriter` correctly
+catches as "this container will not take artwork". Under Robolectric all four report `Success`.
+
+Had I written the assertions against the first run, I would have pinned an artefact of the test
+runtime as app behaviour, in a test whose entire purpose is to describe what the containers do. That
+is `docs/decisions/0017`'s lesson arriving from a new direction: the JVM does not merely fail to
+catch things, it can *invent* answers. What saved it was probing what each container actually
+reported instead of accepting that green meant what it looked like.
+
+### Paging 3: the measurement said no
+
+The note said "measure before adding the dependency", which is an instruction I could follow
+literally. `EpisodeListScaleTest` times the real query through the real DAO:
+
+| Rows | Filter | First emission |
+|---|---|---|
+| 500 | `All` | 6 ms |
+| 9,500 | `All` | 82 ms |
+| 9,500 | `To decide` | 132 ms |
+
+9,500 is the author's entire library — more than any screen asks for, since S2 is per-podcast. The
+slowest number is the default view, and it is an eighth of a second on the JVM.
+
+So: no Paging 3, recorded as `docs/decisions/0027`, because this contradicts CLAUDE.md §3's
+dependency table and that is what ADRs are for here. The thing I want to keep is how narrow the
+honest claim is — JVM numbers cannot tell you whether S2's *first frame* waits on the query, and the
+ADR says so under "what would reopen it" rather than implying the question is closed.
+
+The budgets in the test are deliberately ten times the measured values. A timing assertion tight
+enough to catch a 20% regression is a flaky test, and a flaky test is worse than none; what this one
+catches is the query changing *shape* — a join appearing, an index stopping being used.
+
+### A note that had already been done
+
+"Split `EpisodeLedgerRepository` into two ports" was fixed by commit `be5d7de`, some time before I
+started reading this file. The port is 7 methods, `EpisodeListRepository` exists beside it, and the
+detekt suppression the note said to look for is gone.
+
+That is the second stale note in five sessions (the ktlint one was wrong about *why*, this one about
+*whether*). The pattern is the same: a note records a moment, the code moves, and nothing tells the
+file. Cheap prevention: the note named a detekt suppression, and grepping for it was a ten-second
+check that would have caught it. Notes that name a *symptom you can grep for* expire visibly; notes
+that only describe a feeling do not.
+
+### Revoking the password the user just declined
+
+Nextcloud hands over the app password *before* S5 asks "is this the right account?", so every decline
+left a live password under *Security* belonging to an account the user had just refused. It is now
+deleted with `DELETE /ocs/v2.php/core/apppassword`, authenticated with that same password — which is
+the whole reason it has to happen at that exact moment, since the app is about to forget it.
+
+Two things worth writing down:
+
+- **Nothing waits for it.** The contract of that code path is to store nothing and get the user to
+  their browser. So the revoke is launched and the state transition happens regardless; a failure is
+  one `AUTH` line in S8 saying the leftover is harmless and how to remove it by hand. Making the
+  decline slower, or failable, to clean up something the note itself called harmless would be a bad
+  trade.
+- **Cancel and re-submit abandon the same grant**, so they revoke on the same terms. The note only
+  named *Use a different account*; fixing one path and leaving two others leaking would have been a
+  worse bug than the one being fixed, because it would look fixed.
+
+The `OCS-APIRequest: true` header is the trap here and has a test of its own: without it OCS answers
+**401**, which is indistinguishable from a wrong password unless you already know. That, and the
+404-on-older-servers behaviour, are read from the docs rather than observed — so the fact that this
+has never met a real Nextcloud is a new backlog line, not silence.
+
+`./gradlew ktlintCheck detekt test lint` green: **796 tests, 0 failures, 3 skipped** (up from 765 —
+20 parameterised tagging tests across four containers, 3 scale measurements, and 8 for the
+revocation).

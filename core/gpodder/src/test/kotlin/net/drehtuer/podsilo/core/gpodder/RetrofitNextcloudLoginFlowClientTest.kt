@@ -323,4 +323,54 @@ class RetrofitNextcloudLoginFlowClientTest {
             username = "drehtuer",
             appPassword = "app-pw-xyz",
         )
+
+    // --- revoking a declined app password --------------------------------------------------------
+
+    @Test
+    fun `revoke deletes the app password, authenticated with that same password`() =
+        runTest {
+            server.enqueue(MockResponse().setResponseCode(200).setBody("""{"ocs":{"meta":{"status":"ok"}}}"""))
+
+            val result = client().revokeAppPassword(credentials())
+
+            assertTrue(result.isSuccess)
+            val request = server.takeRequest()
+            assertEquals("DELETE", request.method)
+            assertEquals("/ocs/v2.php/core/apppassword", request.path)
+            // The password being deleted is the only credential this app holds, and is exactly what
+            // the endpoint authenticates with. "drehtuer:app-pw-xyz" base64-encoded.
+            assertEquals("Basic ZHJlaHR1ZXI6YXBwLXB3LXh5eg==", request.getHeader("Authorization"))
+        }
+
+    /**
+     * The header is not optional and not obvious: OCS refuses a request without it with a **401**,
+     * which is indistinguishable from a wrong password unless you know to look.
+     */
+    @Test
+    fun `revoke sends the OCS-APIRequest header`() =
+        runTest {
+            server.enqueue(MockResponse().setResponseCode(200))
+
+            client().revokeAppPassword(credentials())
+
+            assertEquals("true", server.takeRequest().getHeader("OCS-APIRequest"))
+        }
+
+    @Test
+    fun `a server without the endpoint fails the Result rather than throwing`() =
+        runTest {
+            // An older Nextcloud. The caller treats this as "nothing to clean up" — the leftover is
+            // hand-revocable — so what matters is that it comes back as a value.
+            server.enqueue(MockResponse().setResponseCode(404))
+
+            assertTrue(client().revokeAppPassword(credentials()).isFailure)
+        }
+
+    @Test
+    fun `an unreachable server fails the Result rather than throwing`() =
+        runTest {
+            server.shutdown()
+
+            assertTrue(client().revokeAppPassword(credentials()).isFailure)
+        }
 }

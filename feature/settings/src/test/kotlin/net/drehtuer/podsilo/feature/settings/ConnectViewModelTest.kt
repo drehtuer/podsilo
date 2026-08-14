@@ -411,6 +411,94 @@ class ConnectViewModelTest {
         }
 
     /**
+     * Nextcloud issues the app password *before* the user is asked whether it is the right account,
+     * so declining used to leave a live password listed under *Security* belonging to an account
+     * they had just refused. Deleting it needs that same password, so this is the last moment the
+     * app can do it at all.
+     */
+    @Test
+    fun `rejecting the account revokes the app password Nextcloud already issued`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.RejectAccount)
+                skipItems(1)
+            }
+
+            assertEquals(1, client.revoked.size)
+            assertEquals("app-password", client.revoked.single().appPassword)
+            assertNull("revoking is not storing", settings.storedCredentials)
+        }
+
+    /**
+     * Best-effort, by contract: an old Nextcloud without the endpoint, or one that cannot be
+     * reached, leaves exactly the harmless hand-revocable leftover that existed before this
+     * feature — and must not change a single thing the user sees while declining.
+     */
+    @Test
+    fun `a failed revoke is logged and changes nothing about the rejection`() =
+        runTest {
+            client.revokeResult = Result.failure(IllegalStateException("HTTP 404"))
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.RejectAccount)
+
+                assertEquals(ConnectEffect.OpenBrowser("https://cloud.example.org"), awaitItem())
+            }
+
+            assertEquals(ConnectUiState.Phase.Editing, viewModel.state.value.phase)
+            assertTrue(viewModel.state.value.showSwitchAccountHint)
+            assertNull(settings.storedCredentials)
+            assertTrue(
+                "the user cannot act on this, so it belongs in the log and nowhere else",
+                log.recorded.any { it.category == LogCategory.AUTH && it.message.contains("could not be deleted") },
+            )
+        }
+
+    /** Backing out of the confirmation abandons the same grant, so it is revoked on the same terms. */
+    @Test
+    fun `cancelling at the confirmation revokes it too`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.Cancel)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertEquals(1, client.revoked.size)
+        }
+
+    /** Confirming stores it — and must never revoke the password it just stored. */
+    @Test
+    fun `confirming the account revokes nothing`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEvent(ConnectEvent.HostChanged("cloud.example.org"))
+
+            viewModel.effect.test {
+                viewModel.onEvent(ConnectEvent.Submit)
+                skipItems(1)
+                viewModel.onEvent(ConnectEvent.ConfirmAccount)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertEquals("the stored password must not be deleted from the server", 0, client.revoked.size)
+            assertEquals("app-password", settings.storedCredentials?.appPassword)
+        }
+
+    /**
      * The dangerous version of rejecting: the discarded password must not be lying around for a
      * later confirmation to pick up. Without clearing it, *Use a different account* followed by
      * `ConfirmAccount` would store exactly the account the user just refused.
