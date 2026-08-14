@@ -236,6 +236,10 @@ dependencies {
     // Android 16+ — it calls InputManager.getInstance(), which no longer exists, so every Compose
     // instrumented test died in onIdle() before running a line (docs/journal.md, 2026-08-08).
     androidTestImplementation(libs.androidx.test.espresso.core)
+    // Reading tags back out of a delivered file is how DownloadPipelineInstrumentedTest proves the
+    // tag step ran; :core:download keeps jaudiotagger as an `implementation` detail, so the test
+    // source set needs its own view of it. Test-only — nothing ships from here.
+    androidTestImplementation(libs.jaudiotagger)
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
