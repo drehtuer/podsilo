@@ -879,6 +879,39 @@ versions in a downloads folder.
   About → *Build*, so "is this the build I just installed?" is answerable on the phone. `versionName`
   alone cannot answer it: `0.1.0` stays `0.1.0` across every sideload of the day.
 
+### Cutting a release — draft first, always
+
+This repository has GitHub's **immutable releases** enabled. A published release refuses every asset
+upload:
+
+```
+HTTP 422: Cannot upload assets to an immutable release.
+```
+
+Worse, **the tag name is then spent for good.** GitHub keeps the tag of an immutable release
+reserved even after you delete the release, so you cannot fix a wrongly-published release by
+deleting and recreating it — the second attempt fails with `tag_name was used by an immutable
+release` and the version number has to be abandoned. This is exactly how v0.5.0 was lost.
+
+So the order is not optional:
+
+1. Merge the `chore(release): X.Y.Z` commit (version bump + README status line) to `main`.
+2. Create the release **as a draft**, on the merge commit:
+   ```sh
+   gh release create vX.Y.Z --draft --target main \
+       --title "vX.Y.Z — …" --notes-file notes.md
+   ```
+3. **Wait for CI.** The `release: created` trigger fires on the draft being saved; the workflow
+   builds both APKs and attaches them, plus the gzipped R8 mapping. Confirm with
+   `gh release view vX.Y.Z --json assets`.
+4. Only then publish:
+   ```sh
+   gh release edit vX.Y.Z --draft=false --latest
+   ```
+
+If a release is ever published directly, the workflow now **fails loudly** rather than warning — the
+silent skip is what let v0.5.0 go out with green checks and no APKs.
+
 ### Creating a release keystore
 
 **The keystore is yours and is never committed** — `.gitignore` covers `*.jks` and

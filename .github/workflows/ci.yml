@@ -30,8 +30,14 @@
 # download and isn't.
 #
 # Every run uploads them as short-lived workflow artifacts. When a GitHub Release
-# is published they are attached to it instead, where they persist indefinitely —
+# is **drafted** they are attached to it as well, where they persist indefinitely —
 # release assets aren't subject to the artifact retention window.
+#
+# CUTTING A RELEASE: create the release as a DRAFT, wait for this workflow to
+# attach the APKs, then publish it. Publishing first cannot be undone — immutable
+# releases refuse assets after publication, and GitHub keeps the tag name reserved
+# even if the release is deleted, so the version number is spent. docs/dev-
+# environment.md §10 has the procedure.
 name: CI
 
 on:
@@ -40,7 +46,13 @@ on:
   pull_request:
     branches: [main]
   release:
-    types: [published]
+    # `created`, NOT `published`. This repository has GitHub's **immutable
+    # releases** enabled, and a published release refuses every asset upload with
+    # `HTTP 422: Cannot upload assets to an immutable release`. Assets therefore
+    # have to be attached while the release is still a **draft**, and `created`
+    # is the activity type that fires when a draft is saved. Discovered the
+    # expensive way on v0.5.0 — see docs/dev-environment.md §10.
+    types: [created]
 
 permissions:
   contents: read
@@ -166,12 +178,24 @@ jobs:
       # An unsigned release APK is not attached: it downloads like a real build
       # and then refuses to install, which is worse than its absence. The debug
       # APK always goes up, so a release is never left with nothing installable.
-      - name: Attach APKs to release
+      - name: Attach APKs to draft release
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
+          IS_DRAFT: ${{ github.event.release.draft }}
         run: |
+          # Immutable releases accept assets only before publication, so a release
+          # that arrives here already published cannot be fixed by this job — and
+          # the tag name is then burned for good, because GitHub reserves the tag
+          # of an immutable release even after the release is deleted. Fail loudly
+          # rather than warn: a silent skip is what left v0.5.0 with no APKs while
+          # every other check was green.
+          if [ "$IS_DRAFT" != "true" ]; then
+              echo "::error::$TAG was published directly — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: docs/dev-environment.md §10."
+              exit 1
+          fi
+
           gh release upload "$TAG" app/build/outputs/apk/debug/podsilo-*-debug.apk --clobber
 
           # `apksigner verify`, NOT a grep for META-INF/*.RSA. That file is produced by v1 (JAR)

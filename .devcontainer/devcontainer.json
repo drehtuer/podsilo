@@ -10,7 +10,9 @@
     // Host networking during build — see the runArgs comment below. Without it every
     // `RUN apt-get`/`curl` step fails with "Could not connect ... connection timed
     // out" while the WSL2 host itself has perfectly good internet.
-    "options": ["--network=host"],
+    "options": [
+      "--network=host"
+    ],
     // These four are BEST-EFFORT DEFAULTS — you should not need to change them on
     // a new machine, and changing them is not sufficient on its own anyway.
     //
@@ -27,7 +29,7 @@
       "USER_UID": "1000",
       "USER_GID": "1000",
       "KVM_GID": "993",
-      "DOCKER_GID": "109"
+      "DOCKER_GID": "108"
     }
   },
   "workspaceFolder": "/workspaces/podsilo",
@@ -90,7 +92,6 @@
     // Plain bridge networking should work now; dropping this line means re-checking
     // both bullets above.
     "--network=host",
-
     // Hardware virtualisation for the in-container (Tier 2) emulator. Requires
     // Windows 11 + Docker Engine installed inside the WSL2 distro (not Docker
     // Desktop). Windows 11 enables nested virtualisation by default; add
