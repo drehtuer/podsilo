@@ -4749,3 +4749,57 @@ Numbers unchanged at 60/54/0/6 because the 08-13 run reproduced the 08-11 one ex
 
 JVM test count moves 684 → **749**, all green, 3 skipped (the `OpodsyncIntegrationTest` cases that
 want the compose sync server). Zero compiler warnings, as of #76 earlier today.
+
+## 2026-08-14 (0.5.1) — the release I threw away, and the two-step rule that replaces it
+
+0.5.1 has no code in it. It exists because 0.5.0 is unusable, and the way it became unusable is the
+entry.
+
+### What happened
+
+v0.5.0 was cut correctly: PR #77 merged, tag on the merge commit, release published, CI triggered on
+`release: published`. All six checks passed. Both APKs built, the release one signed with the same
+certificate as v0.4.0. Then the last step failed:
+
+```
+HTTP 422: Cannot upload assets to an immutable release.
+```
+
+This repository has GitHub's **immutable releases** enabled, which the workflow predates — v0.4.0,
+three days earlier, attached its APKs without complaint. The design is publish-then-attach, and under
+immutability that is simply impossible: publication is exactly the moment assets stop being
+accepted. The step was written to `::warning::` on a missing APK, so the run was red only because
+`gh` exited non-zero — a slightly different failure and it would have gone out green.
+
+### The part I got wrong
+
+The recovery looked obvious: delete the release, recreate it as a draft, attach the APKs, publish.
+The author approved that. It does not work, and I should have checked before running it rather than
+after:
+
+```
+HTTP 422: tag_name was used by an immutable release
+```
+
+**GitHub reserves the tag name of an immutable release permanently, including after the release is
+deleted.** So deleting v0.5.0 did not free v0.5.0 — it destroyed the only release object that could
+ever carry that number. The lesson is narrow and worth stating plainly: *when a platform tells you a
+thing is immutable, find out what that makes irreversible before deleting anything.* A thirty-second
+experiment on a scratch tag would have cost nothing and saved the version number.
+
+Nothing else was lost. `main` was correct throughout, the tag still pointed at the right commit, and
+the CI-built APKs were recoverable from the workflow artifact — verified against v0.4.0's certificate
+digest before reuse, since attaching a differently-signed APK would have broken upgrades silently.
+
+### What replaces it
+
+The workflow now triggers on `release: created`, which fires when a **draft** is saved, and attaches
+to the draft. Publication is the human's last step and freezes it. The step also **fails instead of
+warning** when it finds an already-published release: the cost of missing this is an unrecoverable
+version number, which is far too high for a warning in a log nobody reads on a green run.
+
+`docs/dev-environment.md` §10 gains the four steps in order — merge, draft, wait for CI, publish —
+with the reason the order matters written next to them, because the order is not a style preference
+here.
+
+Test count unchanged at 749; no Kotlin changed in this release.
