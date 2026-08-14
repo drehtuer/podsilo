@@ -39,23 +39,25 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: [v0.5.1 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
-> end to end, and sync now closes the loop.** Subscription mirroring, feed refresh, the download
-> pipeline, GPodder sync, Nextcloud login, naming and tagging are built and tested (749 JVM tests,
-> green), and all eight screens in `docs/UI.md` render and are reachable. Verified against a **real
-> Nextcloud on a real phone** — login, ~9,500 episodes across four feeds, reconciliation,
-> downloading, tagging and backup/restore. `podsilo-0.5.1.apk` is a signed, minified release build;
-> sideload it on your own device.
+> **Status: [v0.6.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
+> end to end, and this release is about what it does when something goes wrong.** Subscription
+> mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
+> are built and tested (796 JVM tests, green), and all eight screens in `docs/UI.md` render and are
+> reachable. `podsilo-0.6.0.apk` is a signed, minified release build; sideload it on your own device.
 >
-> This release makes a downloaded episode stop coming back: a completed download now emits `PLAY`
-> alongside `DOWNLOAD` ([ADR 0023](docs/decisions/0023-a-download-also-marks-the-episode-played.md)),
-> because Nextcloud discards `DOWNLOAD` and every other client kept seeing the episode as new. Sync
-> is now **manual only** — there is no periodic pass
-> ([ADR 0026](docs/decisions/0026-manual-sync-only.md)).
+> **Failures now say what they are.** An expired app password reads as an *Account* problem telling
+> you to sign in again, instead of hiding among the sync errors — the GPodder client classifies its
+> own failures rather than leaving the caller to guess from a message string. An episode published
+> over plain `http://`, which Android refuses to fetch, says so once instead of retrying for ever
+> behind "the server did not respond". Cover art served over `http://` is fetched over TLS instead,
+> so podcasts that advertise it that way now show their artwork. Declining an account at the
+> confirmation step now **deletes** the app password Nextcloud had already issued, rather than
+> leaving it listed under *Security* for an account you refused.
 >
-> The device test set was last run on 2026-08-13 against a Pixel 10a (Android 17): **60 tests, 54
-> passed, 0 failed, 6 skipped.** The skips are the SAF write, which opts out on an install with no
-> folder granted — see [`docs/dev-environment.md`](docs/dev-environment.md) §6.
+> **Verified on real hardware against a real Nextcloud** (2026-08-14, Pixel 10a / Android 17): the
+> device test set is **61 tests, 0 failed, 0 skipped** — the first run with no skips, including the
+> SAF write and a new end-to-end pipeline test that downloads a real episode, tags it and delivers it
+> through the Storage Access Framework. See [`docs/dev-environment.md`](docs/dev-environment.md) §6.
 
 ## The idea
 

@@ -5265,3 +5265,34 @@ whether to build the compose profile. The last one came back **re-declined on be
 before** — with a real server to probe, a local one is weaker evidence, not stronger.
 
 Tier 1 green throughout: **796 tests, 0 failures, 3 skipped.** Device: **61, 0, 0.**
+
+---
+
+## 2026-08-14 (0.6.0) — the release about what happens when things go wrong
+
+Cut after the device session, and the shape of it is unusual: almost nothing here adds a feature.
+0.6.0 is what the app does when something fails.
+
+Four user-visible changes, and each replaced a silence with a sentence:
+
+- An expired app password now reads as an **Account** problem that names the fix, instead of hiding
+  among the sync errors. The GPodder client types its own failures rather than leaving the caller to
+  guess from a message string.
+- A cleartext `http://` enclosure says so **once**, instead of retrying for ever behind "the server
+  did not respond" about a request that never left the device.
+- Cover art advertised over `http://` is fetched over TLS, so podcasts that do that show their
+  artwork instead of a monogram. Enclosure URLs are deliberately *not* rewritten — they are episode
+  identity.
+- Declining an account deletes the app password Nextcloud had already issued.
+
+The rest is verification rather than code: 796 JVM tests, a device set that is finally **61 with no
+skips**, and the ADR that says Paging 3 is not needed because 9,500 episodes reach the screen in
+132 ms.
+
+### On cutting it
+
+The procedure from the v0.5.0 loss held without incident: bump, merge, **push the tag**, let CI draft
+the release and attach the assets, write the notes, publish last. The one thing I checked by hand
+before tagging was that `assembleRelease` produced a *signed* APK locally — `apksigner verify` rather
+than looking for a `META-INF/*.RSA`, which v1 signing is off for and which is exactly the check that
+would have passed a broken build.
