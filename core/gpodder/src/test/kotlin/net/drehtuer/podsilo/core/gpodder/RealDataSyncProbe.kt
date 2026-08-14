@@ -149,7 +149,7 @@ private fun episodeFrom(
 ): Episode? {
     val xml =
         runCatching {
-            http.newCall(Request.Builder().url(feedUrl).build()).execute().use { it.body?.string() }
+            http.newCall(Request.Builder().url(feedUrl).build()).execute().use { it.body.string() }
         }.getOrNull() ?: return null
 
     val item = Regex("<item>(.*?)</item>", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.get(1) ?: return null
