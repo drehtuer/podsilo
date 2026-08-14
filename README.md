@@ -33,15 +33,21 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: [v0.4.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
-> end to end, and triage now scales.** Subscription mirroring, feed refresh, the download pipeline,
-> GPodder sync, Nextcloud login, naming and tagging are built and tested (684 JVM tests, green), and
-> all eight screens in `docs/UI.md` render and are reachable. Verified against a **real Nextcloud on
-> a real phone** — login, ~9,500 episodes across four feeds, reconciliation, downloading, tagging and
-> backup/restore. `podsilo-0.4.0.apk` is a signed, minified release build; sideload it on your own
-> device.
+> **Status: [v0.5.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
+> end to end, and sync now closes the loop.** Subscription mirroring, feed refresh, the download
+> pipeline, GPodder sync, Nextcloud login, naming and tagging are built and tested (749 JVM tests,
+> green), and all eight screens in `docs/UI.md` render and are reachable. Verified against a **real
+> Nextcloud on a real phone** — login, ~9,500 episodes across four feeds, reconciliation,
+> downloading, tagging and backup/restore. `podsilo-0.5.0.apk` is a signed, minified release build;
+> sideload it on your own device.
 >
-> The device test set was last run on 2026-08-11 against a Pixel 10a (Android 17): **60 tests, 54
+> This release makes a downloaded episode stop coming back: a completed download now emits `PLAY`
+> alongside `DOWNLOAD` ([ADR 0023](docs/decisions/0023-a-download-also-marks-the-episode-played.md)),
+> because Nextcloud discards `DOWNLOAD` and every other client kept seeing the episode as new. Sync
+> is now **manual only** — there is no periodic pass
+> ([ADR 0026](docs/decisions/0026-manual-sync-only.md)).
+>
+> The device test set was last run on 2026-08-13 against a Pixel 10a (Android 17): **60 tests, 54
 > passed, 0 failed, 6 skipped.** The skips are the SAF write, which opts out on an install with no
 > folder granted — see [`docs/dev-environment.md`](docs/dev-environment.md) §6.
 

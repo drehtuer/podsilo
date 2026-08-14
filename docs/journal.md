@@ -4718,3 +4718,34 @@ want the compose sync server. Nothing needed synchronisation added.
 Green on everything CI runs: `./gradlew ktlintCheck detekt test` BUILD SUCCESSFUL, and a rebuild of
 debug + unit-test + androidTest sources now reports zero Kotlin compiler warnings. Test count is
 unmoved at 749 — nothing here changed behaviour, which is the intended result of a warning sweep.
+
+## 2026-08-14 (release) — 0.5.0, the release where sync stopped lying
+
+Cut from main at `a2cd580`, sixteen PRs after v0.4.0 (#61–#76).
+
+The version is a **minor** bump and the reason is ADR 0023. Until this release a downloaded episode
+stayed *new* in every other client for ever: Podsilo emitted `DOWNLOAD`, Nextcloud discards
+`DOWNLOAD` on arrival (ADR 0008), and the GPodder API has no "seen" flag — so the one signal that
+survived was never sent. That is a behaviour change to the app's central job, not a fix to a
+mistake, and it comes with a knowingly accepted cost: another client may auto-delete its own copy of
+an episode this device downloaded. The author ruled that this is the intended reading.
+
+Four ADRs landed in this cycle and they are the release: 0022 (a `PLAY` means *ended*, in both
+directions — an unended `PLAY` is how a client says *unread* and must not be terminal), 0023 (above),
+0024 (*mark as unplayed* is a ledger state, never a deleted row — the row is the dedup authority and
+it stays), 0026 (no periodic sync at all; every pass is one the user asked for).
+
+### On cutting it
+
+Version bump plus README status line, which is exactly what the previous four release commits
+touched — worth checking rather than assuming, because the release process here is *publish the
+GitHub Release*, and CI does the rest on the `release: published` trigger. The APKs are attached by
+that run, so the tag has to be right before it fires, not after.
+
+The README's device-test line moved from 2026-08-11 to **2026-08-13** rather than to today. The
+2026-08-14 device work was a manual verification of the #65 round trip against the real Nextcloud,
+not a run of the 60-test set; dating the set to today would have claimed a run that did not happen.
+Numbers unchanged at 60/54/0/6 because the 08-13 run reproduced the 08-11 one exactly.
+
+JVM test count moves 684 → **749**, all green, 3 skipped (the `OpodsyncIntegrationTest` cases that
+want the compose sync server). Zero compiler warnings, as of #76 earlier today.
