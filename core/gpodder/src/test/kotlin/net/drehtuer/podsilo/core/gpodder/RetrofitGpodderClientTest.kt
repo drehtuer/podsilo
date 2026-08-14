@@ -5,6 +5,8 @@ package net.drehtuer.podsilo.core.gpodder
 import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.port.EpisodeAction
 import net.drehtuer.podsilo.core.model.port.EpisodeActionType
+import net.drehtuer.podsilo.core.model.port.GpodderException
+import net.drehtuer.podsilo.core.model.port.GpodderFailure
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -16,7 +18,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 
 class RetrofitGpodderClientTest {
@@ -208,7 +209,7 @@ class RetrofitGpodderClientTest {
                 """.trimMargin(),
             )
 
-            val delta = client.fetchSubscriptions(null)
+            val delta = client.fetchSubscriptions(null).getOrThrow()
 
             assertEquals(listOf("https://a.example/feed.xml", "https://b.example/feed.xml"), delta.add)
             assertEquals(listOf("https://old.example/feed.xml"), delta.remove)
@@ -220,7 +221,7 @@ class RetrofitGpodderClientTest {
         runBlocking {
             enqueueJson("""{"add":[],"remove":[],"timestamp":5,"update_urls":[]}""")
 
-            assertEquals(5L, client.fetchSubscriptions(null).timestamp)
+            assertEquals(5L, client.fetchSubscriptions(null).getOrThrow().timestamp)
         }
 
     @Test
@@ -233,7 +234,7 @@ class RetrofitGpodderClientTest {
                 """.trimMargin(),
             )
 
-            val page = client.fetchEpisodeActions(0)
+            val page = client.fetchEpisodeActions(0).getOrThrow()
 
             assertEquals(EpisodeActionType.DOWNLOAD, page.actions.single().action)
             assertEquals(9L, page.timestamp)
@@ -252,6 +253,7 @@ class RetrofitGpodderClientTest {
                 EpisodeActionType.PLAY,
                 client
                     .fetchEpisodeActions(0)
+                    .getOrThrow()
                     .actions
                     .single()
                     .action,
@@ -269,7 +271,12 @@ class RetrofitGpodderClientTest {
                 """.trimMargin(),
             )
 
-            val action = client.fetchEpisodeActions(0).actions.single()
+            val action =
+                client
+                    .fetchEpisodeActions(0)
+                    .getOrThrow()
+                    .actions
+                    .single()
 
             assertNull(action.started)
             assertNull(action.position)
@@ -286,7 +293,12 @@ class RetrofitGpodderClientTest {
                 """.trimMargin(),
             )
 
-            val action = client.fetchEpisodeActions(0).actions.single()
+            val action =
+                client
+                    .fetchEpisodeActions(0)
+                    .getOrThrow()
+                    .actions
+                    .single()
 
             assertEquals(0, action.started)
             assertEquals(1800, action.position)
@@ -305,6 +317,7 @@ class RetrofitGpodderClientTest {
             assertNull(
                 client
                     .fetchEpisodeActions(0)
+                    .getOrThrow()
                     .actions
                     .single()
                     .guid,
@@ -322,44 +335,70 @@ class RetrofitGpodderClientTest {
                 """.trimMargin(),
             )
 
-            val actions = client.fetchEpisodeActions(0).actions
+            val actions = client.fetchEpisodeActions(0).getOrThrow().actions
 
             assertEquals(1, actions.size)
             assertEquals("e2", actions.single().episode)
         }
 
     // --- failure paths -------------------------------------------------------------------------
+    //
+    // Every one of these asserts a GpodderFailure rather than "something went wrong". The kind is
+    // part of the port's contract (`GpodderClient`) because SyncOrchestrator reads it twice: once to
+    // decide whether to retry, once to decide whether S8 files the entry under Account or Sync.
+    // Before it was typed, all of this arrived as Retrofit's HttpException and was indistinguishable
+    // from a bug.
+
+    private fun Result<*>.failure(): GpodderException {
+        assertTrue("expected a failure, got $this", isFailure)
+        val thrown = exceptionOrNull()
+        assertTrue("expected a GpodderException, got $thrown", thrown is GpodderException)
+        return thrown as GpodderException
+    }
 
     @Test
-    fun `a 401 on post yields a failed Result carrying the status code`() =
+    fun `a 401 on post is UNAUTHORIZED and carries the status code`() =
         runBlocking {
             server.enqueue(MockResponse().setResponseCode(401))
 
-            val result =
-                client.postEpisodeActions(
-                    listOf(
-                        EpisodeAction("p", "e", null, EpisodeActionType.PLAY, "2026-07-14T09:00:00"),
-                    ),
-                )
+            val failure = client.postEpisodeActions(listOf(playAction)).failure()
 
-            assertTrue(result.isFailure)
-            assertEquals(401, (result.exceptionOrNull() as GpodderHttpException).code)
+            assertEquals(GpodderFailure.UNAUTHORIZED, failure.failure)
+            assertEquals(401, failure.statusCode)
+            assertFalse("a wrong password is still wrong next time", failure.failure.retryable)
         }
 
     @Test
-    fun `a 500 on post yields a failed Result rather than throwing`() =
+    fun `a 403 on post is UNAUTHORIZED too`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(403))
+
+            assertEquals(GpodderFailure.UNAUTHORIZED, client.postEpisodeActions(listOf(playAction)).failure().failure)
+        }
+
+    @Test
+    fun `a 500 on post is a retryable SERVER_ERROR rather than a thrown exception`() =
         runBlocking {
             server.enqueue(MockResponse().setResponseCode(500))
 
-            val result =
-                client.postEpisodeActions(
-                    listOf(
-                        EpisodeAction("p", "e", null, EpisodeActionType.PLAY, "2026-07-14T09:00:00"),
-                    ),
-                )
+            val failure = client.postEpisodeActions(listOf(playAction)).failure()
 
-            assertTrue(result.isFailure)
-            assertEquals(500, (result.exceptionOrNull() as GpodderHttpException).code)
+            assertEquals(GpodderFailure.SERVER_ERROR, failure.failure)
+            assertEquals(500, failure.statusCode)
+            assertTrue("the server is broken, not absent", failure.failure.retryable)
+        }
+
+    @Test
+    fun `a 404 on post is REJECTED, not a server error`() =
+        runBlocking {
+            // What a Nextcloud without the gpoddersync app answers. Retrying it forever would bury
+            // the one entry that explains why nothing ever syncs.
+            server.enqueue(MockResponse().setResponseCode(404))
+
+            val failure = client.postEpisodeActions(listOf(playAction)).failure()
+
+            assertEquals(GpodderFailure.REJECTED, failure.failure)
+            assertFalse(failure.failure.retryable)
         }
 
     @Test
@@ -374,36 +413,82 @@ class RetrofitGpodderClientTest {
             assertEquals("[]", server.takeRequest().body.readUtf8())
         }
 
+    /**
+     * The regression test for the whole change: this used to escape as Retrofit's `HttpException`,
+     * which is not an `IOException`, so an expired app password reached `SyncOrchestrator` in the
+     * shape of an unexpected bug and was logged as a plain `SYNC` failure.
+     */
     @Test
-    fun `a 401 on a GET throws, so SyncOrchestrator can classify it`() {
-        server.enqueue(MockResponse().setResponseCode(401))
+    fun `a 401 on a GET is a failed Result carrying UNAUTHORIZED, not a thrown HttpException`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(401))
 
-        val thrown = runCatching { runBlocking { client.fetchSubscriptions(null) } }.exceptionOrNull()
+            val failure = client.fetchSubscriptions(null).failure()
 
-        assertTrue("expected an IOException-family failure, got $thrown", thrown is Exception)
-    }
-
-    @Test
-    fun `a malformed response body throws rather than yielding silently empty data`() {
-        enqueueJson("this is not json at all")
-
-        val thrown = runCatching { runBlocking { client.fetchSubscriptions(null) } }.exceptionOrNull()
-
-        assertTrue("expected a parse failure, got $thrown", thrown != null)
-    }
+            assertEquals(GpodderFailure.UNAUTHORIZED, failure.failure)
+            assertEquals(401, failure.statusCode)
+        }
 
     @Test
-    fun `a read timeout surfaces as a SocketTimeoutException`() {
-        val impatient = newClient(readTimeoutMillis = 250)
-        server.enqueue(
-            MockResponse()
-                .setHeader("Content-Type", "application/json")
-                .setBody("""{"add":[],"remove":[],"timestamp":0}""")
-                .setBodyDelay(2, TimeUnit.SECONDS),
-        )
+    fun `a 500 on a GET is a retryable SERVER_ERROR`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(500))
 
-        val thrown = runCatching { runBlocking { impatient.fetchSubscriptions(null) } }.exceptionOrNull()
+            val failure = client.fetchEpisodeActions(0).failure()
 
-        assertTrue("expected SocketTimeoutException, got $thrown", thrown is SocketTimeoutException)
-    }
+            assertEquals(GpodderFailure.SERVER_ERROR, failure.failure)
+            assertTrue(failure.failure.retryable)
+        }
+
+    @Test
+    fun `a malformed response body is MALFORMED rather than silently empty data`() =
+        runBlocking {
+            enqueueJson("this is not json at all")
+
+            val failure = client.fetchSubscriptions(null).failure()
+
+            assertEquals(GpodderFailure.MALFORMED, failure.failure)
+            assertFalse("the same unreadable answer comes back next time", failure.failure.retryable)
+        }
+
+    @Test
+    fun `a read timeout is TIMED_OUT rather than UNREACHABLE`() =
+        runBlocking {
+            // Kept apart deliberately: Nextcloud's bruteforce protection delays repeated requests
+            // from one address, so a correct server answering slowly is normal here.
+            val impatient = newClient(readTimeoutMillis = 250)
+            server.enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"add":[],"remove":[],"timestamp":0}""")
+                    .setBodyDelay(2, TimeUnit.SECONDS),
+            )
+
+            val failure = impatient.fetchSubscriptions(null).failure()
+
+            assertEquals(GpodderFailure.TIMED_OUT, failure.failure)
+            assertNull("nothing came back, so there is no status", failure.statusCode)
+        }
+
+    @Test
+    fun `an unreachable server is UNREACHABLE and names no credential`() =
+        runBlocking {
+            val unreachable =
+                RetrofitGpodderClient.create(
+                    baseUrl = "http://localhost:1",
+                    credentials = GpodderCredentials("alice", "app-password"),
+                )
+
+            val failure = unreachable.fetchSubscriptions(null).failure()
+
+            assertEquals(GpodderFailure.UNREACHABLE, failure.failure)
+            assertTrue(failure.failure.retryable)
+            assertFalse(
+                "a failure message must never carry the app password",
+                failure.message.orEmpty().contains("app-password"),
+            )
+        }
+
+    private val playAction =
+        EpisodeAction("p", "e", null, EpisodeActionType.PLAY, "2026-07-14T09:00:00")
 }

@@ -785,7 +785,7 @@ block-beta
   end
   block:x3
     columns 1
-    e3["31 Jul 20:58 · SYNC\nNextcloud returned 401 — authorization may have been revoked\n[ open settings ]"]
+    e3["31 Jul 20:58 · AUTH\nNextcloud rejected the stored app password. Connect the account again in Settings.\n[ open settings ]"]
   end
   foot["Keeps the last 200 entries · nothing leaves the device"]
 ```

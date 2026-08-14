@@ -104,6 +104,7 @@ internal suspend fun realDataSyncPass(
     val onServer =
         client
             .fetchEpisodeActions(since = 0)
+            .getOrThrow()
             .actions
             .filter { it.podcast == episode.feedUrl }
     println()

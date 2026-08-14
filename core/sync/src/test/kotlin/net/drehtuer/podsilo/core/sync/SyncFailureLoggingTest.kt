@@ -6,6 +6,8 @@ import kotlinx.coroutines.runBlocking
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.SyncOutcome
+import net.drehtuer.podsilo.core.model.port.GpodderException
+import net.drehtuer.podsilo.core.model.port.GpodderFailure
 import net.drehtuer.podsilo.core.model.port.LogCategory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -100,6 +102,80 @@ class SyncFailureLoggingTest {
             assertTrue("the count is what tells the user how much is waiting", entry.message.startsWith("2 decision"))
             assertTrue(entry.message.contains("will be sent again"))
             assertEquals("nothing may be marked synced without a 2xx", 2, ledger.getUnsynced().size)
+        }
+
+    // --- typed failures ----------------------------------------------------------------------
+    //
+    // The GPodder port returns a GpodderException carrying a GpodderFailure, and these assert the
+    // two things this class reads off it. Before it was typed, a failed GET arrived as Retrofit's
+    // HttpException — not an IOException — so an expired app password was reported as an unexpected
+    // error under the SYNC chip, which is the one category S8's filter exists to separate it from.
+
+    @Test
+    fun anExpiredAppPasswordIsAnAuthEntryAndIsNotRetried() =
+        runBlocking {
+            val failure = GpodderException(GpodderFailure.UNAUTHORIZED, "HTTP 401 Unauthorized", statusCode = 401)
+
+            val outcome = orchestrator(FakeGpodderClient(subscriptionsFailure = failure)).sync()
+
+            assertTrue("a revoked password will still be revoked next time", outcome is SyncOutcome.Failure)
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.AUTH, entry.category)
+            assertEquals(
+                "Nextcloud rejected the stored app password. Connect the account again in Settings.",
+                entry.message,
+            )
+        }
+
+    @Test
+    fun aServerErrorIsRetriedAndStaysUnderSync() =
+        runBlocking {
+            val failure = GpodderException(GpodderFailure.SERVER_ERROR, "HTTP 503 Service Unavailable", 503)
+
+            val outcome = orchestrator(FakeGpodderClient(episodeActionsFailure = failure)).sync()
+
+            assertTrue(outcome is SyncOutcome.Retry)
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.SYNC, entry.category)
+            assertEquals("Sync with Nextcloud failed: the server reported an error.", entry.message)
+        }
+
+    @Test
+    fun anUnreadableAnswerIsNotRetried() =
+        runBlocking {
+            val failure = GpodderException(GpodderFailure.MALFORMED, "Unexpected JSON token at offset 0")
+
+            val outcome = orchestrator(FakeGpodderClient(subscriptionsFailure = failure)).sync()
+
+            assertTrue("asking again gets the same unreadable answer", outcome is SyncOutcome.Failure)
+            assertEquals(
+                "Sync with Nextcloud failed: the server's answer could not be read.",
+                log.recorded.single().message,
+            )
+        }
+
+    /**
+     * The push path reads the same failure, and has to: it is the one that runs on every triage
+     * decision, so it is where a revoked password is most likely to be noticed first.
+     */
+    @Test
+    fun aPushRefusedForAuthNamesTheCauseAndStopsRetrying() =
+        runBlocking {
+            val ledger = FakeEpisodeLedgerRepository()
+            ledger.upsert(skippedRow("guid-1"))
+            val failure = GpodderException(GpodderFailure.UNAUTHORIZED, "HTTP 401 Unauthorized", 401)
+
+            val outcome = orchestrator(FakeGpodderClient(postResult = Result.failure(failure)), ledger).sync()
+
+            assertTrue(outcome is SyncOutcome.Failure)
+            val entry = log.recorded.single()
+            assertEquals(LogCategory.AUTH, entry.category)
+            assertTrue(
+                "the cause is named, not just the count",
+                entry.message.contains("rejected the stored app password"),
+            )
+            assertTrue("the reassurance survives", entry.message.contains("will be sent again"))
+            assertEquals("nothing may be marked synced without a 2xx", 1, ledger.getUnsynced().size)
         }
 
     /** No message may carry the exception's own text as the headline — that is what `detail` is for. */

@@ -114,16 +114,16 @@ private class FakeGpodderClient : GpodderClient {
     var subscriptionCalls: Int = 0
         private set
 
-    override suspend fun fetchSubscriptions(since: Long?): SubscriptionDelta {
+    override suspend fun fetchSubscriptions(since: Long?): Result<SubscriptionDelta> {
         subscriptionCalls++
-        failWith?.let { throw it }
-        return SubscriptionDelta(add = emptyList(), remove = emptyList(), timestamp = 0)
+        failWith?.let { return Result.failure(it) }
+        return Result.success(SubscriptionDelta(add = emptyList(), remove = emptyList(), timestamp = 0))
     }
 
     override suspend fun postEpisodeActions(actions: List<EpisodeAction>): Result<Unit> = Result.success(Unit)
 
-    override suspend fun fetchEpisodeActions(since: Long): EpisodeActionPage =
-        EpisodeActionPage(actions = emptyList(), timestamp = 0)
+    override suspend fun fetchEpisodeActions(since: Long): Result<EpisodeActionPage> =
+        Result.success(EpisodeActionPage(actions = emptyList(), timestamp = 0))
 }
 
 private class FakeSettingsRepository : SettingsRepository {
