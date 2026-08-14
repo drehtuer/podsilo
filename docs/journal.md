@@ -5013,3 +5013,77 @@ sessions ago, and exactly the kind of sentence that quietly becomes false.
 
 `./gradlew ktlintCheck detekt test lint` green, `shellcheck` and `yamllint` clean. Test count
 unchanged at **757, 0 failures, 3 skipped**.
+
+---
+
+## 2026-08-14 (backlog, fourth pass) — one item I could not do, and a decision that was really two
+
+The next three were the wireless device verification, the two unreachable `ErrorCause` values, and
+the cleartext `http://` question. **The first one I could not do**: it needs a phone, and there is no
+adb server, no `/dev/bus/usb` and nothing on port 5037 in this container. Rather than report two
+items and stop, I did the next three actionable ones — so the count holds, but the wireless note
+stays exactly where it was, unverified, and I want that stated rather than buried.
+
+### Deleting from a persisted vocabulary
+
+`FEED_PARSE` and `TAG_WRITE` had no writer anywhere: a tag-write failure must never fail a download
+(CLAUDE.md §6), and a feed failure is logged under `LogCategory.FEED` against no episode at all. The
+note called this the author's call because `ErrorCause` is persisted, and the risk it was pointing at
+is real — deleting an enum value that a stored row still holds is normally how you take out a whole
+list at read time.
+
+Except it isn't here, and the reason is one line already in the mapper:
+`runCatching { enumValueOf<ErrorCause>(it) }.getOrNull()`. An unrecognised name degrades to `null`,
+which the UI already renders as `UNKNOWN`. That property is what makes the deletion safe *regardless*
+of whether the "nothing ever wrote it" argument holds, so it is now a test rather than a paragraph:
+write `TAG_WRITE` straight into the column with SQL — the domain type cannot express it any more —
+and assert the row still reads.
+
+That distinction is worth keeping. "Nothing ever wrote it" is a claim about today's code and it
+expires. "An unknown value reads as null" is a property, and a test can hold it.
+
+### The cleartext question was two questions
+
+The note framed it as one decision with three options (network-security config, per-domain
+allow-list, or upgrade-and-fall-back). Reading the code, it is two questions with different answers,
+and conflating them is how you get a bad one:
+
+- **Artwork.** `Feed.imageUrl` and `Episode.imageUrl` carry no identity, and `PodsiloArtwork` already
+  draws a monogram when a load fails. Upgrading the scheme at parse time either works, or fails
+  exactly as the blocked request did with the same fallback. There is no case where it is worse, so
+  it is a one-line change in `RssMapping` and the author's `heute journal` gets its cover.
+- **Enclosures.** Upgrading one would have been the same one-liner and would have been a **serious
+  bug**. An enclosure URL is `episodeKey`'s fallback when a feed omits `<guid>`, and it is the
+  `episode` field of every action posted to the shared log — so a rewritten one is a *different
+  episode* to AntennaPod and to Nextcloud. That is precisely the drift this app exists to prevent.
+
+So enclosures are left exactly as published and the failure is made loud instead: `CLEARTEXT_BLOCKED`
+is a new `ErrorCause`, **non-retryable**, with a sentence saying the publisher serves the episode over
+http. Before, that arrived as `NetworkError` — retryable — so it would have backed off for ever while
+reporting "the server did not respond" about a request that never left the device. That is the
+"network error with no obvious cause" the backlog predicted, and it is now the opposite.
+
+The test is the part I am happiest with. Android raises `UnknownServiceException` from its network
+security policy, and **OkHttp raises the same exception** from a client whose connection specs exclude
+cleartext — so restricting the client exercises the real catch branch on a plain JVM, with no
+emulator and no `targetSdk` involved. A fixture feed with `http://` on both the artwork and the
+enclosures pins both halves of the decision in one place, including that the enclosure comes back
+untouched.
+
+Note the shape of the two changes together: one `ErrorCause` value removed for having no writer, one
+added *with* its writer in the same commit. That is the rule the enum's KDoc now states.
+
+### The restore picker
+
+`*/*` made the filter a no-op, so a Downloads folder full of PDFs and APKs was the picker's contents.
+Dropped, and four explicit spellings kept in its place — `application/zip`, `octet-stream`, and the
+two `x-zip` forms Windows-influenced file managers report — which is wider than the two the note
+proposed, at no cost, because `EXTRA_MIME_TYPES` is a union.
+
+What I cannot check from here is which type any given file manager actually reports, so that went to
+the backlog too rather than into a claim. Our own exports always match: `CreateDocument` writes
+`application/zip`.
+
+`./gradlew ktlintCheck detekt test lint` green: **765 tests, 0 failures, 3 skipped** (up from 757 —
+one for the enum-removal property, five for the artwork upgrade and the enclosure it must not touch,
+two for the cleartext classification).
