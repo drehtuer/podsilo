@@ -77,7 +77,7 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier.widthIn(max = MaxContentWidth).verticalScroll(rememberScrollState()),
             ) {
-                NextcloudGroup(state.nextcloud, now, onEvent)
+                NextcloudGroup(state.nextcloud, now, state.directionalSyncBusy, onEvent)
                 DownloadsGroup(state, onEvent)
                 TriageGroup(state, onEvent)
                 AppearanceGroup(state.theme, onEvent)
@@ -90,6 +90,7 @@ fun SettingsScreen(
 
     state.pendingBulk?.let { BulkPreviewDialog(it, onEvent) }
     if (state.restoreConfirmationVisible) RestoreWarningDialog(onEvent)
+    state.pendingDirectionalSync?.let { DirectionalSyncDialog(it, onEvent) }
 }
 
 /**
@@ -136,6 +137,7 @@ private fun BackupGroup(
 private fun NextcloudGroup(
     nextcloud: NextcloudUi,
     now: Instant,
+    directionalSyncBusy: Boolean,
     onEvent: (SettingsEvent) -> Unit,
 ) {
     GroupHeader("NEXTCLOUD")
@@ -151,6 +153,24 @@ private fun NextcloudGroup(
             title = "Last sync",
             subtitle = lastSyncLine(nextcloud, now),
             onClick = { onEvent(SettingsEvent.LastSyncClicked) },
+        )
+        // The two directional passes sit under *Last sync*, which already answers "when did this
+        // happen" — so "make it happen, in this direction" belongs beside it (`docs/UI.md` §7).
+        // Absent entirely when no account is connected, rather than disabled: there is nothing to
+        // apply and nowhere to send.
+        SettingsRow(
+            title = "Apply Nextcloud's state here",
+            subtitle = "Marks episodes played here if they are played in Nextcloud. Nothing is unmarked.",
+            onClick =
+                { onEvent(SettingsEvent.DirectionalSyncRequested(SyncDirection.PULL)) }
+                    .takeUnless { directionalSyncBusy },
+        )
+        SettingsRow(
+            title = "Send this device's state to Nextcloud",
+            subtitle = "Re-sends every decision made here, including ones already sent.",
+            onClick =
+                { onEvent(SettingsEvent.DirectionalSyncRequested(SyncDirection.PUSH)) }
+                    .takeUnless { directionalSyncBusy },
         )
     }
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = RowPadding)) {

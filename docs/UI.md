@@ -428,6 +428,8 @@ block-beta
   r2["Account\nuser · connected 31 Jul 2026"]
   r3["[ Change Nextcloud instance ]"]
   r4["Last sync   10 min ago · 3 actions pending      ›"]
+  r4a["Apply Nextcloud's state here                     ›\nMarks episodes played here if they are played in\nNextcloud. Nothing is unmarked."]
+  r4b["Send this device's state to Nextcloud            ›\nRe-sends every decision made here, including\nones already sent."]
   g2["DOWNLOADS"]
   r5["Download folder\nSD card / Podcasts                 ›"]
   r6["File naming\nDer Podcast/20260714_Warum-…mp3    ›"]
@@ -460,6 +462,18 @@ block-beta
   Nextcloud** when nothing is configured.
 - **Last sync** **[gap]** — relative timestamp plus outbox depth (`syncedToServer = false` count);
   tapping opens S7.
+- **Apply Nextcloud's state here** / **Send this device's state to Nextcloud** (`docs/decisions/0025`)
+  — the two directional passes, under *Last sync* because that row already answers "when did this
+  happen". Both are absent until an account is connected, both go dead while either runs, and both
+  confirm first. The push names its count; **the pull cannot** — the number worth showing is "how
+  many of these change anything here", which is only knowable after a fetch, and a view model does
+  not touch the network (§B0.3). It says what the operation does and does not do instead.
+  - The pull only ever *marks episodes played*; it never un-marks one and never replaces a
+    `DOWNLOADED` row. That is a short enough promise to put in the subtitle, and it is why the pull
+    needs no new conflict rule: it is the ordinary reconciliation over the whole log.
+  - The push is the only way to repair a decision the server never received — a download recorded
+    before `docs/decisions/0023` sent `DOWNLOAD` alone, which Nextcloud discards, and its row is
+    already synced so no ordinary pass will retry it.
 
 **Downloads group**
 

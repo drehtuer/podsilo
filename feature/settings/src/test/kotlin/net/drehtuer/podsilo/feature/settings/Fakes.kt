@@ -338,3 +338,16 @@ class FakeLogRepository : LogRepository {
 
     override suspend fun exportPlainText(): String = ""
 }
+
+/** Records which directional pass was asked for, and never performs one. */
+class RecordingDirectionalSync : DirectionalSync {
+    val requests = mutableListOf<SyncDirection>()
+
+    override fun applyRemoteState() {
+        requests += SyncDirection.PULL
+    }
+
+    override fun sendLocalState() {
+        requests += SyncDirection.PUSH
+    }
+}

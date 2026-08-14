@@ -52,6 +52,7 @@ class SettingsViewModelTest {
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val archive = FakeDatabaseArchive()
     private val syncTrigger = RecordingSyncTrigger()
+    private val directionalSync = RecordingDirectionalSync()
 
     @Before
     fun setUp() {
@@ -75,6 +76,7 @@ class SettingsViewModelTest {
             syncStatus = { lastSync },
             archive = archive,
             syncTrigger = syncTrigger,
+            directionalSync = directionalSync,
             clock = clock,
             version = "0.1.0",
             build = "42 · 2026-08-04 00:00 UTC · abc1234",
@@ -396,7 +398,8 @@ class SettingsViewModelTest {
         }
 }
 
-private suspend fun app.cash.turbine.ReceiveTurbine<SettingsUiState>.awaitUntil(
+/** Shared with the directional-sync tests: one settling helper beats two that drift. */
+internal suspend fun app.cash.turbine.ReceiveTurbine<SettingsUiState>.awaitUntil(
     predicate: (SettingsUiState) -> Boolean,
 ): SettingsUiState {
     while (true) {
