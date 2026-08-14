@@ -1477,7 +1477,7 @@ data class FailureUi(val cause: ErrorCause, val message: String, val attempts: I
 // the message text — see its KDoc. `retryable` is stored alongside it, because a 404 and a 503 are
 // both SERVER and only one is worth retrying.
 
-enum class ErrorCause { NETWORK, SERVER, AUTH, DISK_FULL, FOLDER_UNAVAILABLE, UNKNOWN }
+enum class ErrorCause { NETWORK, SERVER, AUTH, DISK_FULL, FOLDER_UNAVAILABLE, CLEARTEXT_BLOCKED, UNKNOWN }
 
 /** One user-visible condition with three causes (§12.11). */
 sealed interface QueueStatus {

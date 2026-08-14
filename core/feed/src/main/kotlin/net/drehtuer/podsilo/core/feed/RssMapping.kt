@@ -27,6 +27,25 @@ data class ParsedFeed(
 private val RFC_822_DATE: DateTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME
 
 /**
+ * Upgrades a cover-art URL from `http://` to `https://`.
+ *
+ * Android blocks cleartext at `targetSdk` 28+, and feeds still advertise artwork over `http://` —
+ * the author's own `heute journal` does, which is why that podcast rendered a monogram instead of a
+ * cover. Requesting the same path over TLS either works, or fails exactly as the blocked request
+ * did and `PodsiloArtwork` falls back to the monogram it already draws. There is no case where this
+ * is worse, which is what makes it preferable to a network-security config that would weaken every
+ * request in the app.
+ *
+ * **Only artwork.** [Episode.enclosureUrl] is deliberately not touched anywhere: it is
+ * `episodeKey`'s fallback when a feed omits `<guid>`, and it is the `episode` field of every action
+ * posted to the shared GPodder log, so an upgraded one is a *different episode* to every other
+ * client (`docs/architecture.md` §4/§6). A cleartext enclosure is reported instead, as
+ * `ErrorCause.CLEARTEXT_BLOCKED`.
+ */
+internal fun String.artworkOverTls(): String =
+    if (startsWith("http://", ignoreCase = true)) "https://" + substring("http://".length) else this
+
+/**
  * Maps a parsed [RssChannel] to [ParsedFeed] for [feedUrl]. Items without an enclosure are
  * excluded -- they aren't downloadable and have no other purpose in this app (CLAUDE.md section 7).
  * A duplicate `episodeKey` across items keeps the first (feed) occurrence, since RSS items are
@@ -36,7 +55,7 @@ fun RssChannel.toParsedFeed(feedUrl: String): ParsedFeed {
     val metadata =
         ParsedFeedMetadata(
             title = title?.trim()?.takeIf(String::isNotEmpty),
-            imageUrl = itunesChannelData?.image ?: image?.url,
+            imageUrl = (itunesChannelData?.image ?: image?.url)?.trim()?.takeIf(String::isNotEmpty)?.artworkOverTls(),
         )
     val episodes =
         items
@@ -61,7 +80,7 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
         link = link?.trim()?.takeIf(String::isNotEmpty),
         // itunes:image first: it is the per-episode cover feeds actually use. A bare <image> on an
         // item is rare but legal, and costs nothing to accept.
-        imageUrl = (itunesItemData?.image ?: image)?.trim()?.takeIf(String::isNotEmpty),
+        imageUrl = (itunesItemData?.image ?: image)?.trim()?.takeIf(String::isNotEmpty)?.artworkOverTls(),
         // Advisory, and only when positive: feeds write `length="0"` when they mean "no idea", and a
         // row reading "0 MB" is worse than one with no size at all.
         sizeBytes = rawEnclosure?.length?.takeIf { it > 0 },

@@ -60,6 +60,62 @@ class EpisodeImageParsingTest {
         parse("valid_minimal.xml").episodes.forEach { assertNull(it.imageUrl) }
     }
 
+    // --- cleartext artwork ---------------------------------------------------------------------
+    //
+    // Android blocks http:// at targetSdk 28+, and feeds still publish artwork that way. Upgrading
+    // the request to TLS either works or fails exactly as the blocked request did, with the same
+    // monogram fallback, so there is no case where it is worse than leaving it — which is what makes
+    // it preferable to a network-security config that would weaken every request in the app.
+
+    @Test
+    fun `a cleartext channel image is requested over TLS instead`() {
+        assertEquals(
+            "https://example.org/podcast-cover.jpg",
+            parse("cleartext_artwork.xml").metadata.imageUrl,
+        )
+    }
+
+    @Test
+    fun `a cleartext episode image is requested over TLS instead`() {
+        val episodes = parse("cleartext_artwork.xml").episodes
+
+        assertEquals(
+            "https://example.org/ep-cleartext.jpg",
+            episodes.single { it.guid == "ep-cleartext" }.imageUrl,
+        )
+    }
+
+    @Test
+    fun `an uppercase scheme is upgraded too`() {
+        val episodes = parse("cleartext_artwork.xml").episodes
+
+        assertEquals("https://example.org/ep-uppercase.jpg", episodes.single { it.guid == "ep-uppercase" }.imageUrl)
+    }
+
+    @Test
+    fun `an https image is left exactly as published`() {
+        val episodes = parse("cleartext_artwork.xml").episodes
+
+        assertEquals("https://example.org/ep-secure.jpg", episodes.single { it.guid == "ep-secure" }.imageUrl)
+    }
+
+    /**
+     * **The invariant the artwork upgrade must not break.** An enclosure URL is `episodeKey`'s
+     * fallback when a feed omits `<guid>`, and it is the `episode` field of every action posted to
+     * the shared GPodder log — so an upgraded one is a *different episode* to AntennaPod and to
+     * Nextcloud. A cleartext enclosure is reported as `ErrorCause.CLEARTEXT_BLOCKED` at download
+     * time instead; it is never rewritten to make it work.
+     */
+    @Test
+    fun `a cleartext enclosure URL is left untouched, because it is episode identity`() {
+        val episodes = parse("cleartext_artwork.xml").episodes
+
+        assertEquals(
+            "http://example.org/ep-cleartext.mp3",
+            episodes.single { it.guid == "ep-cleartext" }.enclosureUrl,
+        )
+    }
+
     /**
      * `<enclosure length>` — advisory, and only when positive.
      *

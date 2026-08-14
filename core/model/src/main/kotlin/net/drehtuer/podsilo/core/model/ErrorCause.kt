@@ -33,5 +33,21 @@ enum class ErrorCause {
     AUTH,
     DISK_FULL,
     FOLDER_UNAVAILABLE,
+
+    /**
+     * The enclosure is served over plain `http://` and Android refused the connection.
+     *
+     * Its own value rather than [NETWORK] because it is permanent — the request never left the
+     * device, and every retry is refused identically — and because the sentence a user needs is
+     * about the *feed*, not about their connection.
+     *
+     * **Podsilo does not rewrite the URL to `https://` to get around it.** An enclosure URL is not
+     * decoration: it is `episodeKey`'s fallback when a feed omits `<guid>`, and it is the `episode`
+     * field of every action posted to the shared GPodder log (`docs/architecture.md` §4/§6). A
+     * rewritten one is a *different episode* to AntennaPod and to Nextcloud, which is the one kind
+     * of drift this app exists to prevent. Cover art carries no identity and is upgraded, in
+     * `:core:feed`; enclosures are left exactly as the feed published them.
+     */
+    CLEARTEXT_BLOCKED,
     UNKNOWN,
 }

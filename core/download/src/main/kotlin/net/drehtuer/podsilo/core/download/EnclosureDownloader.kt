@@ -13,6 +13,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.UnknownServiceException
 
 private const val HTTP_PARTIAL_CONTENT = 206
 private const val HTTP_RANGE_NOT_SATISFIABLE = 416
@@ -37,6 +38,21 @@ sealed interface EnclosureDownloadResult {
 
     /** DNS/connect/timeout/TLS, or a truncated body — transient, and the partial file is kept for resume. */
     data class NetworkError(
+        val reason: String,
+    ) : EnclosureDownloadResult
+
+    /**
+     * Android refused to open the connection because the enclosure is served over plain `http://`.
+     *
+     * Its own case rather than a [NetworkError] because it is **permanent and nothing to do with the
+     * network**: the request never left the device, and every retry will be refused identically.
+     * Reported as a network error it retried on a backoff for ever and read as "the server did not
+     * respond", which is the failure `docs/backlog.md` predicted would arrive with no obvious cause.
+     *
+     * Podsilo does **not** upgrade the URL to `https://` to get around this — see the note on
+     * `ErrorCause.CLEARTEXT_BLOCKED`.
+     */
+    data class CleartextBlocked(
         val reason: String,
     ) : EnclosureDownloadResult
 
@@ -85,6 +101,15 @@ class EnclosureDownloader(
             throw cancellation
         } catch (write: DiskWriteException) {
             EnclosureDownloadResult.WriteError(write.message ?: "failed to write to the download cache")
+        } catch (cleartext: UnknownServiceException) {
+            // BEFORE the IOException branch it is a subclass of. This is Android's own refusal of a
+            // plain http:// connection ("CLEARTEXT communication to host not permitted by network
+            // security policy"), and it is the only IOException here that no retry can ever change.
+            // Only the connect can raise it; a body read cannot, which is why the inner catch in
+            // `attempt` needs no equivalent.
+            EnclosureDownloadResult.CleartextBlocked(
+                cleartext.message ?: "an unencrypted http:// connection was refused",
+            )
         } catch (network: IOException) {
             EnclosureDownloadResult.NetworkError(network.message ?: "network error downloading enclosure")
         }
