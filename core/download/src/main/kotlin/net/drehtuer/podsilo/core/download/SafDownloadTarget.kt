@@ -3,9 +3,9 @@
 package net.drehtuer.podsilo.core.download
 
 import android.content.Context
-import android.net.Uri
 import android.system.ErrnoException
 import android.system.Os
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.flow.first
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
@@ -85,7 +85,7 @@ class SafDownloadTarget(
         val uri =
             settingsRepository.observeDownloadFolderUri().first()
                 ?: throw DownloadFolderUnavailableException("no download folder has been chosen yet")
-        val tree = DocumentFile.fromTreeUri(context, Uri.parse(uri))
+        val tree = DocumentFile.fromTreeUri(context, uri.toUri())
         if (tree == null || !tree.isDirectory || !tree.canWrite()) {
             throw DownloadFolderUnavailableException("the download folder is no longer accessible: $uri")
         }

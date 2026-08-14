@@ -58,6 +58,10 @@ dependencies {
     implementation(libs.jaudiotagger)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.okhttp)
+    // Only for `String.toUri()` in SafDownloadTarget, which lint's UseKtx asks for. Not a new
+    // dependency for the project: :app already ships core-ktx, so the APK does not grow by a byte —
+    // which is what makes the KTX call cheaper here than the warning was.
+    implementation(libs.androidx.core.ktx)
     implementation(libs.work.runtime.ktx)
     implementation(libs.documentfile)
     implementation(libs.hilt.android)
