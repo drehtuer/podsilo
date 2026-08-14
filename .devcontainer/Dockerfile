@@ -47,6 +47,27 @@ ENV LANG=C.UTF-8 \
 
 # --- Toolchain and everyday CLI ------------------------------------------------
 # openjdk-17-jdk (not -headless): AGP crunches PNGs through java.awt/ImageIO.
+#
+# python3 is here for tooling around the build, never for the app: this image had
+# no scripting language beyond perl and awk, so checking a YAML file (there are
+# five: the CI workflow, dependabot.yml, the compose file, detekt's config and
+# .yamllint.yml itself) meant eyeballing indentation. python3-yaml parses them;
+# yamllint is the ready-made check, configured by .yamllint.yml at the root.
+#
+# shellcheck for the other unlinted language in this repository: five bash
+# scripts that re-chown volumes, drive a real phone, and resolve the Windows host
+# across two WSL networking modes, none of them covered by a test. Configured by
+# .shellcheckrc at the root.
+#
+# Nothing in Gradle, the app, or the test tiers depends on any of this — dropping
+# these packages costs only the ability to lint YAML and shell, and to write
+# ad-hoc scripts.
+#
+# python3-venv + python3-pip because noble enforces PEP 668: `pip install` into
+# the system interpreter refuses with "externally-managed-environment", so
+# anything beyond the distro packages belongs in a `python3 -m venv` and these are
+# what make that possible offline-ish. Deliberately no pip packages baked in —
+# the header's "distro packages only" rule holds here too.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       openjdk-17-jdk \
@@ -58,6 +79,12 @@ RUN apt-get update \
       zip \
       ripgrep \
       jq \
+      python3 \
+      python3-venv \
+      python3-pip \
+      python3-yaml \
+      yamllint \
+      shellcheck \
       less \
       procps \
       sudo \
