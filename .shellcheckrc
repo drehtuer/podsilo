@@ -8,8 +8,9 @@
 # persisted volumes and re-aligns the kvm/docker GIDs, device-test.sh drives a
 # real phone, adb-connect-host.sh resolves the Windows host across two WSL
 # networking modes. None of it is covered by a test, so static analysis is the
-# only check they have — docs/backlog.md already notes that src/androidTest/ has
-# no linting either, and this is the same gap one directory over.
+# only check they have. `src/androidTest/` was the same gap one directory over
+# until 2026-08-14, when ktlint and detekt were pointed at it; these scripts are
+# now the only thing in the repository with no other net under them.
 #
 # WHY ONLY FOUR OPTIONAL CHECKS. ShellCheck ships nine off-by-default checks. The
 # four enabled below are the ones the existing scripts **already pass**, so they

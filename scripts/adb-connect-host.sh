@@ -5,13 +5,21 @@
 # that does not work. The helper CLAUDE.md §4 asks for, "rather than making the author remember it".
 #
 # THE CONTAINER NEVER TOUCHES USB. It has no /dev/bus/usb, no usbip and no libusb access, and does
-# not need any: adb is a client/server protocol over TCP, so the container runs only the *client*
-# and the server that owns the device runs in WSL (or on Windows). That is why `linux-tools-virtual`
-# and `hwdata` belong in the WSL distro, where usbipd-win delivers the device, and not in this
-# image — see docs/dev-environment.md §9.
+# not need any: adb is a client/server protocol over TCP, so on the USB path the container runs only
+# the *client* and the server that owns the device runs in WSL (or on Windows). That is why
+# `linux-tools-virtual` and `hwdata` belong in the WSL distro, where usbipd-win delivers the device,
+# and not in this image — see docs/dev-environment.md §9.
+#
+# OVER WIRELESS DEBUGGING (§9.4) THAT IS INVERTED: no USB device is owned by anyone, the server
+# reaches the phone over TCP, and the server therefore belongs *here*. This script supports both, and
+# the fact that separates them is not "is a server running in the container" — it is whether that
+# server can see a device. An empty list from a container-local server is the USB failure; a
+# non-empty one is a working link on either transport.
 #
 # Read-only and side-effect free by design: it will not start an adb server, because the one thing
-# that reliably breaks this setup is a server started on the *container* side (see below).
+# that reliably breaks the USB setup is a server started on the *container* side. Every adb client
+# command below runs only after a raw TCP probe has proved one is already answering, since a client
+# with nothing to talk to is exactly what starts the bad server.
 set -euo pipefail
 
 PORT="${ADB_SERVER_PORT:-5037}"
@@ -39,26 +47,27 @@ else
     host="127.0.0.1"
 fi
 
-# --- The failure mode worth defending against -----------------------------------------------------
-# If `adb devices` is ever run in this container while no server is listening, adb starts one HERE.
-# It then holds 127.0.0.1:5037 in the shared host namespace and answers for WSL too — with an empty
-# device list, because it cannot see USB. The symptom is "my device disappeared from WSL as well",
-# which looks like a cable or a phone problem and is neither.
-if pgrep -x adb >/dev/null 2>&1; then
-    fail "An adb server is running INSIDE this container (pid $(pgrep -x adb | tr '\n' ' '))."
-    say  ""
-    say  "  It cannot see USB — this container has no /dev/bus/usb — and because the network"
-    say  "  namespace is shared it is also answering for WSL, so both sides report no devices."
-    say  ""
-    say  "  Fix, in this order:"
-    say  "      adb kill-server            # here"
-    say  "      adb devices                # in WSL, which starts a server that owns the device"
-    say  "      $0                         # here again"
-    exit 1
-fi
+# --- Is the server local to this container? -------------------------------------------------------
+# Only meaningful when we are talking to a local socket at all: with ADB_SERVER_SOCKET pointing at
+# another machine, a stray `adb` process in here is not the server we are about to query.
+local_server() {
+    case "$host" in
+        127.0.0.1 | localhost | ::1) pgrep -x adb >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
 
 # --- Is anything answering? -----------------------------------------------------------------------
 if ! listening "$host" "$PORT"; then
+    if local_server; then
+        # A server process exists but is not reachable at the socket we were told to use — almost
+        # always a stale ADB_SERVER_SOCKET rather than a broken server.
+        fail "An adb server is running here (pid $(pgrep -x adb | paste -sd' ' -)) but nothing answers on $host:$PORT."
+        say  ""
+        say  "  ADB_SERVER_SOCKET=${ADB_SERVER_SOCKET:-<unset>} is what chose that address."
+        say  "  Unset it to talk to the local server, or point it somewhere that is listening."
+        exit 1
+    fi
     fail "No adb server is listening on $host:$PORT."
     say  ""
     say  "  Nothing is wrong in here — start the server on the side that owns the device."
@@ -88,9 +97,42 @@ say "  (the server must be the same platform-tools build — a mismatch makes th
 say "   and start a USB-blind one in its place, which reads as 'no devices attached')"
 
 # --- What is attached -----------------------------------------------------------------------------
+# Safe to ask now, and only now: a client command starts a server *only when none answers*, and one
+# demonstrably answers. Asking earlier is what would create the USB-blind server described below.
 say ""
 devices="$(adb devices -l | tail -n +2 | grep -v '^[[:space:]]*$' || true)"
+
+# --- The failure mode worth defending against -----------------------------------------------------
+# If an adb client runs in this container while no server is listening, adb starts one HERE. It then
+# holds 127.0.0.1:5037 in the shared host namespace and answers for WSL too — with an empty device
+# list, because it cannot see USB. The symptom is "my device disappeared from WSL as well", which
+# looks like a cable or a phone problem and is neither.
+#
+# THE TEST IS THE EMPTY LIST, NOT THE PROCESS. A container-local server used to be treated as the
+# fault itself, which is right for USB and exactly wrong for wireless debugging (§9.4): over Wi-Fi
+# nothing owns a USB device, the server reaches the phone over TCP, and so the local server is the
+# one that is *supposed* to be there. Refusing on sight made `device-test.sh` unusable on the easier
+# of the two transports. A local server holding no devices is still the bug; a local server holding
+# a device is doing its job, whatever the transport.
 if [ -z "$devices" ]; then
+    if local_server; then
+        fail "An adb server is running INSIDE this container (pid $(pgrep -x adb | paste -sd' ' -)) and sees nothing."
+        say  ""
+        say  "  If the phone is on USB it cannot see it — this container has no /dev/bus/usb — and"
+        say  "  because the network namespace is shared it is also answering for WSL, so both sides"
+        say  "  report no devices."
+        say  ""
+        say  "  For a USB device, fix in this order:"
+        say  "      adb kill-server            # here"
+        say  "      adb devices                # in WSL, which starts a server that owns the device"
+        say  "      $0                         # here again"
+        say  ""
+        say  "  For wireless debugging (docs/dev-environment.md §9.4) this server is the right one —"
+        say  "  it just has nothing connected yet. Pair and connect the phone:"
+        say  "      adb pair <ip>:<pairing-port> <code>"
+        say  "      adb connect <ip>:<connect-port>     # a DIFFERENT port, shown on the same screen"
+        exit 1
+    fi
     fail "The server is up but no devices are attached."
     say  ""
     say  "  Check in WSL first — if 'adb devices' is empty there too, the phone is not passed"
@@ -101,6 +143,16 @@ fi
 
 note "Attached"
 say "$devices"
+
+# A serial of the form <host>:<port> is a network device — wireless debugging, or an emulator
+# reached over TCP. Named explicitly because §9.4's advice inverts §9.1's, and knowing which page
+# you are on is most of the battle when this goes wrong.
+if printf '%s\n' "$devices" | awk '{print $1}' | grep -qE ':[0-9]+$'; then
+    say ""
+    say "  (network device — wireless debugging, so the adb server belongs in this container;"
+    say "   docs/dev-environment.md §9.4. Do not 'fix' it with adb kill-server.)"
+fi
+
 say ""
 say "Run instrumented tests against it with:"
-say "    ./gradlew connectedDebugAndroidTest"
+say "    ./scripts/device-test.sh"

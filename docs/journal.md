@@ -4942,3 +4942,74 @@ workaround" are both defensible until you know the ratio is fourteen to one.
 `./gradlew ktlintCheck detekt test lint` green, and `lint` verified from a cleaned build tree since
 that is how CI will run it. Test count unchanged at **757, 0 failures, 3 skipped** — none of this
 touched a code path with behaviour.
+
+---
+
+## 2026-08-14 (backlog, third pass) — a fix I had argued against, and got wrong
+
+Three more items: a one-character warning, the ktlint staleness I had declined to fix two sessions
+ago, and the device scripts refusing to run over wireless debugging. The middle one is the one worth
+writing down, because being asked to work on it produced a better answer than the one I had defended.
+
+### The staleness fix I said was not worth making
+
+Last session I framed it as a binary: either leave the bug, or `outputs.upToDateWhen { false }` on
+every ktlint task and pay 0.9 s → ~13 s on every invocation. I measured that ratio, called it a bad
+trade, and stopped. The framing was the mistake — I had found *a* fix, checked its cost, and treated
+the answer as settled instead of asking what else could invalidate the task.
+
+What the task is actually missing is one fact: **the list of files that exist**. Adding it as an
+input property is eight lines:
+
+```kotlin
+tasks.matching { it.name.startsWith("runKtlint") }.configureEach {
+    inputs.property("ktlintSourceFileList") { /* every .kt/.kts path under src, sorted */ }
+        .optional(true)
+}
+```
+
+It is deliberately coarse — every Kotlin path under the module's `src`, shared by every ktlint task
+in that module — and that coarseness is what makes it free: the value only changes when a file is
+added, renamed or deleted, and the first two already invalidated the task correctly. Measured after:
+deletion now re-runs the task in `src/main`, `src/test` and `src/androidTest` alike, and a no-change
+`./gradlew ktlintCheck` is still 849 ms with 98 tasks up to date. Same fix, none of the cost I
+rejected.
+
+The lesson is not "measure" — I did measure. It is that measuring one option and finding it too
+expensive is not the same as having looked for a second one, and the write-up I produced last time
+read as though it were.
+
+### The wireless guard: the test was on the wrong noun
+
+`adb-connect-host.sh` refused to run whenever `pgrep -x adb` found a server inside the container.
+That is right for USB, where the container has no `/dev/bus/usb` and a local server is blind and
+also steals the socket from WSL. It is exactly wrong for wireless debugging, where nothing owns a USB
+device and the local server is the one that is *supposed* to be there.
+
+The guard now tests **the empty device list rather than the running process**. A local server holding
+no devices is still the bug it always was; a local server holding a device is doing its job, on
+either transport. Two consequences fell out:
+
+- The device-list query had to move *after* the raw TCP probe. That ordering is load-bearing rather
+  than tidy: an adb client starts a server only when none answers, so asking before the probe is
+  precisely how you create the USB-blind server the script exists to detect.
+- `device-test.sh` now exports `ANDROID_SERIAL` for the whole run. Over wireless a stale
+  `emulator-5554` or an old `<ip>:<port>` beside the phone is the *normal* case, and Gradle answers
+  "found 2 devices" rather than choosing — which was half of why the wireless path meant running the
+  script's steps by hand.
+
+I exercised what this environment can reach: the no-server path, the local-server-with-no-devices
+path (by starting a server here on purpose, with no device attached, which is safe precisely because
+there is no WSL adb to steal from), and the `<ip>:<port>` classification against three real serial
+shapes. **The attached-wireless-device path is still unverified**, and it is the case the change
+exists for, so it went to `docs/backlog.md` rather than into a claim that it works.
+
+### And the one character
+
+`RealDataSyncProbe.kt` called `it.body?.string()`; `ResponseBody` is non-null in OkHttp 5. Deleted the
+`?`. While in `.shellcheckrc` for the SC2249 the wireless change introduced, I also corrected a
+comment there asserting that `src/androidTest/` has no linting — true when written, fixed two
+sessions ago, and exactly the kind of sentence that quietly becomes false.
+
+`./gradlew ktlintCheck detekt test lint` green, `shellcheck` and `yamllint` clean. Test count
+unchanged at **757, 0 failures, 3 skipped**.

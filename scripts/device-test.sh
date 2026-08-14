@@ -6,8 +6,8 @@
 #
 # WHY THIS IS SEPARATE FROM CI, AND STAYS SEPARATE
 #
-# `.github/workflows/ci.yml` runs yamllint, shellcheck, `ktlintCheck`, `detekt`, `test` and
-# `assembleDebug` — and nothing else.
+# `.github/workflows/ci.yml` runs yamllint, shellcheck, `ktlintCheck`, `detekt`, `lint`, `test` and
+# both APK builds — and nothing else.
 # `connectedDebugAndroidTest` is not in it and must not be added: GitHub's runners have no
 # device, so the job could only ever be skipped, fail, or spin up an emulator whose whole purpose is
 # to *not* be the thing these tests exist to check. The isolation is therefore structural rather
@@ -52,8 +52,25 @@ if ! ./scripts/adb-connect-host.sh >/dev/null 2>&1; then
     exit 1
 fi
 
-device="$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
+# One device, named explicitly, for everything below — Gradle *and* the raw adb calls at the end.
+#
+# `adb` and AGP both honour ANDROID_SERIAL, so exporting it is the whole mechanism; nothing here
+# needs a `-s` flag. It matters because more than one device in the list is the normal case rather
+# than the exotic one: over wireless debugging (docs/dev-environment.md §9.4) a stale
+# `emulator-5554` or a previous `<ip>:<port>` entry sits alongside the phone, and Gradle then fails
+# with "found 2 devices" rather than picking one. An ANDROID_SERIAL the caller already set wins,
+# which is how you choose between them.
+if [ -z "${ANDROID_SERIAL:-}" ]; then
+    ANDROID_SERIAL="$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
+fi
+export ANDROID_SERIAL
+device="$ANDROID_SERIAL"
+
 echo "==> Device test set against ${device}"
+case "$device" in
+    *:[0-9]*) echo "    (network device — wireless debugging, §9.4)" ;;
+    *) ;; # USB or an in-container emulator; nothing extra worth saying
+esac
 echo "    (CI never runs these — see the header of this script)"
 echo
 

@@ -794,19 +794,26 @@ cable or a phone fault and is neither.
 The same trap has a second door: if the container's adb build differs from the server's, the client
 **kills the working server** and starts its own USB-blind replacement. Keep the versions in step.
 
-`scripts/adb-connect-host.sh` is built around both hazards — it probes port 5037 with a raw TCP
-connect rather than an adb command, so it can never trigger the problem it reports, and it detects
-an already-running container-local server with `pgrep`:
+`scripts/adb-connect-host.sh` is built around both hazards. It probes port 5037 with a raw TCP
+connect rather than an adb command, so it can never trigger the problem it reports, and it runs no
+adb client at all until that probe has proved a server is already answering:
 
 ```
 $ ./scripts/adb-connect-host.sh
-An adb server is running INSIDE this container (pid 3763).
-  Fix, in this order:
+An adb server is running INSIDE this container (pid 3763) and sees nothing.
+  For a USB device, fix in this order:
       adb kill-server            # here
       adb devices                # in WSL, which starts a server that owns the device
 ```
 
-Recovery is always: `adb kill-server` in the container, then `adb devices` in WSL.
+Recovery **on the USB path** is always: `adb kill-server` in the container, then `adb devices` in
+WSL.
+
+**The test is the empty device list, not the running process** (changed 2026-08-14). A
+container-local server used to be the fault by itself, which is right here and wrong one section
+down: over wireless debugging the local server is the one that is supposed to exist, and refusing on
+sight made both scripts unusable on that transport. A local server holding no devices is still this
+bug; a local server holding a device is doing its job.
 
 ### 9.4 Wireless debugging: no USB at all
 
@@ -860,20 +867,32 @@ export ANDROID_SERIAL=192.168.89.201:43169
 **The port changes every time wireless debugging is toggled**, and the pairing does not survive it —
 expect to redo both after a reboot. That is Android's design, not a fault here.
 
-#### What does not work yet
+#### The scripts work over wireless too (since 2026-08-14)
 
-`./scripts/adb-connect-host.sh` and therefore `./scripts/device-test.sh` **both refuse to run over
-wireless.** The connect helper detects a container-local adb server with `pgrep -x adb` and exits 1
-on principle, which is right for USB and wrong for Wi-Fi:
+`./scripts/adb-connect-host.sh` and `./scripts/device-test.sh` used to refuse this path: the connect
+helper exited 1 the moment `pgrep -x adb` found a container-local server, which is correct for USB
+and exactly wrong here. The guard now asks whether that server **sees a device** rather than whether
+it exists, so the same script serves both transports and says which one it is on:
 
 ```
 $ ./scripts/adb-connect-host.sh
-An adb server is running INSIDE this container (pid 2230).
+==> Attached
+192.168.89.201:43169   device product:stallion model:Pixel_10a device:stallion
+  (network device — wireless debugging, so the adb server belongs in this container;
+   docs/dev-environment.md §9.4. Do not 'fix' it with adb kill-server.)
 ```
 
-Nothing is actually wrong when that appears on the wireless path. Until the scripts learn the
-difference — the distinguishing fact is cheap, a device serial of the form `<ip>:<port>` is a network
-device — a wireless run means executing `device-test.sh`'s steps by hand. Noted in `docs/backlog.md`.
+`device-test.sh` also **exports `ANDROID_SERIAL`** for the whole run, which is what makes the
+multi-device case above — a stale `emulator-5554` or an old `<ip>:<port>` entry beside the phone —
+stop being a Gradle "found 2 devices" failure. Set it yourself to choose:
+
+```bash
+ANDROID_SERIAL=192.168.89.201:43169 ./scripts/device-test.sh
+```
+
+**Verified as far as this environment allows**: the no-server path, the local-server-with-no-devices
+path and the serial classification were exercised directly; the attached-device path has not been
+re-run against a phone since the change.
 
 ---
 
