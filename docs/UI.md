@@ -1192,7 +1192,7 @@ where this document meets that code — recorded so Tier 4c doesn't rediscover t
 | Folder states for the checklist and the paused banner | `DownloadFolderAccess` → `NotChosen` / `Granted` / `Revoked` | used verbatim (§4, §12.11) |
 | "File still there?" for the duplicate guard | `DownloadTarget.existingNames(folder)` (architecture §11) | reuse; **no new port method** (§12.3) |
 | Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.11) |
-| Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; `SyncTrigger` in `:core:download` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
+| Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; the `SyncTrigger` port in `:core:model` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
 | Credential change takes effect immediately after S5 | `SyncOrchestratorFactory` builds the client per pass from current credentials | nothing to do; no restart needed after connecting |
 | Re-download of a terminal episode | `KEY_USER_REQUESTED` is the only way past `DownloadWorker`'s terminal-row refusal | set it from a triage event and nowhere else (ADR 0012) |
 | "To decide" list + counts | `EpisodeLedgerRepository.observeEpisodes(filter)` → `EpisodeListItem` | matches §12.5; the `firstSeenAt` cutoff variant is retired (ADR 0013) |

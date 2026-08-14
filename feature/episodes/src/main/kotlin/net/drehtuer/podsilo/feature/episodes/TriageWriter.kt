@@ -48,11 +48,12 @@ class TriageWriter(
                 )
             },
         )
-        // Issue #60: this is the *only* reason a skip ever reached Nextcloud promptly, and it did
+        // Issue #60: this is the *only* reason a skip ever reaches Nextcloud promptly, and it did
         // not exist. Nothing asked for a pass after a triage decision, so a skip waited for a
-        // completed download, an app-bar tap, or the periodic pass — four hours by default. One
-        // request per call, not per episode: the write above is one transaction and this is one
-        // pass, however many rows it covered.
+        // completed download or an app-bar tap — and since `docs/decisions/0026` removed the
+        // periodic pass, there is no timer left to catch it either. One request per call, not per
+        // episode: the write above is one transaction and this is one pass, however many rows it
+        // covered.
         syncTrigger.requestSyncNow()
     }
 

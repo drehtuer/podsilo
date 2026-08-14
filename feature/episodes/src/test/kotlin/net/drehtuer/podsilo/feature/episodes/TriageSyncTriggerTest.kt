@@ -14,8 +14,9 @@ import java.time.ZoneOffset
  * Issue #60, and the whole of the reported symptom: **a decision that never leaves the device.**
  *
  * `TriageWriter` wrote the row with `syncedToServer = false` and returned, and nothing anywhere
- * asked for a pass. A skip therefore waited for a completed download, an app-bar tap, or the
- * periodic pass — four hours by default — before Nextcloud heard about it.
+ * asked for a pass. A skip therefore waited for a completed download or an app-bar tap before
+ * Nextcloud heard about it — and since `docs/decisions/0026` there is no periodic pass to fall
+ * back on at all, so these triggers are the whole mechanism.
  *
  * These pin the trigger where the write is, rather than at the four call sites that reach it.
  */

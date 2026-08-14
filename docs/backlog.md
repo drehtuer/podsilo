@@ -23,11 +23,10 @@ done and when, and a backlog that also keeps that record is two records (2026-08
   server rewords it, so the fix is a typed failure on the `GpodderClient` port. Carried over from
   `docs/TODO.md` when the #60 work landed and that file was retired (2026-08-14).
 
-- **The default sync interval is four hours** (`DEFAULT_SYNC_INTERVAL_MINUTES = 240`). Since the
-  triage triggers and pull-to-refresh both run a pass now, the user-visible delay is gone and this
-  only governs unattended background catch-up; 15 minutes is WorkManager's floor and Doze stretches
-  it anyway. Left as the author's call on battery and traffic — it was D1 in `docs/TODO.md`, and
-  nothing depends on it.
+~~**The default sync interval is four hours**~~ — **settled 2026-08-14 by removing the periodic sync
+entirely** (`docs/decisions/0026`). The author's call on D1 was neither "shorter" nor "longer" but
+"no automatic sync; any sync will happen manually". `DEFAULT_SYNC_INTERVAL_MINUTES` survives under its
+old name timing only the **feed refresh**.
 
 - **Nothing lints `src/androidTest/`.** Verified 2026-08-11:
   `runKtlintCheckOverAndroidTestDebugSourceSet` reports **`NO-SOURCE`** (the Kotlin dir is never

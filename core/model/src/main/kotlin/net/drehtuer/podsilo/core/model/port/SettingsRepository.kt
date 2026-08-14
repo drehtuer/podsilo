@@ -34,6 +34,12 @@ interface SettingsRepository {
 
     suspend fun setDownloadFolderUri(uri: String?)
 
+    /**
+     * How often the **feed refresh** runs in the background. Named for sync because it once timed
+     * a periodic sync pass too; since `docs/decisions/0026` there is no such pass — every sync is
+     * something the user asked for — and this is the feed-refresh interval only. The key is left
+     * alone rather than migrated: it is one value, stored once, with no user-visible label.
+     */
     fun observeSyncIntervalMinutes(): Flow<Long>
 
     suspend fun setSyncIntervalMinutes(minutes: Long)
@@ -141,7 +147,7 @@ data class NextcloudCredentials(
     val account: NextcloudAccount get() = NextcloudAccount(serverUrl, username)
 }
 
-/** Default background sync cadence when the user hasn't chosen one (best-effort — CLAUDE.md §11's Doze note). */
+/** Default background **feed refresh** cadence (best-effort — CLAUDE.md §11's Doze note). */
 const val DEFAULT_SYNC_INTERVAL_MINUTES: Long = 240
 
 /**

@@ -4480,3 +4480,51 @@ the actual causes were **five separate things**, only one of which the report na
 Four of those were found by **reading the other implementations' source and then probing the real
 server**, not by reasoning about our own code — and #3, the worst of them, was invisible until the
 author marked something unread by hand and the probe printed both readings side by side.
+
+## 2026-08-14 (after #68) — deleting a timer, and the job that outlives the code
+
+The author, once the two directional buttons were on the phone: *"No need to implement an automatic
+sync. For now, any sync will happen manually."* Small change, two things worth recording.
+
+### What "manual" turned out to mean
+
+The instruction reads as "remove sync scheduling", but eight things ask for a pass and only one of
+them is a timer. Pull-to-refresh, S7's *Sync now*, the two S4 buttons, a triage decision, a finished
+download, a bulk mark and connecting an account all enqueue the same worker — and every one of them
+is the user asking. Removing those would remove the fix for #60, which the author had just verified
+on their own phone the same day. So the change is exactly one deletion: the four-hour
+`PeriodicWorkRequest`.
+
+The one genuinely non-user-initiated trigger left is the mark-old rule firing after a periodic feed
+refresh. It stays, and the reasoning is in `docs/decisions/0026`: feed refresh is a different job that
+CLAUDE.md §1 requirement 2 mandates and that never talks to Nextcloud, and the rule only runs at all
+because the author turned on a setting whose whole promise is that it writes `SKIPPED` rows.
+
+### The half that is invisible in a diff
+
+Deleting `enqueueUniquePeriodicWork` does not stop the job. Periodic work lives in **WorkManager's
+database, not in the APK**, so the author's phone — which already carries the four-hour job from the
+previous build — would have gone on running it for ever against a build that no longer mentions it
+anywhere. Un-schedulable, un-greppable, visible only in battery stats.
+
+So `schedulePeriodicWork` now *cancels* `SyncWorker.PERIODIC_WORK_NAME` on every start, and the
+constant survives for no other purpose. `WorkSchedulerPeriodicTest` pins both halves, and both new
+assertions were checked against a deliberately reverted `WorkScheduler` first: enqueue-the-periodic-
+job-instead fails exactly the two tests that should fail, and the feed-refresh ones stay green.
+`SyncWorker.periodicRequest` is deleted rather than left unused — a builder for work nobody schedules
+is an invitation to schedule it again by accident.
+
+### Comment drift, found by grep rather than by review
+
+Three comments and one test KDoc argued their case by contrasting with "the periodic pass — four
+hours by default", written a few hours earlier when that was the fallback. Left alone they would have
+described a mechanism that no longer exists, in the exact places where a reader most needs to
+understand why a trigger is load-bearing. Rewritten to say the stronger true thing: there is no timer
+to fall back on, so those triggers *are* the mechanism.
+
+Same for `observeSyncIntervalMinutes`, which now times the feed refresh under a name that says sync.
+Renaming it would touch nine fakes and a DataStore key migration for one value with no user-visible
+label, so it keeps the name and gains a KDoc saying what it actually does. Documented drift beats a
+migration nobody asked for, but it is drift, and it is written down as such.
+
+`./gradlew ktlintCheck detekt test` green, 749 JVM tests.

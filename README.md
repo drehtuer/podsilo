@@ -52,7 +52,8 @@ isn't.
 - **Not automatic.** Nothing is ever downloaded that you didn't ask for. No auto-download rules, no
   background triage, nothing queued by a sync or a refresh. You can tell it to fetch a whole
   podcast's worth of undecided episodes in one go — that's a command you issue, not a rule that runs
-  behind you.
+  behind you. Sync works the same way: there is no periodic pass, so state moves between the phone
+  and Nextcloud when you pull to refresh, press *Sync now*, or make a decision — never on a timer.
 - **Not a file manager.** Once a file lands in your folder it belongs to you and your player.
   Podsilo does not delete it, track it, or care whether it still exists.
 
