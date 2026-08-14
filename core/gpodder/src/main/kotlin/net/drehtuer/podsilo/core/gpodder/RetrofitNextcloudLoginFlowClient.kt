@@ -30,6 +30,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 private const val LOGIN_FLOW_PATH = "index.php/login/v2"
+private const val APP_PASSWORD_PATH = "ocs/v2.php/core/apppassword"
 private const val HTTP_NOT_FOUND = 404
 private const val HTTP_OK = 200
 
@@ -180,6 +181,36 @@ class RetrofitNextcloudLoginFlowClient(
                     response.code == HTTP_UNAUTHORIZED ->
                         throw LoginFlowException(LoginFlowFailure.UNAUTHORIZED, "HTTP 401")
                     else -> throw LoginFlowException(LoginFlowFailure.NOT_NEXTCLOUD, "HTTP ${response.code}")
+                }
+            }
+        }
+
+    override suspend fun revokeAppPassword(credentials: NextcloudCredentials): Result<Unit> =
+        runCatchingRequest(ioDispatcher) {
+            val root =
+                credentials.serverUrl.normalisedRoot()
+                    ?: throw LoginFlowException(LoginFlowFailure.NOT_NEXTCLOUD, "unusable server URL")
+
+            val request =
+                Request
+                    .Builder()
+                    .url(root.newBuilder().addPathSegments(APP_PASSWORD_PATH).build())
+                    .delete()
+                    .header("Authorization", Credentials.basic(credentials.username, credentials.appPassword))
+                    // OCS refuses any request without this header with a 401 that looks exactly like
+                    // a wrong password. It is the header, not the credentials, and it is the single
+                    // easiest thing to get wrong about this API.
+                    .header("OCS-APIRequest", "true")
+                    .header("Accept", "application/json")
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    // 404 on an older Nextcloud without the endpoint, 401 if the password is already
+                    // gone. Both are "nothing to clean up here", and neither is the caller's problem
+                    // — see the port's KDoc on why this is best-effort.
+                    throw LoginFlowException(LoginFlowFailure.UNAUTHORIZED, "HTTP ${response.code}")
                 }
             }
         }

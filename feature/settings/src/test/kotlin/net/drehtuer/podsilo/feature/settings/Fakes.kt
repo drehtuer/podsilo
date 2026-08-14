@@ -234,8 +234,17 @@ class FakeLoginFlowClient(
     var startResult: Result<LoginFlow> = Result.success(FLOW),
     var pollResult: Result<LoginResult> = Result.success(RESULT),
     var verifyResult: Result<Unit> = Result.success(Unit),
+    var revokeResult: Result<Unit> = Result.success(Unit),
 ) : NextcloudLoginFlowClient {
     val startedWith = mutableListOf<String>()
+
+    /** Every credential set this client was asked to revoke, in order. */
+    val revoked = mutableListOf<NextcloudCredentials>()
+
+    override suspend fun revokeAppPassword(credentials: NextcloudCredentials): Result<Unit> {
+        revoked += credentials
+        return revokeResult
+    }
 
     override suspend fun start(baseUrl: String): Result<LoginFlow> {
         startedWith += baseUrl

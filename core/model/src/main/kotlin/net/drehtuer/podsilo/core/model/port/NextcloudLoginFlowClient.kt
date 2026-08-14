@@ -42,6 +42,22 @@ interface NextcloudLoginFlowClient {
      * silently syncs nothing. On failure the app password is discarded rather than stored.
      */
     suspend fun verifyGpodderSync(credentials: NextcloudCredentials): Result<Unit>
+
+    /**
+     * `DELETE /ocs/v2.php/core/apppassword`, authenticated with the app password it is deleting —
+     * which is the only credential this app ever holds, and exactly what the endpoint expects.
+     *
+     * Called when a granted account is **rejected** rather than stored (`docs/UI.md` §8). Nextcloud
+     * issues the password before the user is asked "is this the right account?", so answering *no*
+     * used to leave a live password listed under *Security* on the server for ever, belonging to an
+     * account the user had just declined.
+     *
+     * **Best-effort by contract.** The caller's job at that moment is to store nothing and get the
+     * user to their browser; a server that does not answer, or is old enough not to have the
+     * endpoint, must not slow that down or change what the user sees. The leftover is harmless and
+     * revocable by hand, so a failure here is worth a line in the error log and nothing more.
+     */
+    suspend fun revokeAppPassword(credentials: NextcloudCredentials): Result<Unit>
 }
 
 /**
