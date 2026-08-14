@@ -4880,3 +4880,65 @@ already there — into a real finding about task staleness.
 
 `./gradlew ktlintCheck detekt test lint` green: **757 tests, 0 failures, 3 skipped** (up from 749 —
 four new failure-classification tests in `:core:gpodder`, four in `:core:sync`).
+
+---
+
+## 2026-08-14 (backlog, second pass) — adopting lint, and an item I had scoped wrong
+
+The next three items, and two of them were ones I had written the day before as "the author's call".
+Being told to work on them is that call, so: lint goes into CI, `UseKtx` gets fixed rather than
+argued with, and the ktlint staleness note gets investigated properly — which is where it got
+interesting, because the note was mine and it was wrong.
+
+### Android lint is CI's seventh check
+
+`./gradlew lint` has been green since the `SpecifyForegroundServiceType` suppression, so this is one
+step and two paragraphs of prose. The step sits with detekt rather than after the tests, because it
+is static analysis and it fails fast. The comment beside it says what lint adds that the other two
+do not: ktlint reads Kotlin as text, detekt reads it as a syntax tree, and lint knows the *platform*
+— API levels, manifest merging, SAF, WorkManager. It is the check that would have caught the missing
+`foregroundServiceType` if the declaration had been anywhere it could see.
+
+Worth stating for whoever adds the eighth: lint fails on **errors**, not warnings, so
+`GradleDependency` announcing a newer Compose BOM stays Dependabot's business and cannot turn the
+badge red on its own.
+
+### `UseKtx`: the reason I gave for skipping it was wrong
+
+Yesterday's note said `uri.toUri()` "costs a dependency" and was therefore not worth a warning about
+two equivalent calls. That was true of `:core:download`'s build file and false of the project:
+`androidx.core:core-ktx` is already pinned in the version catalog and already shipped by `:app`, so
+adding it to a second module grows the APK by nothing at all. The cost I was weighing did not exist.
+
+The lesson is about how I write backlog notes: "costs a dependency" was a conclusion, and I wrote it
+without checking the one fact that decided it. A note that names its evidence would have been
+falsifiable in ten seconds.
+
+### The staleness item: right symptom, wrong scope
+
+I had written that deleting a *device test* leaves ktlint failing on a file that is gone. Reproducing
+it properly from a clean baseline in an untouched module showed two things I had not known:
+
+- **It is not androidTest-specific at all.** `src/main/` and `src/test/` do exactly the same.
+- **It can only ever cause a false failure, never a false pass.** Adding or editing a file re-runs
+  the task correctly; only removal is missed. So no violation can hide behind it, which is the fact
+  that turns this from a correctness hole into an annoyance.
+
+The mechanism, now actually established rather than guessed: `runKtlintCheckOver<X>SourceSet` writes
+`build/intermediates/ktLint/*_errors.bin` and `ktlint<X>SourceSetCheck` turns that into the report
+and the failure. Printing the first task's declared inputs and outputs is what made it legible — the
+report is not its output, the `.bin` is, and a removed source file does not invalidate it.
+
+I did **not** fix it. The only lever available here is `outputs.upToDateWhen { false }` on every
+ktlint task, and I measured what that buys and costs before deciding: `ktlintCheck` goes from 0.9 s
+to about 13 s, on every invocation, to spare an occasional stale error about a file you personally
+just deleted. 14.2.0 is the current plugin release, so there is no upgrade to wait for either. The
+workaround is one `rm -rf`, and it now lives in `docs/dev-environment.md` §8.7 where someone will
+meet it, rather than in a backlog file they would have to think to search.
+
+Measuring before choosing is the part I want to keep. "Disable incrementality" and "document the
+workaround" are both defensible until you know the ratio is fourteen to one.
+
+`./gradlew ktlintCheck detekt test lint` green, and `lint` verified from a cleaned build tree since
+that is how CI will run it. Test count unchanged at **757, 0 failures, 3 skipped** — none of this
+touched a code path with behaviour.

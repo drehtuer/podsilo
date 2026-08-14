@@ -21,26 +21,23 @@ entirely** (`docs/decisions/0026`). The author's call on D1 was neither "shorter
 "no automatic sync; any sync will happen manually". `DEFAULT_SYNC_INTERVAL_MINUTES` survives under its
 old name timing only the **feed refresh**.
 
-- **`./gradlew lint` is green but is not in CI.** The `SpecifyForegroundServiceType` false positive
-  that blocked adoption is fixed (`core/download/build.gradle.kts` disables it at the module, with a
-  note naming the two tests that assert the manifest declaration for real), and a full `lint` run now
-  passes with no errors in any module. CI still runs yamllint, shellcheck, ktlintCheck, detekt,
-  `test` and both APK builds — six checks, as `README.md` says — so adopting lint means a seventh
-  step and a README edit, which is the author's call rather than a consequence of unblocking it
-  (2026-08-14).
+- **One compiler warning survived the warnings sweep.**
+  `RealDataSyncProbe.kt:151` calls `it.body?.string()`, and `ResponseBody` is non-null in OkHttp 5 —
+  "unnecessary safe call". The fix is deleting one `?`. Left out of the backlog-items PR only to keep
+  it to what was asked; the sweep on 2026-08-14 covered main sources and this is a test one, which is
+  presumably why it was missed (2026-08-14).
 
-- **`UseKtx` warns in `:core:download`.** `SafDownloadTarget` calls `Uri.parse(uri)` where lint wants
-  `uri.toUri()`. Left alone deliberately: the extension lives in `androidx.core:core-ktx`, which this
-  module does not depend on, and CLAUDE.md §3 says ask before adding a dependency — for a warning
-  about two equivalent calls, the dependency costs more than the warning does. The only lint finding
-  left in the project apart from `GradleDependency`, which is Dependabot's job (2026-08-14).
-
-- **A deleted device test leaves ktlint failing on a file that is gone.**
-  `runKtlintCheckOverAndroidTestSourceSet` does not treat a *removed* source file as an input change,
-  so it stays `UP-TO-DATE` while `ktlintAndroidTestSourceSetCheck` replays the previous report and
-  fails on a path that no longer exists. Deleting the module's `build/` clears it. Adding or editing
-  a device test re-runs the task correctly, so this only bites on a delete — noted while establishing
-  that ktlint does cover `src/androidTest/` after all (2026-08-14).
+- **ktlint's up-to-date checking ignores a removed file** — investigated 2026-08-14 and left in
+  place, with the workaround documented in `docs/dev-environment.md` §8.7 rather than fixed here.
+  Deleting a Kotlin file leaves `runKtlintCheckOver<SourceSet>SourceSet` `UP-TO-DATE`, so the stale
+  `build/intermediates/ktLint/*_errors.bin` is what gets reported; `rm -rf <module>/build/intermediates/ktLint`
+  clears it. Two facts decided it: it is **not** androidTest-specific (reproduced from a clean state
+  in `src/main/` and `src/test/` too, so the note that raised it had the scope wrong), and it can
+  only ever cause a false *failure* — adding or editing a file re-runs the task correctly, so no
+  violation can hide behind it. The only fix available locally is
+  `outputs.upToDateWhen { false }` on every ktlint task, which takes `ktlintCheck` from under a
+  second to about thirteen on every invocation. 14.2.0 is the current plugin release, so there is no
+  upgrade to wait for; reconsider if one lands.
 
 - **`device-test.sh` and `adb-connect-host.sh` refuse to run over wireless debugging.** Both gate on
   "no adb server inside the container", which is correct for the usbip path and exactly wrong for the

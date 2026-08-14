@@ -4,10 +4,10 @@
 # without an emulator (see CLAUDE.md §4/§7). Instrumented tests (Tier 2) are
 # deliberately not run here; §4 asks for Tier 1 + Tier 3 as the supported path.
 #
-# Six checks in one job, in this order: yamllint, shellcheck, ktlint, detekt, the
-# Tier 1 unit tests, then both APK builds. The two cheapest come first and need no
-# JDK. One job rather than six means the badge answers one question — "is main
-# healthy" — and the step that failed is one click away.
+# Seven checks in one job, in this order: yamllint, shellcheck, ktlint, detekt,
+# Android lint, the Tier 1 unit tests, then both APK builds. The two cheapest come
+# first and need no JDK. One job rather than seven means the badge answers one
+# question — "is main healthy" — and the step that failed is one click away.
 #
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
@@ -119,8 +119,18 @@ jobs:
       - name: ktlint
         run: ./gradlew ktlintCheck
 
-      - name: detekt
-        run: ./gradlew detekt
+      # Android lint, which is a different question from ktlint and detekt: those
+      # read Kotlin as text and as a syntax tree, this one knows the platform —
+      # API levels, manifest merging, resource shrinking, SAF, WorkManager. It is
+      # the check that would have caught the missing `foregroundServiceType` had
+      # the declaration not been in a module lint could not see (core/download's
+      # build.gradle.kts explains the one suppression this repository has).
+      #
+      # Adopted only once it was green everywhere. `lint` fails the build on
+      # errors, not warnings, so `GradleDependency` telling us a newer Compose BOM
+      # exists stays Dependabot's business rather than becoming a red badge.
+      - name: Android lint
+        run: ./gradlew lint
 
       - name: Unit tests (Tier 1)
         run: ./gradlew test
