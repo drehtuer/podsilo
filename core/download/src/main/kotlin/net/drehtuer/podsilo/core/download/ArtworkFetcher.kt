@@ -68,12 +68,11 @@ class ArtworkFetcher(
         runCatching {
             httpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (!response.isSuccessful) return@use null
-                val body = response.body ?: return@use null
                 // Trust the response's own type over the URL's extension, the same rule the
                 // enclosure's extension resolution follows (CLAUDE.md §6).
                 val contentType = response.header("Content-Type")?.substringBefore(';')?.trim()
                 if (contentType == null || !contentType.startsWith("image/")) return@use null
-                val bytes = body.bytes()
+                val bytes = response.body.bytes()
                 if (bytes.isEmpty()) null else EpisodeArtwork(bytes, contentType, source)
             }
         }.getOrNull()
