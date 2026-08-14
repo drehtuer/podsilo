@@ -4416,3 +4416,67 @@ abstract method), so it cost a minute rather than a false green.
 
 Knowing about a trap is not the same as having a habit that avoids it. The habit that would have
 worked is the one already available: use the editor for code, and keep `perl` for prose.
+
+---
+
+## 2026-08-14 (close) — both buttons on the phone, and #60 is finished
+
+**Attempted:** device verification of the two directional buttons, then retiring `docs/TODO.md`,
+which said from its first line that it would die when the work landed.
+
+### The push repaired the row that proved it was needed
+
+S4 offered both rows under *Last sync*, and *Send this device's state to Nextcloud* asked
+**"Send 4 decisions to Nextcloud?"** — matching the database exactly (2 `DOWNLOADED`, 2 `SKIPPED`).
+Confirming it ran clean, with nothing in the error log.
+
+Then the probe, on the server:
+
+```
+2026-08-13T22:30:35+00:00  PLAY
+  guid=691a4895e42e3466f2dd4623  started=0 position=2766 total=2766   RePod: played
+```
+
+That is the author's download from Tuesday night, which had sat at `position=0` because the original
+`DOWNLOAD` was discarded and its row was already `syncedToServer = true`. **No ordinary pass would
+ever have retried it**; the force push is the only thing that could, and did.
+
+Two details worth keeping:
+
+- **The re-posted action carries its original timestamp**, not "now", because `toOutboundActions`
+  uses `actionedAt`. That is the honest value — it is when the decision was made — and it means a
+  repair updates the row in place instead of appearing as fresh activity at the top of the log.
+- **The action count stayed at 73.** One row per episode per user, so re-asserting updates rather
+  than appends. Exactly what `EpisodeActionSaver` promised on the first read, now observed.
+
+### The pull's correct behaviour was to do almost nothing
+
+Applied over the entire log: 71 rows unchanged, no errors, and the two episodes marked unread in
+RePod **still row-less in *To decide***. A pull that walked the whole history and left them alone is
+the strongest available demonstration that it overrides nothing — which was the design's central
+claim and the thing D4 and D5 were protecting.
+
+### Retiring the file
+
+`docs/TODO.md` opened with "this file is temporary and dies when the work lands", and every box in it
+is now ticked. Four ADRs referenced it, so those references were rewritten rather than left dangling
+— the same rule the August 13 consolidation established. Two genuinely open items moved to
+`docs/backlog.md`: the four-hour sync interval (D1, the author's call on battery), and the untyped
+`GET` failure that files an expired app password under `SYNC` rather than `AUTH`.
+
+`docs/` is back to the six files the consolidation left it with.
+
+### What #60 cost, end to end
+
+Seven PRs, five ADRs, and two rules in CLAUDE.md reversed. The bug report was "sync does not work";
+the actual causes were **five separate things**, only one of which the report named:
+
+1. Nothing triggered a pass when a decision was made, and pull-to-refresh never synced (#63).
+2. A duration-less skip sent `0/0`, which no client reads as played (#64).
+3. A remote *unread* mark was read as *handled*, hiding episodes permanently (#64).
+4. A download emitted only `DOWNLOAD`, which Nextcloud discards (#65).
+5. The `since` cursor compared two different clocks (#64).
+
+Four of those were found by **reading the other implementations' source and then probing the real
+server**, not by reasoning about our own code — and #3, the worst of them, was invisible until the
+author marked something unread by hand and the probe printed both readings side by side.

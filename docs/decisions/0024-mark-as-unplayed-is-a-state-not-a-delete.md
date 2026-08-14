@@ -67,4 +67,5 @@ user pressing a button is a decision; a remote row arriving is not.
   durability rules, actions that only move the user around do not. Fifth time that ceiling has
   pointed at a genuine boundary.
 - `docs/backlog.md`'s decline is removed rather than struck through, and D4's entry in
-  `docs/TODO.md` now records the half that survived.
+  D4's surviving half — a *remote* unread mark still cannot re-open a decision — is recorded in
+  `docs/decisions/0025`.

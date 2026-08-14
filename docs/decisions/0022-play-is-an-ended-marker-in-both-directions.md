@@ -3,7 +3,8 @@
 # 0022 — A `PLAY` means *ended*, in both directions
 
 **Status:** Accepted (2026-08-14). Amends the outbound encoding in `docs/architecture.md` §6 and the
-inbound reconciliation rule in the same section. Settles **D2** and **D7** of `docs/TODO.md`.
+inbound reconciliation rule in the same section. Settles the author's decisions D2 and D7, taken in the working plan for #60 (since retired — see
+`docs/journal.md`).
 
 ## Context
 

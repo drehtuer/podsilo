@@ -96,7 +96,7 @@ private fun <T> List<Pair<T, List<EpisodeAction>>>.chunkedByActionCount(
  * still coarser than the adapter it now runs against: a failed GET surfaces as Retrofit's own
  * `HttpException`, which is not an `IOException`, so an expired app password lands in the
  * non-retryable branch and in the log as a plain SYNC failure. Typing that failure in the port is
- * tracked in `docs/TODO.md`.
+ * tracked in `docs/backlog.md`.
  */
 class SyncOrchestrator(
     private val feedRepository: FeedRepository,
@@ -194,7 +194,7 @@ class SyncOrchestrator(
      * Every sync failure is [LogCategory.SYNC], including an expired app password. Distinguishing
      * `AUTH` needs a typed failure from the GPodder port — the client currently throws Retrofit's
      * own `HttpException` for a failed `GET` — and sniffing "401" out of a message string is the
-     * kind of thing that works until a server rewords it. Noted in `docs/TODO.md`.
+     * kind of thing that works until a server rewords it. Noted in `docs/backlog.md`.
      */
     private suspend fun record(
         message: String,

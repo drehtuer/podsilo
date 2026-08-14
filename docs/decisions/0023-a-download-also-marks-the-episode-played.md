@@ -3,7 +3,7 @@
 # 0023 — A completed download also emits `PLAY`
 
 **Status:** Accepted (2026-08-14). **Reverses an explicit prohibition in CLAUDE.md §5**, which is
-amended to match. Settles **D3** of `docs/TODO.md`.
+amended to match. Settles the author's decision D3, taken in the working plan for #60.
 
 ## Context
 
@@ -54,7 +54,8 @@ side effect.
 
 - **Already-downloaded episodes are not retroactively marked.** Their rows are `syncedToServer =
   true`, so no pass will re-post them. The *Send this device's state to Nextcloud* button in
-  `docs/TODO.md` §7 is exactly the tool for that, and is the reason it is worth building.
+  S4's *Send this device's state to Nextcloud* is exactly the tool for that
+  (`docs/decisions/0025`), and repairing these rows is the reason it was worth building.
 - **`DOWNLOAD` is still emitted**, so nothing is lost against a server that stores it, and ADR 0008's
   finding remains recorded rather than worked around.
 - **One row can now produce several actions.** `toOutboundActions()` returns a list and
