@@ -350,7 +350,7 @@ private class FakeActivityFeedRepository : FeedRepository {
     override suspend fun replaceAll(feeds: List<Feed>) = Unit
 
     override suspend fun updateRefreshMetadata(
-        url: String,
+        feedUrl: String,
         metadata: FeedRefreshMetadata,
     ) = Unit
 }

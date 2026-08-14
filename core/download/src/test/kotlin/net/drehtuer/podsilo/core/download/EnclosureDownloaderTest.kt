@@ -48,7 +48,7 @@ class EnclosureDownloaderTest {
 
     private fun partialFileContaining(text: String): File =
         destination().apply {
-            parentFile.mkdirs()
+            parentFile?.mkdirs()
             writeText(text)
         }
 
