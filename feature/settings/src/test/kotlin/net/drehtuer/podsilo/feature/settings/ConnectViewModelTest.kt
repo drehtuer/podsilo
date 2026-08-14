@@ -125,7 +125,7 @@ class ConnectViewModelTest {
     }
 
     @Test
-    fun `an address that does not resolve says check the spelling, not "not a Nextcloud"`() =
+    fun `an address that does not resolve says check the spelling, not 'not a Nextcloud'`() =
         runTest {
             // Found by running the manual probe against a host with no DNS record: every start
             // failure used to collapse into NOT_NEXTCLOUD, which sends the user to check their

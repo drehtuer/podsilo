@@ -4663,3 +4663,58 @@ out of CI, and an argument resting on a stale premise is worse than none.
 Green locally on every check the runner will run: `yamllint .` exit 0 (one warning, the unwrappable
 `::warning::` line), `shellcheck` exit 0 across all five scripts, `./gradlew ktlintCheck detekt test`
 BUILD SUCCESSFUL. No Kotlin changed in any of this, so the test count is unmoved.
+
+## 2026-08-14 (warnings) — sixteen warnings, and the six that were hiding
+
+Prompted by "check the build for warnings and fix them", straight after pulling Dependabot's five
+merges (wrapper 9.6.1→9.7.0, KSP 2.3.11, core-ktx 1.19.0, activity-compose 1.13.0, Robolectric
+4.16.1, plus four actions).
+
+The first lesson was about *looking*. `assembleDebug` prints warnings only for what it compiles, and
+`--warning-mode all` scrolls past in a wall of task lines. Piping a clean build to a file and
+grouping the `Problem found` blocks by message gave 15 Kotlin warnings — but a `grep -rl` for
+`createComposeRule` found **17** call sites against 11 warned. The missing six were in `androidTest`,
+which no task in that set compiles. Adding `compileDebugAndroidTestKotlin` is what made the count
+trustworthy; a "zero warnings" claim from the first task set would have been wrong by six.
+
+The second was about *reading the exit code you actually got*. `./gradlew … > lint.log 2>&1; echo
+"EXIT=$?"` reports the exit of the `echo`, not of Gradle. It said 0. Gradle had said BUILD FAILED —
+Android lint finds a real error in `:core:download`. Backlogged rather than fixed (see below); the
+point worth keeping is that the harness reported success for a command that failed, and only reading
+the log caught it.
+
+### What was fixed
+
+- `ArtworkFetcher.kt` — `response.body ?: return@use null` on OkHttp 5, where `body` is non-null. The
+  elvis was dead and the local it bound was used once; both gone, `response.body.bytes()` inline.
+  This was the only warning in `main` source.
+- `EnclosureDownloaderTest.kt` — `parentFile.mkdirs()` on a `File?`. Now `?.`.
+- `ConnectViewModelTest.kt` — a backticked test name containing `"`, which becomes a JVM method name
+  and then a report filename Windows will not write. Single quotes.
+- `ActivityViewModelTest.kt` — a fake overrode `updateRefreshMetadata`'s first parameter as `url`
+  where `FeedRepository` names it `feedUrl`; a named-argument trap in waiting.
+- All 17 `createComposeRule()` sites → `androidx.compose.ui.test.junit4.v2.createComposeRule`.
+
+The v2 migration was the only one with teeth. The deprecation text warns that v2 swaps
+`UnconfinedTestDispatcher` for `StandardTestDispatcher` — tasks queue instead of running immediately
+— so "tests relying on immediate execution may require explicit synchronization". Checked the
+artifact with `javap` first: v2 returns the same `ComposeContentTestRule`, so it is an import swap and
+not an API change, and any breakage would be timing, which only the suite can answer. It answered:
+**749 tests, 0 failures, 0 errors, 3 skipped** — the 3 being the `OpodsyncIntegrationTest` cases that
+want the compose sync server. Nothing needed synchronisation added.
+
+### What was not fixed, and why
+
+- **The one remaining build warning is not ours.** `ReportingExtension.file(String)` is deprecated for
+  Gradle 10; `--stacktrace` puts it at `io.gitlab.arturbosch.detekt.DetektPlugin.apply(DetektPlugin
+  .kt:28)`, inside the plugin. Nothing in `build.gradle.kts` can silence it honestly — it clears when
+  detekt releases a fix. Worth knowing before someone goes looking for it in our own scripts, which
+  is where line 18 of the trace misleadingly points.
+- **The lint error.** `:core:download` is linted against its own manifest and so cannot see the
+  `foregroundServiceType="dataSync"` that `:app` declares. Real false positive, but the fix is a
+  `disable` or a baseline, and choosing between those decides what lint is *for* here — §9's "note it
+  in `docs/backlog.md`" rather than a decision made in passing during a warning sweep.
+
+Green on everything CI runs: `./gradlew ktlintCheck detekt test` BUILD SUCCESSFUL, and a rebuild of
+debug + unit-test + androidTest sources now reports zero Kotlin compiler warnings. Test count is
+unmoved at 749 — nothing here changed behaviour, which is the intended result of a warning sweep.
