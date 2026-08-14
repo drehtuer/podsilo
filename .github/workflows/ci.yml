@@ -33,26 +33,33 @@
 # is **drafted** they are attached to it as well, where they persist indefinitely —
 # release assets aren't subject to the artifact retention window.
 #
-# CUTTING A RELEASE: create the release as a DRAFT, wait for this workflow to
-# attach the APKs, then publish it. Publishing first cannot be undone — immutable
-# releases refuse assets after publication, and GitHub keeps the tag name reserved
-# even if the release is deleted, so the version number is spent. docs/dev-
-# environment.md §10 has the procedure.
+# CUTTING A RELEASE: merge the version bump, then **push the tag**. This workflow
+# builds it, creates a DRAFT release if one does not exist, and attaches the APKs
+# to the draft. You then write the notes and publish. Publishing first cannot be
+# undone — immutable releases refuse assets after publication, and GitHub keeps
+# the tag name reserved even if the release is deleted, so the version number is
+# spent. docs/dev-environment.md §10 has the procedure.
 name: CI
 
 on:
   push:
     branches: [main]
+    # A pushed tag is what drives a release, NOT the `release:` event. Two
+    # separate facts force this, both learned the expensive way on v0.5.0:
+    #
+    #   1. This repository has immutable releases enabled, so a *published*
+    #      release refuses every asset upload — `HTTP 422: Cannot upload assets
+    #      to an immutable release`. Assets have to arrive while it is a draft.
+    #   2. GitHub does not fire the `release` event for draft releases **at
+    #      all** — not `created`, not `edited`. So no `release:` trigger can
+    #      ever attach assets to a draft. Verified: creating the v0.5.1 draft
+    #      produced no workflow run whatsoever.
+    #
+    # A tag push fires reliably and needs no release to exist yet, so the job
+    # below creates the draft itself if the author has not already written one.
+    tags: ['v*']
   pull_request:
     branches: [main]
-  release:
-    # `created`, NOT `published`. This repository has GitHub's **immutable
-    # releases** enabled, and a published release refuses every asset upload with
-    # `HTTP 422: Cannot upload assets to an immutable release`. Assets therefore
-    # have to be attached while the release is still a **draft**, and `created`
-    # is the activity type that fires when a draft is saved. Discovered the
-    # expensive way on v0.5.0 — see docs/dev-environment.md §10.
-    types: [created]
 
 permissions:
   contents: read
@@ -179,20 +186,27 @@ jobs:
       # and then refuses to install, which is worse than its absence. The debug
       # APK always goes up, so a release is never left with nothing installable.
       - name: Attach APKs to draft release
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-          IS_DRAFT: ${{ github.event.release.draft }}
+          TAG: ${{ github.ref_name }}
         run: |
+          # If the author has not written the release yet, create it as a draft so
+          # the tag alone is enough to cut one. `--notes` is a placeholder they are
+          # expected to replace before publishing; `--verify-tag` is pointless here
+          # because the tag is what triggered this run.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+              gh release create "$TAG" --draft --title "$TAG" \
+                  --notes "Draft created by CI. Replace these notes, then publish."
+          fi
+
           # Immutable releases accept assets only before publication, so a release
-          # that arrives here already published cannot be fixed by this job — and
-          # the tag name is then burned for good, because GitHub reserves the tag
-          # of an immutable release even after the release is deleted. Fail loudly
-          # rather than warn: a silent skip is what left v0.5.0 with no APKs while
-          # every other check was green.
-          if [ "$IS_DRAFT" != "true" ]; then
-              echo "::error::$TAG was published directly — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: docs/dev-environment.md §10."
+          # that is already published cannot be fixed by this job — and its tag name
+          # is burned for good, because GitHub reserves the tag of an immutable
+          # release even after the release is deleted. Fail loudly rather than warn:
+          # a silent skip is what left v0.5.0 with no APKs while every check passed.
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+              echo "::error::$TAG is already published — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: docs/dev-environment.md §10."
               exit 1
           fi
 

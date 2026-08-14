@@ -893,23 +893,31 @@ reserved even after you delete the release, so you cannot fix a wrongly-publishe
 deleting and recreating it — the second attempt fails with `tag_name was used by an immutable
 release` and the version number has to be abandoned. This is exactly how v0.5.0 was lost.
 
+**A second trap sits behind the first: GitHub does not fire the `release` event for draft releases
+at all** — not `created`, not `edited`. So no `release:` trigger can attach assets to a draft, and
+the obvious fix for the first problem silently does nothing. Verified by creating the v0.5.1 draft
+and watching zero workflow runs start. **The tag push is the trigger.**
+
 So the order is not optional:
 
 1. Merge the `chore(release): X.Y.Z` commit (version bump + README status line) to `main`.
-2. Create the release **as a draft**, on the merge commit:
+2. Push the tag:
    ```sh
-   gh release create vX.Y.Z --draft --target main \
-       --title "vX.Y.Z — …" --notes-file notes.md
+   git tag vX.Y.Z && git push origin vX.Y.Z
    ```
-3. **Wait for CI.** The `release: created` trigger fires on the draft being saved; the workflow
-   builds both APKs and attaches them, plus the gzipped R8 mapping. Confirm with
-   `gh release view vX.Y.Z --json assets`.
-4. Only then publish:
+3. **Wait for CI.** The tag push triggers the workflow, which builds both APKs, creates a **draft**
+   release if you have not written one already, and attaches the APKs plus the gzipped R8 mapping.
+   Confirm with `gh release view vX.Y.Z --json isDraft,assets`.
+4. Write the notes, then publish:
    ```sh
-   gh release edit vX.Y.Z --draft=false --latest
+   gh release edit vX.Y.Z --notes-file notes.md --draft=false --latest
    ```
 
-If a release is ever published directly, the workflow now **fails loudly** rather than warning — the
+You may write the draft *before* pushing the tag if you prefer to have the notes ready
+(`gh release create vX.Y.Z --draft --notes-file notes.md`); the job reuses an existing draft rather
+than creating a second one. What you must never do is publish before the assets are attached.
+
+If a release is ever published before CI attaches, the job **fails loudly** rather than warning — the
 silent skip is what let v0.5.0 go out with green checks and no APKs.
 
 ### Creating a release keystore
