@@ -918,10 +918,16 @@ sequenceDiagram
 ### Failed-POST recovery (durability proof)
 
 No separate diagram needed — this is just "the sync pass runs again later." Because
-`syncedToServer` stays `false` until a confirmed 2xx, a failed POST self-heals on the next periodic
+`syncedToServer` stays `false` until a confirmed 2xx, a failed POST self-heals on the next
 `SyncWorker` run (WorkManager's own retry/backoff, not hand-rolled — CLAUDE.md §3) with no special
 recovery code. This is precisely why the outbox flag is durable in the DB rather than tracked
 in-memory (§5).
+
+**"Later" is now user-initiated** (`docs/decisions/0026`): there is no periodic sync pass, so the
+next pass is a pull-to-refresh, S7's *Sync now*, one of S4's directional buttons, or the pass the
+next triage decision or finished download triggers. The row survives indefinitely either way — but
+the triggers are the whole mechanism now rather than a promptness optimisation over a four-hour
+timer.
 
 ---
 
@@ -1017,6 +1023,7 @@ and deleted (2026-08-13).
 | [0023](decisions/0023-a-download-also-marks-the-episode-played.md) | A completed download emits `DOWNLOAD` **and** `PLAY` — reverses CLAUDE.md §5's prohibition, because the server discards `DOWNLOAD` and the episode stayed new everywhere else | §6, CLAUDE.md §1/§5 |
 | [0024](decisions/0024-mark-as-unplayed-is-a-state-not-a-delete.md) | *Mark as unplayed* is a new `UNPLAYED` ledger state, not a row deletion — the row outlives the decision, so the dedup authority is untouched | §4, §9 |
 | [0025](decisions/0025-two-directional-sync-passes.md) | Two directional passes — the pull is `since = 0` over the **unchanged** reconciliation, the push re-asserts every row and is chunked | §6, `docs/UI.md` §7 |
+| [0026](decisions/0026-manual-sync-only.md) | **No periodic sync pass** — every pass is one the user asked for, and the schedule an older build persisted is *cancelled* on start, not merely un-scheduled | §6, §10, CLAUDE.md §11 |
 
 ### Decisions folded into this document
 

@@ -12,8 +12,6 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
-import androidx.work.PeriodicWorkRequest
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -72,6 +70,13 @@ class SyncWorker
             const val KEY_SYNC_MODE: String = "sync_mode"
             const val MODE_FORCE_PULL: String = "force_pull"
             const val MODE_FORCE_PUSH: String = "force_push"
+
+            /**
+             * Kept **only** so the schedule an older build persisted can be cancelled
+             * (`docs/decisions/0026`). Nothing enqueues under this name any more, and the request
+             * builder that used to is gone: a builder for work nobody schedules is an invitation to
+             * schedule it again by accident.
+             */
             const val PERIODIC_WORK_NAME: String = "podsilo-sync-periodic"
 
             private val networkConstraint =
@@ -87,12 +92,6 @@ class SyncWorker
                     .setInputData(Data.Builder().apply { mode?.let { putString(KEY_SYNC_MODE, it) } }.build())
                     .setConstraints(networkConstraint)
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
-                    .build()
-
-            fun periodicRequest(intervalMinutes: Long): PeriodicWorkRequest =
-                PeriodicWorkRequestBuilder<SyncWorker>(intervalMinutes, TimeUnit.MINUTES)
-                    .setConstraints(networkConstraint)
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
                     .build()
         }

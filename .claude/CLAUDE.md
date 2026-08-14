@@ -720,7 +720,13 @@ Work in this order; each step should be green before moving on.
   returns and send it back as the next `since`. Never compute the next `since` from local device
   time — clock skew will silently drop or duplicate actions.
 - **Doze and background limits** will delay WorkManager. Use a foreground service for active
-  downloads; treat periodic sync as best-effort and always offer manual refresh.
+  downloads; treat periodic work as best-effort and always offer manual refresh.
+  - **Amended 2026-08-14 (`docs/decisions/0026`): there is no periodic sync at all.** Every sync pass
+    is one something asked for — pull-to-refresh, S7's *Sync now*, S4's two directional buttons, a
+    triage decision, a finished download, a bulk mark, or the mark-old rule after a feed refresh.
+    Feed refresh stays periodic (§1 requirement 2). If you re-add a periodic sync, **cancel is not
+    optional in reverse either**: `SyncWorker.PERIODIC_WORK_NAME` exists only so the schedule an
+    older build persisted in WorkManager's database can be cancelled on start.
 - **Nextcloud GPodder deviates from the original gpodder.net API.** Verify against the actual
   `nextcloud-gpodder` implementation rather than gpodder.net documentation. Notably, not every
   gpodder.net endpoint exists (e.g. parts of the Devices API).

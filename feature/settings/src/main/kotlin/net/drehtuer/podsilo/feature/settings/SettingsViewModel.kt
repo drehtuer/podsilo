@@ -311,9 +311,9 @@ class SettingsViewModel(
 
         val now = clock.millis()
         ledgerRepository.upsertAll(episodes.map { it.toSkippedRow(now) })
-        // One pass for the whole batch (issue #60). Without this the rows sat in the outbox until
-        // something else happened to ask — up to the four-hour periodic interval — and the user was
-        // looking at a screen that had just told them the state goes to Nextcloud.
+        // One pass for the whole batch (issue #60). Without this the rows sit in the outbox until
+        // something else happens to ask — and since `docs/decisions/0026` nothing asks on a timer —
+        // while the user is looking at a screen that has just told them the state goes to Nextcloud.
         syncTrigger.requestSyncNow()
         emit(SettingsEffect.ShowMessage("Marked ${episodes.size} episodes as played."))
     }

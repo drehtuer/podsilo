@@ -106,12 +106,21 @@ class WorkScheduler
 
         /** UPDATE so changing the interval in settings re-times the existing schedule instead of adding one. */
         fun schedulePeriodicWork(intervalMinutes: Long) {
+            // **No periodic sync** (`docs/decisions/0026`). The author's decision: every pass is
+            // something they asked for — pull-to-refresh, S7's *Sync now*, the two directional
+            // buttons, or the pass a triage decision triggers so it reaches Nextcloud at once.
+            //
+            // Cancelled rather than merely not scheduled. Periodic work lives in WorkManager's own
+            // database and survives an app *update*, so an install that already has the four-hour job
+            // would keep running it for ever against a build that no longer knows it exists — the
+            // kind of leftover that is invisible in the code and visible only in the battery stats.
+            workManager.cancelUniqueWork(SyncWorker.PERIODIC_WORK_NAME)
+
+            // Feed refresh stays periodic: CLAUDE.md §1 requirement 2 asks for exactly that, and it
+            // is a different job — it fetches RSS and never talks to Nextcloud. What it *can* do is
+            // write `SKIPPED` rows through the mark-old rule, and those ask for a pass of their own,
+            // which is a consequence of a setting the author turned on rather than a background sync.
             val interval = intervalMinutes.coerceAtLeast(MIN_PERIODIC_MINUTES)
-            workManager.enqueueUniquePeriodicWork(
-                SyncWorker.PERIODIC_WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                SyncWorker.periodicRequest(interval),
-            )
             workManager.enqueueUniquePeriodicWork(
                 FeedRefreshWorker.PERIODIC_WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,

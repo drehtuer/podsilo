@@ -1,0 +1,73 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+# 0026 — No periodic sync: every pass is one the author asked for
+
+**Status:** Accepted (2026-08-14). The author, after PR #68: *"No need to implement an automatic
+sync. For now, any sync will happen manually."*
+
+Supersedes the periodic half of the sync scheduling introduced with `SyncWorker`. Does **not**
+touch `docs/decisions/0025`'s two directional passes, `docs/decisions/0023`'s mark-on-download, or
+the periodic **feed refresh**.
+
+## Context
+
+Sync ran on a four-hour `PeriodicWorkRequest` alongside the passes something asks for: pull-to-refresh,
+S7's *Sync now*, the two directional buttons on S4, the pass a triage decision now triggers
+(issue #60), the pass a finished download triggers, the pass S4's bulk mark triggers, the pass that
+runs when an account is first connected, and — the one that is not a user gesture — the mark-old rule
+firing after a feed refresh.
+
+Issue #60 changed what the timer was *for*. Before it, the periodic pass was the only thing that
+reliably drained the outbox, so a skip could sit unsent for four hours; the timer was covering for a
+missing trigger. With the triage trigger in place, every write that produces an outbound action asks
+for a pass at the moment it is written. The timer's remaining job was to notice actions authored on
+*other* clients — and the author reads those on a screen they have just opened, which pull-to-refresh
+already covers.
+
+The author's phone is also the only install, so "what happens if the user never opens the app" is not
+a question this project has to answer. Nothing expires; the ledger is durable and the outbox drains on
+the next pass, whenever that is.
+
+## Decision
+
+**No periodic sync pass.** `WorkScheduler.schedulePeriodicWork` schedules the feed refresh and
+nothing else.
+
+### Cancelled, not merely un-scheduled
+
+`workManager.cancelUniqueWork(SyncWorker.PERIODIC_WORK_NAME)` runs on every app start, and
+`PERIODIC_WORK_NAME` survives **only** to be the argument to that call.
+
+This is the part worth writing down. Periodic work lives in WorkManager's own database, not in the
+APK: an install that already carries the four-hour job keeps running it after an update to a build
+that no longer mentions it anywhere. Deleting the scheduling code alone would leave a job that is
+invisible in the source and visible only in the battery stats — and the author's phone carries
+exactly that job. `WorkSchedulerPeriodicTest` pins both halves: none enqueued, and a pre-existing one
+`CANCELLED`.
+
+`SyncWorker.periodicRequest` is deleted rather than left unused. A builder for work nobody schedules
+is an invitation to schedule it again by accident.
+
+### The feed refresh stays periodic
+
+A different job with a different mandate: CLAUDE.md §1 requirement 2 asks for "periodic background
+refresh of the followed feeds", and it fetches RSS without ever talking to Nextcloud. What it *can*
+do is write `SKIPPED` rows through the mark-old rule (`docs/decisions/0013`) — and those trigger a
+pass, which is a consequence of a setting the author deliberately turned on, not a background sync.
+
+`DEFAULT_SYNC_INTERVAL_MINUTES` and `observeSyncIntervalMinutes` keep their names while now timing
+only that refresh. The stored key is left alone rather than migrated: one value, stored once, with no
+user-visible label to contradict.
+
+## Consequences
+
+- **Nothing observes Nextcloud on its own.** An episode marked played on another device appears here
+  when the author pulls to refresh, presses *Sync now*, or presses *Apply Nextcloud's state* — not
+  before. That is the intended reading of "any sync will happen manually".
+- **The outbox can hold a decision indefinitely** if the pass a decision triggers fails and the app is
+  never opened again. It is still durable and still drains, and there is no longer a timer behind it,
+  which makes the triage trigger (issue #60) and the post-download trigger load-bearing rather than
+  merely prompt. The tests that pin them matter more than they did.
+- **Battery and data go to zero when the app is closed** apart from the feed refresh.
+- Reversing this is one `enqueueUniquePeriodicWork` call and a request builder. The name is still
+  reserved and the worker still takes the ordinary mode.
