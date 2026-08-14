@@ -16,6 +16,16 @@ done and when, and a backlog that also keeps that record is two records (2026-08
 
 ## Open items
 
+- **`./gradlew lint` fails on a false positive in `:core:download`.** `SpecifyForegroundServiceType`
+  (from `androidx.work`) flags `DownloadWorker.kt`'s `ForegroundInfo` for a missing `dataSync`
+  `foregroundServiceType`. The declaration exists and is correct — it is in `:app`'s manifest, with a
+  long comment explaining the hard crash it prevents — but a library module is linted against its own
+  manifest, which cannot see it. Lint is **not** in CI (which runs yamllint, shellcheck, ktlintCheck,
+  detekt, `test`, `assembleDebug`/`assembleRelease` and nothing else), so nothing is red today; the
+  cost is that `lint` cannot be adopted without either a per-module `disable` or a baseline. Noted
+  2026-08-14 while clearing compiler warnings; not fixed, because suppressing a check is a call about
+  what the project wants lint to mean, not a warning cleanup.
+
 - **A failed `GET` is not an `IOException`.** Retrofit throws its own `HttpException` for a non-2xx
   response on the two `GET`s, so an expired app password lands in `SyncOrchestrator`'s
   *non-retryable* branch and in the error log as a plain `SYNC` failure rather than `AUTH` — the one
