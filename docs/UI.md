@@ -659,8 +659,16 @@ block-beta
   not the flow URL. Requesting authorization again against a live session returns the same account
   however many times it is tried, so the browser is the only place the problem can be fixed. The
   dialog then says so next to the address field.
-- The granted app password is left on the server. It is harmless and revocable under *Security* in
-  Nextcloud; revoking it automatically is in `docs/backlog.md`.
+- **The granted app password is deleted from the server** (`DELETE /ocs/v2.php/core/apppassword`,
+  authenticated with that same password — the last moment the app can do it, since it is about to
+  forget it). Nextcloud issues the password *before* the user is asked whether it is the right
+  account, so declining used to leave a live password listed under *Security* belonging to an account
+  they had just refused. Cancelling at the confirmation, and re-submitting from it, revoke on the same
+  terms.
+- **Nothing waits for that.** The revoke is best-effort: an unreachable server, or one too old to
+  have the endpoint, leaves exactly the harmless hand-revocable leftover that existed before, and
+  the user sees no difference. A failure is one line in S8 (`AUTH`) and nothing else — it is not
+  something they can act on mid-flow.
 
 **Inline error messages** (under the field, plain language, never a stack trace; each also written to
 S8):
@@ -2187,7 +2195,7 @@ The cases below are where a plausible implementation is wrong. Each is a test, n
 | Episode has no enclosure | `hasEnclosure = false` → `actions` contains only `OPEN_IN_BROWSER`; the row is dimmed with a **no audio** badge. Download must be *absent*, not present-and-failing. |
 | Two episodes in one feed share a `guid` | the ledger is keyed by `episodeKey`, so they are one row and one decision. The list must not show a duplicate — dedup by key when projecting, and do not assume the DAO did it. |
 | A title long enough to overflow at the largest font scale | the title truncates first; the decision affordances never do (§12.12, Part A). |
-| A feed with 500+ episodes under `All` | paging or a keyed `LazyColumn` with stable `episodeKey`s — the sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them. |
+| A feed with 500+ episodes under `All` | a keyed `LazyColumn` with stable `episodeKey`s — **not** Paging 3, settled by measurement in `docs/decisions/0027`. The sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them. |
 | `writtenFileName` present but the file is gone | the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists — the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (`docs/decisions/0012`). |
 
 ### B14.4 Disconnect
