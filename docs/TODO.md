@@ -285,9 +285,10 @@ already handled — and because `HANDLED_REMOTELY` is terminal, no later sync ev
 - [x] `GuidFidelityTest` over a fixture of the shapes a real feed produces — plain, indented on its
       own line, a URL with a query string, and a `urn:` — pinning that `guid` and `episodeKey` are
       always the same string. The probe already confirmed the live instance matches.
-- [ ] Re-run the device test set and check the round trip by hand on the phone: mark in Podsilo →
-      appears in RePod; mark in RePod → the episode leaves *To decide* in Podsilo. **Nothing in the
-      JVM suite can prove this**, and #60 is a bug that only exists on the wire.
+- [x] **Done 2026-08-14, on the phone against the real server.** Mark as played reaches Nextcloud;
+      a download now marks the episode played there too (`position=1854 total=1854`, which RePod reads
+      as played); *mark as unplayed* writes `UNPLAYED, synced=1` with `writtenFileName` intact; and
+      three episodes marked unread in RePod correctly sit row-less in *To decide*.
 
 ---
 
@@ -486,30 +487,38 @@ Rules, all of which the screen already has a pattern for:
 
 ### 7.4 Implementation order
 
+**Done 2026-08-14** (`docs/decisions/0025`). 745 tests, 0 failures, 3 skipped.
+
 Nothing here needs a new dependency, a schema change or a migration.
 
-- [ ] **ADR, and a small one.** §7.1a removed the conflict-rule change from the pull, so what is left
+- [x] **ADR** — `docs/decisions/0025`, and it did stay small, because §7.1a was right: the pull needed
+      no new conflict rule at all. §7.1a removed the conflict-rule change from the pull, so what is left
       to record is: the two buttons are *directional* rather than one "resolve conflicts" action
       because only the user knows which side is right; the pull is `since = 0` over the unchanged
       reconciliation; the push deliberately re-asserts what the server has already seen; and D4/D5's
       bounds, so nobody widens them later. Write it with the code, not before it.
-- [ ] **`:core:sync` — the two passes.** `SyncOrchestrator` grows `forcePull()` and `forcePush()`
+- [x] **`:core:sync` — the two passes.** `forcePull()` is the existing pull with `since = 0` and
+      **no branch in `reconcile`**; a test asserts each terminal state survives it untouched. `SyncOrchestrator` grows `forcePull()` and `forcePush()`
       beside `sync()`, sharing the existing pull/push helpers. `forcePull()` is the existing pull with
       `since = 0` — **if it needs a new branch in `reconcile`, something has drifted from D4/D5.**
       Pure JVM, driven by the existing in-memory fakes: that the pull leaves all three terminal states
       alone and finalises the in-flight ones, that it decides episodes the cursor had skipped, that a
       force push includes already-synced rows, and that a chunk failing mid-way leaves the earlier
       chunks marked and the rest unmarked.
-- [ ] **Chunking in the shared push path**, with a test at a few thousand rows asserting the request
+- [x] **Chunking in the shared push path** at 200 actions per request, so the ordinary outbox drain
+      is fixed too. A failed chunk keeps the earlier ones marked and leaves the rest unsynced., with a test at a few thousand rows asserting the request
       count and that a failed chunk does not mark its rows.
-- [ ] **`:app` — one worker, not three.** `SyncWorker` takes a `KEY_SYNC_MODE` input
+- [x] **`:app` — one worker, three modes** via `KEY_SYNC_MODE`, plus a `DirectionalSync` port kept
+      separate from `SyncTrigger` so the two requests cannot be confused. `SyncWorker` takes a `KEY_SYNC_MODE` input
       (`NORMAL` / `FORCE_PULL` / `FORCE_PUSH`), the same shape `FeedRefreshWorker.KEY_FEED_URL`
       already uses. `WorkScheduler` gains the two enqueues; unique work by name still applies, so a
       second press joins rather than duplicates.
-- [ ] **`:feature:settings` — the rows, the two dialogs, the busy state**, and the preview type for
+- [x] **`:feature:settings` — the rows, the confirmation, the busy state.** One deviation from §7.3,
+      recorded in the ADR: the pull's dialog names **no count**, because counting means fetching and a
+      view model may not touch the network. It says what the operation can and cannot do instead., and the preview type for
       the pull's second phase. Compose tests: disabled without an account, dead while busy, the count
       is named before anything is written, and dismissing writes nothing.
-- [ ] **`docs/UI.md` §7 and §B5** — the rows, the events and the states, in the same pass as the code.
+- [x] **`docs/UI.md` §7 and §B5** — the rows, the events and the states, in the same pass as the code.
 - [ ] **Verify on the device.** Mark an episode played in RePod only, press *Apply Nextcloud's state
       here*, watch it leave *To decide*. Then mark one here, press *Send this device's state*, and
       watch RePod grey it out. Nothing in the JVM suite can prove either.

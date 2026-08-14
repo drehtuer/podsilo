@@ -8,6 +8,7 @@ import androidx.work.WorkManager
 import net.drehtuer.podsilo.core.download.DownloadWorker
 import net.drehtuer.podsilo.core.feed.FeedRefreshWorker
 import net.drehtuer.podsilo.core.model.port.SyncTrigger
+import net.drehtuer.podsilo.feature.settings.DirectionalSync
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,7 +28,8 @@ class WorkScheduler
     @Inject
     constructor(
         private val workManager: WorkManager,
-    ) : SyncTrigger {
+    ) : SyncTrigger,
+        DirectionalSync {
         /**
          * KEEP, not REPLACE: a second tap on the same episode must join the download already
          * running rather than restart it (and restarting would discard the resume progress).
@@ -82,6 +84,23 @@ class WorkScheduler
                 // before this row was written, so the new row needs a pass of its own afterwards.
                 ExistingWorkPolicy.APPEND_OR_REPLACE,
                 SyncWorker.expeditedRequest(),
+            )
+        }
+
+        /**
+         * The two directional passes (`docs/decisions/0025`). `APPEND_OR_REPLACE` for the same reason
+         * [requestSyncNow] uses it: a pass already in flight may have read the ledger before the user
+         * pressed this, so the button needs a pass of its own afterwards rather than joining one.
+         */
+        override fun applyRemoteState() = enqueueSync(SyncWorker.MODE_FORCE_PULL)
+
+        override fun sendLocalState() = enqueueSync(SyncWorker.MODE_FORCE_PUSH)
+
+        private fun enqueueSync(mode: String) {
+            workManager.enqueueUniqueWork(
+                SyncWorker.UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                SyncWorker.expeditedRequest(mode),
             )
         }
 

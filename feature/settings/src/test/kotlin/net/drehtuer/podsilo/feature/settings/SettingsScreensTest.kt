@@ -82,8 +82,11 @@ class SettingsScreensTest {
         compose.onNodeWithText("https://cloud.example.org").assertIsDisplayed()
         compose.onNodeWithText("author").assertIsDisplayed()
         compose.onNode(hasText("3 actions pending", substring = true)).assertIsDisplayed()
-        compose.onNodeWithText("Change Nextcloud instance").assertIsDisplayed()
-        compose.onNodeWithText("Disconnect").assertIsDisplayed()
+        // Scrolled to rather than asserted in place: since `docs/decisions/0025` the NEXTCLOUD group
+        // also carries the two directional-sync rows, so these sit below the fold in the test's
+        // viewport. The screen scrolls, so reachable is the property that matters.
+        compose.onNodeWithText("Change Nextcloud instance").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Disconnect").performScrollTo().assertIsDisplayed()
     }
 
     @Test

@@ -4369,3 +4369,50 @@ copy — that one is theirs and cannot be imported — but ours had no excuse.
 Worth generalising: **a diagnostic that restates behaviour instead of invoking it will eventually
 describe a version of the system that no longer exists**, and it will do so with total confidence,
 in the exact place where someone is trying to work out what is true.
+
+---
+
+## 2026-08-14 (§7) — the two directional buttons
+
+**Attempted:** `docs/TODO.md` §7 — *apply Nextcloud's state here* and *send this device's state to
+Nextcloud*, the last unbuilt item of the #60 plan. 745 tests (+15), 0 failures, 3 skipped; both
+passes verified red without their fix.
+
+### The design work was already done, and it held
+
+§7.1a predicted that D4 and D5 collapse the pull into "the ordinary reconciliation with `since = 0`",
+because "never un-mark" plus "never overwrite a download" is exactly "leave all three terminal states
+alone" — which `reconcile` already did. That turned out to be literally true: `forcePull()` is four
+lines and **no branch anywhere in `reconcile`**. The tests are written so that the day someone adds
+one, they fail.
+
+Worth noting because the opposite is the usual experience: a design note written a day earlier
+predicted the shape of the code exactly, and the reason it could is that the two decisions were
+settled *before* the implementation rather than during it.
+
+### The chunking was a pre-existing bug, not a new requirement
+
+The force push made it obvious — thousands of actions in one body — but the ordinary outbox drain had
+always posted everything unsynced in a single request, and a *mark all as played* over 9,500 episodes
+would have done the same. Putting the chunking in the shared path fixed a latent bug and a new one at
+once, which is the argument for looking at where a new feature's requirement *already* applies.
+
+### One promise the plan made that the code cannot keep
+
+§7.3 specified a two-phase dialog for the pull: fetch, then *"3,022 actions from Nextcloud. 87 change
+something here."* That number cannot be produced without fetching, and a view model may not touch the
+network (`docs/UI.md` §B0.3). The options were to smuggle a fetch into a view model, invent a
+plausible figure, or say something shorter and true. The dialog now describes what the operation can
+and cannot do, and the ADR records the gap rather than quietly dropping it.
+
+The push keeps its count, because that one is a ledger query.
+
+### I hit a trap I had documented the same day
+
+`perl -0777 -i -pe` interpolated `@Binds` in a replacement string as an empty array, silently
+deleting the annotation — the exact failure I wrote up this morning after it ate three `@Test`
+annotations. The compiler caught this one immediately (Hilt complained about an unimplemented
+abstract method), so it cost a minute rather than a false green.
+
+Knowing about a trap is not the same as having a habit that avoids it. The habit that would have
+worked is the one already available: use the editor for code, and keep `perl` for prose.

@@ -1016,6 +1016,7 @@ and deleted (2026-08-13).
 | [0022](decisions/0022-play-is-an-ended-marker-in-both-directions.md) | A `PLAY` means *ended*, both ways: a duration-less skip sends `1/1`, and an inbound `PLAY` is only terminal when `position >= total > 0` — which is how a client says *unread* | §6 — settles #60's two interop halves |
 | [0023](decisions/0023-a-download-also-marks-the-episode-played.md) | A completed download emits `DOWNLOAD` **and** `PLAY` — reverses CLAUDE.md §5's prohibition, because the server discards `DOWNLOAD` and the episode stayed new everywhere else | §6, CLAUDE.md §1/§5 |
 | [0024](decisions/0024-mark-as-unplayed-is-a-state-not-a-delete.md) | *Mark as unplayed* is a new `UNPLAYED` ledger state, not a row deletion — the row outlives the decision, so the dedup authority is untouched | §4, §9 |
+| [0025](decisions/0025-two-directional-sync-passes.md) | Two directional passes — the pull is `since = 0` over the **unchanged** reconciliation, the push re-asserts every row and is chunked | §6, `docs/UI.md` §7 |
 
 ### Decisions folded into this document
 

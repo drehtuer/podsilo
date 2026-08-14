@@ -27,6 +27,8 @@ import net.drehtuer.podsilo.core.model.port.DatabaseArchive
 import net.drehtuer.podsilo.core.model.port.EpisodeLedgerRepository
 import net.drehtuer.podsilo.core.model.port.EpisodeListRepository
 import net.drehtuer.podsilo.core.model.port.FeedRepository
+import net.drehtuer.podsilo.core.model.port.LedgerFilter
+import net.drehtuer.podsilo.core.model.port.LedgerFilterState
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.OlderThan
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
@@ -53,6 +55,7 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val ledgerRepository: EpisodeLedgerRepository,
     private val syncTrigger: SyncTrigger,
+    private val directionalSync: DirectionalSync,
     private val listRepository: EpisodeListRepository,
     private val feedRepository: FeedRepository,
     private val folderStatus: SettingsFolderStatus,
@@ -115,6 +118,8 @@ class SettingsViewModel(
                 pendingBulk = transient.first,
                 restoreConfirmationVisible = transient.second.confirmingRestore,
                 archiveBusy = transient.second.busy,
+                pendingDirectionalSync = transient.second.pendingDirectional,
+                directionalSyncBusy = transient.second.directionalBusy,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -152,6 +157,51 @@ class SettingsViewModel(
                 viewModelScope.launch { runArchive { archive.exportTo(event.uri) } }
             is SettingsEvent.BackupSourceChosen ->
                 viewModelScope.launch { runArchive { archive.importFrom(event.uri) } }
+            is SettingsEvent.DirectionalSyncRequested ->
+                viewModelScope.launch { requestDirectionalSync(event.direction) }
+            SettingsEvent.DirectionalSyncCancelled -> archiveUi.update { it.copy(pendingDirectional = null) }
+            SettingsEvent.DirectionalSyncConfirmed -> runDirectionalSync()
+        }
+    }
+
+    /**
+     * Opens the confirmation, counting first for a push.
+     *
+     * **Refused without an account**, exactly as a restore is: the rows are disabled *and* the check
+     * is repeated here, so it holds however the event arrives.
+     *
+     * The count is a ledger query, not a network call — a view model may read the database and may
+     * not touch the network (`docs/UI.md` §B0.3). That asymmetry is the whole reason the pull cannot
+     * offer a number: the figure that would matter, *how many of these change anything here*, is only
+     * knowable after a fetch.
+     */
+    private suspend fun requestDirectionalSync(direction: SyncDirection) {
+        if (settingsRepository.nextcloudCredentials() == null) return
+        val pushable =
+            if (direction == SyncDirection.PUSH) {
+                ledgerRepository
+                    .observe(LedgerFilter(state = LedgerFilterState.ALL))
+                    .first()
+                    .count { it.state in PUSHABLE_STATES }
+            } else {
+                0
+            }
+        archiveUi.update { it.copy(pendingDirectional = DirectionalSyncConfirmation(direction, pushable)) }
+    }
+
+    /** Enqueues the pass and says so. The work is a worker's — this never syncs inline. */
+    private fun runDirectionalSync() {
+        val pending = archiveUi.value.pendingDirectional ?: return
+        archiveUi.update { it.copy(pendingDirectional = null) }
+        when (pending.direction) {
+            SyncDirection.PULL -> {
+                directionalSync.applyRemoteState()
+                emit(SettingsEffect.ShowMessage("Applying Nextcloud's state…"))
+            }
+            SyncDirection.PUSH -> {
+                directionalSync.sendLocalState()
+                emit(SettingsEffect.ShowMessage("Sending ${pending.pushableCount} decisions to Nextcloud…"))
+            }
         }
     }
 
@@ -335,8 +385,14 @@ fun interface SyncStatus {
 internal fun lastSyncInstant(epochMillis: Long): java.time.Instant? =
     EpochTime.ofMillisOrNull(epochMillis.takeIf { it > 0 })
 
-/** Transient backup state: the warning dialog, and whether a zip is being written or read. */
+/** The three states a force push can actually send (`docs/decisions/0023`, `0024`). */
+private val PUSHABLE_STATES =
+    setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.UNPLAYED)
+
+/** Transient dialog/busy state: the backup warning, a zip in flight, and the directional passes. */
 private data class ArchiveUi(
     val confirmingRestore: Boolean = false,
     val busy: Boolean = false,
+    val pendingDirectional: DirectionalSyncConfirmation? = null,
+    val directionalBusy: Boolean = false,
 )

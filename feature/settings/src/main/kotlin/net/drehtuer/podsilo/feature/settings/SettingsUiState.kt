@@ -35,7 +35,39 @@ data class SettingsUiState(
     val restoreConfirmationVisible: Boolean = false,
     /** Zipping or restoring. Both backup rows disable while it runs, so neither can be re-entered. */
     val archiveBusy: Boolean = false,
+    /**
+     * The confirmation for one of the two directional sync buttons (`docs/decisions/0025`), or `null`.
+     *
+     * Both are behind one, for different reasons. The push writes to a shared, append-only log that
+     * other clients act on and nothing can retract, so it names its count first — the same safeguard
+     * every bulk write in this app carries. The pull cannot be taken back either, in the sense that
+     * the decisions it applies are decisions; it just cannot name a number, because counting would
+     * mean fetching, and a view model does not touch the network (`docs/UI.md` §B0.3).
+     */
+    val pendingDirectionalSync: DirectionalSyncConfirmation? = null,
+    /** A directional pass is running; both rows go dead, exactly as the backup rows do. */
+    val directionalSyncBusy: Boolean = false,
 )
+
+/**
+ * Which way, and — for the push only — how much.
+ *
+ * [pushableCount] is a local query over the ledger, so it costs nothing and is honest before the
+ * fact. The pull has no equivalent: the number that would matter (*how many of these change
+ * anything here*) is only knowable after a fetch.
+ */
+data class DirectionalSyncConfirmation(
+    val direction: SyncDirection,
+    val pushableCount: Int = 0,
+)
+
+enum class SyncDirection {
+    /** Apply Nextcloud's state here. Only ever marks episodes handled; never un-marks one. */
+    PULL,
+
+    /** Send this device's state to Nextcloud, including rows it has already seen. */
+    PUSH,
+}
 
 /**
  * @property instanceUrl `null` renders an **empty** value area, not a placeholder, and the row is
@@ -134,6 +166,15 @@ sealed interface SettingsEvent {
 
     data object RestoreCancelled : SettingsEvent
 
+    /** Opens the confirmation. Nothing is sent or applied until [DirectionalSyncConfirmed]. */
+    data class DirectionalSyncRequested(
+        val direction: SyncDirection,
+    ) : SettingsEvent
+
+    data object DirectionalSyncConfirmed : SettingsEvent
+
+    data object DirectionalSyncCancelled : SettingsEvent
+
     /**
      * The host came back from the SAF picker. [uri] is a document the user chose in *this* app
      * session; a `null` would mean they cancelled, which the host swallows rather than sending on.
@@ -192,3 +233,19 @@ interface SettingsCounts {
 
 /** Where the source lives. GPL-3.0 obliges us to be able to point at it; this is that pointer. */
 const val PODSILO_REPOSITORY_URL: String = "https://github.com/drehtuer/podsilo"
+
+/**
+ * The two directional passes, as a port (`docs/decisions/0025`).
+ *
+ * A screen asks for work and never performs it — same rule as [net.drehtuer.podsilo.core.model.port.SyncTrigger],
+ * and a separate interface because these are *different requests*, not a parameter on the ordinary
+ * one: confusing "sync now" with "overwrite the server with my state" is exactly the mistake worth
+ * making structurally impossible.
+ */
+interface DirectionalSync {
+    /** Apply Nextcloud's state here — pull the whole log and reconcile it. */
+    fun applyRemoteState()
+
+    /** Send this device's state to Nextcloud, including rows it has already seen. */
+    fun sendLocalState()
+}

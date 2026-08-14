@@ -18,6 +18,7 @@ import net.drehtuer.podsilo.feature.episodes.EpisodeListViewModel
 import net.drehtuer.podsilo.feature.episodes.PodcastListViewModel
 import net.drehtuer.podsilo.feature.episodes.TriageWriter
 import net.drehtuer.podsilo.feature.settings.ConnectViewModel
+import net.drehtuer.podsilo.feature.settings.DirectionalSync
 import net.drehtuer.podsilo.feature.settings.NamingViewModel
 import net.drehtuer.podsilo.feature.settings.SettingsViewModel
 import net.drehtuer.podsilo.ui.activity.ActivityViewModel
@@ -60,6 +61,7 @@ class EpisodeViewModelFactory
         private val namingSample: NamingSampleSourceAdapter,
         private val loginFlowClient: NextcloudLoginFlowClient,
         private val syncTrigger: SyncTrigger,
+        private val directionalSync: DirectionalSync,
         private val logRepository: net.drehtuer.podsilo.core.model.port.LogRepository,
         @Named("appVersion") private val appVersion: String,
         @Named("appBuild") private val appBuild: String,
@@ -116,6 +118,7 @@ class EpisodeViewModelFactory
                     settingsRepository = settingsRepository,
                     ledgerRepository = ledgerRepository,
                     syncTrigger = syncTrigger,
+                    directionalSync = directionalSync,
                     listRepository = listRepository,
                     feedRepository = feedRepository,
                     folderStatus = settingsFolderStatus,

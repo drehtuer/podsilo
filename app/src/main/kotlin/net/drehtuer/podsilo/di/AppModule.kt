@@ -17,6 +17,7 @@ import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
 import net.drehtuer.podsilo.core.model.port.GpodderClientFactory
 import net.drehtuer.podsilo.core.model.port.NextcloudLoginFlowClient
 import net.drehtuer.podsilo.core.model.port.SyncTrigger
+import net.drehtuer.podsilo.feature.settings.DirectionalSync
 import net.drehtuer.podsilo.system.AndroidConnectivityMonitor
 import net.drehtuer.podsilo.work.WorkScheduler
 import okhttp3.OkHttpClient
@@ -92,6 +93,14 @@ object AppModule {
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BindingsModule {
+    /**
+     * The two directional passes S4 offers (`docs/decisions/0025`). A separate port from
+     * [SyncTrigger] on purpose: "sync now" and "overwrite the server with my state" are different
+     * requests, and one interface with a mode parameter is one typo away from confusing them.
+     */
+    @Binds
+    abstract fun bindDirectionalSync(workScheduler: WorkScheduler): DirectionalSync
+
     /**
      * Every "I have written something the server needs" in the app arrives here — a finished
      * download, a mark-as-played, S4's bulk mark, the mark-old rule, and S5 once credentials land.
