@@ -111,7 +111,8 @@
         "EditorConfig.EditorConfig",
         "github.vscode-github-actions",
         "GitHub.vscode-pull-request-github",
-        "Anthropic.claude-code"
+        "Anthropic.claude-code",
+        "ms-python.python"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
