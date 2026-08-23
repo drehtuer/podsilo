@@ -5517,3 +5517,48 @@ never used at all, so the count is zero. Verified failing before the fix, passin
 watched the app during a real download since the change — the claim "the UI no longer freezes" is
 reasoning plus a dispatch assertion, not an observation. The device set (`docs/dev-environment.md` §6)
 is where that would be settled, and it has not been run for this.
+
+---
+
+## 2026-08-23 (#90) — a decision you can find again
+
+**Attempted:** issue #90 — a history of actions, "if an episode is marked by mistake and the undo
+notification is missed, it is impossible to track which should be reverted."
+
+The word doing the work is **track**. Nothing was ever unrecoverable: *Mark as unplayed* has existed
+since `docs/decisions/0024`, and S2's filters can reach any episode. What was missing is knowing
+*which* episode — a swipe holds its decision for five seconds (§12.3) and is then silent, and an
+episode that leaves the *To decide* filter leaves the screen. The feature is therefore a list, not a
+new capability.
+
+**Asked before building**, because it decides how much of the app moves: a group inside S7, a ninth
+screen, or widening S7's existing *recently downloaded* group. The author chose the group in S7,
+which is what the issue itself pointed at ("similar to the download history"). It costs no new route,
+no new ViewModel, and no schema change — `EpisodeLedgerRow` already carries `state` and `actionedAt`.
+
+**Built:** `EpisodeListDao.observeRecentActions(limit)` — the `episodes ⨝ episode_ledger` join,
+every decided state, newest first, `LIMIT` in SQL. Three decisions worth recording:
+
+- **Every decided state, not just `SKIPPED`.** "What did I just do?" does not distinguish a wrong
+  *Download* from a wrong *Mark as played*.
+- **In-flight states excluded.** `QUEUED`/`DOWNLOADING`/`ERROR` are already the three groups above
+  this one; including them would put the same episode on one screen twice.
+- **A join, not the ledger alone.** S7's delivered group reads ledger rows because it renders a
+  filename, and that keeps it correct for an unsubscribed feed. This group has to name an episode the
+  user can *recognise*, so it joins — and an episode whose cache was pruned by an unsubscribe drops
+  out of it. The ledger row survives, which is the part that matters (CLAUDE.md §11).
+
+The row says **Played**, not `SKIPPED` — the vocabulary rule §1 sets — and `HANDLED_REMOTELY` renders
+as *Handled elsewhere*, because presenting another client's decision as "you played this" would have
+the app asserting something it does not know. A row already `UNPLAYED` gets no button.
+
+**The cost nobody plans for:** six test fakes implement `EpisodeListRepository` across five modules,
+so one port method meant six overrides. Four are `flowOf(emptyList())` with a comment saying why
+that is honest rather than lazy; the two that back tests of this feature return real data.
+
+`./gradlew ktlintCheck detekt test` green: **812 tests, 0 failures, 3 skipped.**
+
+**Honest limits.** Verified on the JVM only — the group renders correctly under Robolectric and the
+write goes through the same `TriageWriter` as S2's, but nobody has swiped an episode on a phone,
+opened S7 and taken it back. Fifty entries is a guess at "enough to find a mis-swipe in": there is no
+paging and no *load more*, so a decision older than the last fifty is not reachable here.

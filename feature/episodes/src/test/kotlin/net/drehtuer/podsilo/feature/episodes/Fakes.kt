@@ -5,6 +5,7 @@ package net.drehtuer.podsilo.feature.episodes
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
@@ -138,6 +139,28 @@ class FakeLedgerRepository(
                     ?.takeIf { it.state in IN_FLIGHT_STATES }
                     ?.let { EpisodeListItem(episode, it) }
             }
+        }
+
+    /**
+     * Backed by the same store as everything else, so a test that writes a decision and then reads
+     * the history sees its own write (issue #90).
+     */
+    override fun observeRecentActions(limit: Int): Flow<List<EpisodeListItem>> =
+        rows.map { current ->
+            current.values
+                .filter {
+                    it.state in
+                        setOf(
+                            LedgerState.DOWNLOADED,
+                            LedgerState.SKIPPED,
+                            LedgerState.UNPLAYED,
+                            LedgerState.HANDLED_REMOTELY,
+                        )
+                }.sortedByDescending { it.actionedAt }
+                .take(limit)
+                .mapNotNull { row ->
+                    episodes.firstOrNull { it.episodeKey == row.episodeKey }?.let { EpisodeListItem(it, row) }
+                }
         }
 
     override fun observeRecentlyDelivered(

@@ -4,6 +4,7 @@ package net.drehtuer.podsilo.core.feed
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.port.BulkScope
@@ -55,6 +56,12 @@ class RecordingLedgerRepository(
 
     // S7's queries. These modules do not render S7, so the honest stub is "nothing in flight".
     override fun observeInFlight(): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
+
+    /**
+     * Not exercised here: S7's *recent actions* group (issue #90) is an `:app` screen, and this
+     * module's tests are about the download path. Empty rather than wrong.
+     */
+    override fun observeRecentActions(limit: Int): Flow<List<EpisodeListItem>> = flowOf(emptyList())
 
     override fun observeRecentlyDelivered(
         since: Long,

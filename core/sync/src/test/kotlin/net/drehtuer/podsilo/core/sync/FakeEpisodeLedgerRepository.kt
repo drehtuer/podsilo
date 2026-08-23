@@ -4,6 +4,7 @@ package net.drehtuer.podsilo.core.sync
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import net.drehtuer.podsilo.core.model.Episode
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
@@ -37,6 +38,9 @@ class FakeEpisodeLedgerRepository(
 
     // S7's queries. These modules do not render S7, so the honest stub is "nothing in flight".
     override fun observeInFlight(): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
+
+    /** S7's *recent actions* group (issue #90) is an `:app` screen; reconciliation never reads it. */
+    override fun observeRecentActions(limit: Int): Flow<List<EpisodeListItem>> = flowOf(emptyList())
 
     override fun observeRecentlyDelivered(
         since: Long,

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
+import net.drehtuer.podsilo.core.model.EpochTime
 import net.drehtuer.podsilo.core.model.Feed
 import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.core.model.port.ConnectivityMonitor
@@ -42,6 +43,9 @@ private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /** The last ~20 delivered files answer "did it land?"; more than that is a file browser. */
 private const val RECENT_LIMIT = 20
+
+/** Enough decisions to find a mis-swipe in, few enough that the group stays a group (issue #90). */
+private const val HISTORY_LIMIT = 50
 
 /**
  * S7 (`docs/UI.md` §B6).
@@ -108,8 +112,13 @@ class ActivityViewModel(
             Snapshot(inFlight, work, folder, connectivity.online, sync.first, sync.second, sync.third != null)
         }.flatMapLatest { snapshot ->
             settingsRepository.observeDeliveredClearedAt().flatMapLatest { clearedAt ->
-                listRepository.observeRecentlyDelivered(since = clearedAt, limit = RECENT_LIMIT).map { delivered ->
-                    snapshot.toUiState(delivered)
+                combine(
+                    listRepository.observeRecentlyDelivered(since = clearedAt, limit = RECENT_LIMIT),
+                    // Not cursor-filtered: *clear* answers "stop showing me delivered files", and a
+                    // decision the user may need to take back is not something they asked to hide.
+                    listRepository.observeRecentActions(limit = HISTORY_LIMIT),
+                ) { delivered, history ->
+                    snapshot.toUiState(delivered, history)
                 }
             }
         }.flowOn(projectionContext)
@@ -119,7 +128,10 @@ class ActivityViewModel(
                 initialValue = ActivityUiState(),
             )
 
-    private suspend fun Snapshot.toUiState(delivered: List<EpisodeLedgerRow>): ActivityUiState {
+    private suspend fun Snapshot.toUiState(
+        delivered: List<EpisodeLedgerRow>,
+        history: List<EpisodeListItem>,
+    ): ActivityUiState {
         val feeds = feedRepository.getAll().associateBy(Feed::url)
         val rows =
             inFlight.map { item ->
@@ -158,6 +170,21 @@ class ActivityViewModel(
                         feedUrl = it.feedUrl,
                     )
                 },
+            history =
+                history.mapNotNull { item ->
+                    val ledger = item.ledger ?: return@mapNotNull null
+                    ActionUi(
+                        episodeKey = item.episode.episodeKey,
+                        feedUrl = item.episode.feedUrl,
+                        episodeTitle = item.episode.title,
+                        feedTitle = feeds[item.episode.feedUrl]?.title ?: item.episode.feedUrl,
+                        state = ledger.state,
+                        actionedAt = EpochTime.ofMillis(ledger.actionedAt),
+                        // `UNPLAYED` is a decision already withdrawn; offering the same button again
+                        // would be a no-op dressed as an affordance.
+                        canMarkAsUnplayed = ledger.state != LedgerState.UNPLAYED,
+                    )
+                },
         )
     }
 
@@ -171,6 +198,7 @@ class ActivityViewModel(
             is ActivityEvent.RowClicked -> emit(ActivityEffect.OpenEpisodeDetail(event.episodeKey))
             // Hides the list; never deletes a ledger row. Those rows are what stop an episode being
             // downloaded a second time (CLAUDE.md §11), so "clear" here means "stop showing me these".
+            is ActivityEvent.MarkAsUnplayedClicked -> viewModelScope.launch { markAsUnplayed(event.episodeKey) }
             ActivityEvent.ClearDeliveredClicked ->
                 viewModelScope.launch { settingsRepository.setDeliveredClearedAt(clock.millis()) }
             ActivityEvent.PausedBannerActionClicked -> emit(ActivityEffect.ChooseFolder)
@@ -203,6 +231,16 @@ class ActivityViewModel(
     private suspend fun markAsPlayed(episodeKey: String) {
         val episode = episodeRepository.get(episodeKey) ?: return
         triageWriter.markAsPlayed(listOf(episode))
+    }
+
+    /**
+     * Issue #90's recovery path. The same writer S2 and S3 use, so a decision withdrawn here is
+     * indistinguishable from one withdrawn there — a new `UNPLAYED` row that re-posts, never a
+     * deleted one (`docs/decisions/0024`).
+     */
+    private suspend fun markAsUnplayed(episodeKey: String) {
+        val episode = episodeRepository.get(episodeKey) ?: return
+        triageWriter.markAsUnplayed(listOf(episode))
     }
 
     private fun emit(effect: ActivityEffect) {

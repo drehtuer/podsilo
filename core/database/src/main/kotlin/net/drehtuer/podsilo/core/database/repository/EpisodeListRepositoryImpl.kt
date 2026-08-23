@@ -40,6 +40,9 @@ class EpisodeListRepositoryImpl(
     override fun observeInFlight(): Flow<List<EpisodeListItem>> =
         listDao.observeInFlight().map { list -> list.map { it.toDomain() } }
 
+    override fun observeRecentActions(limit: Int): Flow<List<EpisodeListItem>> =
+        listDao.observeRecentActions(limit).map { list -> list.map { it.toDomain() } }
+
     override fun observeRecentlyDelivered(
         since: Long,
         limit: Int,

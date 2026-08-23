@@ -116,6 +116,36 @@ interface EpisodeListDao {
     fun observeInFlight(): Flow<List<EpisodeWithLedger>>
 
     /**
+     * **S7's *recent actions* group — what was decided, newest first (issue #90).**
+     *
+     * The problem it exists for: *Mark as played* has a five-second undo window, and once that
+     * closes the decision is invisible. A mis-swipe is then unrecoverable in practice — not because
+     * the state cannot be changed back, but because there is no way to find out *which* episode was
+     * swiped. This query is that list.
+     *
+     * Deliberately every decided state rather than only `SKIPPED`: the user's question is "what did
+     * I just do?", and an accidental *Download* belongs in the same answer as an accidental
+     * *Mark as played*. In-flight states are excluded because they are already the three groups
+     * above this one — a `QUEUED` row would appear twice on one screen.
+     *
+     * `LIMIT` in SQL, not `take()` in Kotlin: the whole decided history is thousands of rows on a
+     * device that has been used, and this renders the last few dozen (issue #47's lesson).
+     */
+    @Transaction
+    @Query(
+        "SELECT e.*, " +
+            "l.episodeKey AS l_episodeKey, l.feedUrl AS l_feedUrl, l.enclosureUrl AS l_enclosureUrl, " +
+            "l.state AS l_state, l.actionedAt AS l_actionedAt, l.syncedToServer AS l_syncedToServer, " +
+            "l.attempts AS l_attempts, l.lastError AS l_lastError, " +
+            "l.lastErrorCause AS l_lastErrorCause, l.lastErrorRetryable AS l_lastErrorRetryable, " +
+            "l.writtenFileName AS l_writtenFileName, l.durationSeconds AS l_durationSeconds " +
+            "FROM episodes e JOIN episode_ledger l ON e.episodeKey = l.episodeKey " +
+            "WHERE l.state IN ('DOWNLOADED', 'SKIPPED', 'UNPLAYED', 'HANDLED_REMOTELY') " +
+            "ORDER BY l.actionedAt DESC LIMIT :limit",
+    )
+    fun observeRecentActions(limit: Int): Flow<List<EpisodeWithLedger>>
+
+    /**
      * The last [limit] delivered files — S7's *recently downloaded* group, and the app's only
      * "did it actually land?" affordance.
      *
