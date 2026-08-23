@@ -5620,3 +5620,98 @@ second run's file came out as `… (2).mp3`, which is the collision suffixing be
 against the file the first run had already written.
 
 `./gradlew ktlintCheck detekt test` green: **814 tests, 0 failures, 3 skipped.**
+
+---
+
+## 2026-08-23 (device) — the phone answered the two questions the JVM could not
+
+**Attempted:** verify #90, #91 and #92 on the author's Pixel 10a (Android 17) over wireless
+debugging, against the real `cloud.drehtuer.net` account — the three fixes had all shipped with
+"verified on the JVM, nobody has looked at it" attached.
+
+### Getting on the phone
+
+`adb pair` failed with a protocol fault, and it did not matter: the adb key from the August sessions
+is still trusted, so `adb connect` alone worked. The **pairing port is not the connect port** —
+§9.4 says so and I still tried the pairing port first. The connect port came from the documented
+scan, since mDNS does not cross into the container.
+
+Two environmental failures cost a run each, and neither was a code problem:
+
+1. **The phone was dozing with the lockscreen up.** Every Compose test failed with *"No compose
+   hierarchies found in the app"*, which is what the test rule says when the activity cannot reach
+   the foreground. Worth knowing because it reads exactly like a broken app.
+2. **A 30-second screen timeout** would have re-created that mid-run, so it was raised to 30 minutes
+   for the session and put back afterwards.
+
+### The set
+
+61 tests, in two halves. 39 across `core/datastore`, `core/download`, `core/ui`,
+`feature/episodes` and `feature/settings` — all green. Then `:app`'s 22, which is where the
+interesting part is: **the 6 `SafDownloadTargetInstrumentedTest` cases and
+`DownloadPipelineInstrumentedTest` only run if a folder grant and refreshed episodes exist**, and
+`device-test.sh` destroys the first by reinstalling. Installing **only the test APK** over an
+already-granted app is what let them run: `am instrument` directly, no Gradle, no reinstall. All 7
+passed, and the pipeline test left the ledger byte-identical to the baseline — it cleans up after
+itself, which the JVM cannot show.
+
+One failure along the way was a **flake**: `everyFilterChipIsReachableAtTheDeviceWidth` died with
+"Activity has been destroyed already" and passed on re-run. That is the test most likely to be broken
+by #92's gutter, so its passing is a positive result rather than an absence of a negative.
+
+### #92, settled
+
+The gutter resolves to **30 dp on this phone** — the same as the emulator, and the reason taking
+`max(systemGestures, 16 dp)` rather than hardcoding 16 was right. Chrome and rows both land at
+x = 78 px, so the alignment fix holds on real hardware with real data.
+
+The gesture itself, which no emulator could answer: **a swipe starting at x = 10 px navigated back**
+— the system took it — with no triage and no snackbar. A swipe starting inside the content area still
+triages, and its undo still writes nothing. That is the whole issue, closed on the device that
+reported it. Caveat: these are injected events, not a finger.
+
+### #91, measured at last
+
+`dumpsys gfxinfo` during a **real download of a real episode**, scrolling the list throughout:
+**266 frames, 8 janky (3.01 %)**, 50th 6 ms, 90th 11 ms, 95th 15 ms. Against a 2,468-episode cache
+and 2,917 ledger rows. The claim in the PR was reasoning plus a dispatch assertion; this is the
+number.
+
+**What it is not: an A/B.** Nobody measured the pre-fix build on this phone, so the honest statement
+is "smooth now", not "n times smoother". The before-number would need the `fix/92` build installed
+and another real download.
+
+### What the account cost, and how it was returned
+
+The author asked for any *mark as played* to be reversed. The baseline was clean and unusually easy
+to diff: **2,917 rows, every one `HANDLED_REMOTELY`, nothing unsynced** — so anything else was mine.
+
+The download wrote one row (`DOWNLOADED`, then `syncedToServer = 1`, so `DOWNLOAD` and `PLAY` reached
+the server). It was reversed through **S7's own *Mark as unplayed*** — which is #90 being used for
+its actual purpose on real data, not a demo — leaving `UNPLAYED`, synced, which other clients read as
+unread (`docs/decisions/0022`). The row itself stays, because the row is the dedup authority and has
+to outlive the decision (`docs/decisions/0024`). "Reversed" therefore means *the episode reads as
+unread everywhere*, not *the record is gone*, and those are deliberately different things.
+
+The 63 MB file remains in the author's `Podcasts/PseudoPod/` folder. Podsilo does not delete files
+(CLAUDE.md §1), and an agent deleting one because it created it is a rule this project should not
+start bending; it is theirs to remove.
+
+### A network problem that was a typo
+
+Mid-session the author could not connect: *"cannot reach address"*. The container reached
+`cloud.drehtuer.net` in 76 ms, the phone pinged it in 35 ms, and the VPN tunnel's 1283-byte MTU
+looked like a promising culprit — which is where I started speculating instead of reading. The app's
+own error log had it in one line:
+
+```
+AUTH ×3 · Connecting to Nextcloud failed: UNREACHABLE
+host 'cloud drehtuer.net' rejected before contacting anything
+```
+
+A **space instead of a dot**. `docs/decisions/0019` paid for itself a second time, and the lesson is
+the same one as last time: read the error log before theorising about the network.
+
+It leaves a real observation, unfixed and unrecorded elsewhere: a **malformed host reports as
+`UNREACHABLE`**, the same word a genuine network failure gets. The `detail` line distinguishes it,
+the headline does not, and that is what sent two of us to look at a VPN. Same family as issue #40.
