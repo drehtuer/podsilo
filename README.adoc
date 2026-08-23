@@ -151,7 +151,7 @@ section that governs it.
 
 They are an https://antora.org/[Antora] component, which is why the paths above are
 `docs/modules/ROOT/pages/` rather than plain `docs/` -- `antora.yml` and `modules/` have to be
-siblings. `antora --fetch antora-playbook.yml` builds the site into `build/site/`. One consequence
+siblings. `./scripts/build-docs.sh` builds the site into `build/site/`. One consequence
 worth knowing before clicking a link in here: pages reference each other with Antora's `xref:` macro,
 which GitHub's file view does not resolve, so cross-references work on the built site and not while
 browsing the repository. That site is published at

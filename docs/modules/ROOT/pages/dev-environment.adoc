@@ -344,8 +344,8 @@ yamllint .
 git ls-files -z '*.sh' | xargs -0 -r shellcheck
 git ls-files -z '*.adoc' | xargs -0 -r asciidoctor --failure-level=WARN -o /dev/null
 
-# 4. Build the documentation site (optional; not a CI step).
-antora --fetch antora-playbook.yml && echo "open build/site/index.html"
+# 4. Build the documentation site (optional; CI builds it too, and deploys from main).
+./scripts/build-docs.sh && echo "open build/site/index.html"
 ----
 
 *Verified 2026-08-01* -- `BUILD SUCCESSFUL`, exit 0:
@@ -437,10 +437,22 @@ directory inside a module.
 [source,bash]
 ----
 cd .devcontainer && docker compose up -d kroki && cd ..   # the diagrams need it
-antora --fetch --log-failure-level=warn antora-playbook.yml   # -> build/site/index.html
+./scripts/build-docs.sh                                   # -> build/site/index.html
 ----
 
-`--log-failure-level=warn` is not optional decoration: Antora reports an unresolved `xref:`, a page
+*Build through the script, not `antora` directly.* The site is no longer only Antora: one page is
+generated first, and running `antora` on its own fails on the nav's unresolved `xref:` to it. The
+script exists so the local build and `docs.yml` are the same command and cannot drift.
+
+*That generated page is the security policy.* It has to be Markdown named `SECURITY.md` at the
+repository root, because that is what GitHub's Security tab and its *Report a vulnerability* flow
+read -- and it should also be readable on the site. Copying it would leave two versions of a policy to
+keep in step, which is the one document where that is unacceptable, so `SECURITY.md` stays the single
+source and kramdoc renders it into `docs/modules/ROOT/pages/security.adoc` at build time. That file is
+*gitignored and never committed*; it carries a "generated, do not edit" banner because it lands among
+hand-written pages. Editing the policy means editing `SECURITY.md`.
+
+`--log-failure-level=warn`, which the script passes, is not optional decoration: Antora reports an unresolved `xref:`, a page
 missing from the nav or a diagram Kroki refused as a *warning* and still exits 0. Without the flag a
 site with holes in it builds green. It is the same argument as `--failure-level=WARN` below, one
 level up -- Asciidoctor checks a file, Antora checks the site.
@@ -1559,7 +1571,7 @@ Android SDK (`/opt/android-sdk`), `~/.gradle`, `~/.android`, Claude Code's confi
 * `journal.adoc` -- how each of these problems was actually diagnosed, including the wrong turns
 * `architecture.adoc` -- module structure and what depends on what
 * `decisions/` -- ADRs, notably 0008 (Nextcloud discards `DOWNLOAD`) and 0009 (wire contract)
-* https://github.com/drehtuer/podsilo/security/policy[`SECURITY.md`] -- the build and release path
+* xref:security.adoc[`SECURITY.md`] -- the build and release path
   is in its scope: dependency integrity, the signing setup in <<10-builds-versioning-and-release-signing,§10>>,
   and these workflows. It also records that the device tier is not run in CI, which is why
   <<1-what-works-and-what-has-never-been-run,§1>> exists

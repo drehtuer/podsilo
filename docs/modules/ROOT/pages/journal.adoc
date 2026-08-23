@@ -6184,3 +6184,38 @@ After that, the token diff between the original and the finished `.adoc` is: the
 brief was already in context when it started. It needs a fresh session and `/context`, which is in the
 stub's maintainer note.
 
+'''
+
+== 2026-08-23 (security page) — one source, two renderings
+
+Yesterday the site linked *out* to `SECURITY.md` on GitHub. The author asked the obvious question:
+why not convert it with kramdoc, as the brief had just been converted?
+
+Because the two files are constrained differently, and the constraint is not in the file — it is in
+who reads it. Claude Code has a documented `@import`, so a three-line `CLAUDE.md` stub genuinely
+expands into the whole brief. GitHub has no include for `SECURITY.md`: the filename *is* the
+integration, and the reader is a stranger who has found a vulnerability and clicked *Report a
+vulnerability*. A stub there degrades the one page that must not be a signpost, and GitHub's own
+documentation does not say which extensions it detects — so `SECURITY.adoc` is a guess, made on the
+document least suited to guessing.
+
+What the question was actually right about is that the policy should be *readable on the site*. The
+way to have both is to keep one source and render it twice: `SECURITY.md` stays at the root for
+GitHub, and `scripts/build-docs.sh` runs kramdoc over it into `docs/modules/ROOT/pages/security.adoc`
+before Antora runs. The generated page is gitignored — a generated file in git is a file that drifts —
+and carries a "do not edit" banner, because it lands in a directory of hand-written pages.
+
+The build is now a script rather than an `antora` invocation, and that is not tidiness: running
+`antora` alone leaves the nav pointing at a page that does not exist, which `--log-failure-level=warn`
+turns into a failed build. One script means the local build and `docs.yml` cannot drift apart.
+
+=== A dead link nobody had followed
+
+Converting forced a look at the file's links, and `SECURITY.md`'s only in-repo document link —
+`[third-party.adoc](third-party.adoc)` — had been *dead since the Antora restructure* moved that file
+to `docs/modules/ROOT/pages/`. It had been broken on GitHub for three commits and nobody noticed,
+because the check that would have caught it (`--failure-level=WARN`, then Antora's xref resolution)
+only ever looked at `.adoc`. Both of the file's relative links are now absolute — one to the published
+site, one to the file on GitHub — which is what they have to be for a document that is rendered in two
+places.
+
