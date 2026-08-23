@@ -98,6 +98,8 @@ RUN apt-get update \
       yamllint \
       shellcheck \
       asciidoctor \
+      nodejs \
+      npm \
       less \
       procps \
       sudo \
@@ -108,6 +110,12 @@ RUN apt-get update \
 # brings Ruby and rubygems, so this is the only extra step. --no-document skips
 # rdoc/ri, which nothing here reads.
 RUN gem install --no-document kramdown-asciidoc:2.1.1
+
+# Antora builds the documentation site (docs/antora.yml, antora-playbook.yml). It is
+# a Node application, which is the only reason nodejs and npm are in the image at all
+# — nothing in the app, Gradle or the test tiers touches them. Pinned like everything
+# else; `antora` is the CLI plus the default site generator.
+RUN npm install -g --no-fund --no-audit antora@3.1.10
 
 # --- Android emulator runtime libraries ---------------------------------------
 # Only needed for Tier 2 (headless emulator inside the container). Safe to drop

@@ -98,7 +98,7 @@ below differ enormously in how well-proven they are.
 
 | *The foreground-service notification*
 | ✅ *Verified*
-| 2026-08-02 -- after fixing the manifest crash it caused on API 34 (`docs/journal.adoc`)
+| 2026-08-02 -- after fixing the manifest crash it caused on API 34 (`journal.adoc`)
 
 | *Backup / restore with real data*
 | ✅ *Verified*
@@ -122,15 +122,15 @@ below differ enormously in how well-proven they are.
 
 | *The app actually running on a device*
 | ✅ *Verified*
-| 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`docs/decisions/0017`)
+| 2026-08-02: installed on the Tier 2 emulator and driven through all eight screens. Its first run found the ICU regex bug (`decisions/0017`)
 
 | *A real Nextcloud (read)*
 | ✅ *Verified*
-| 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`docs/decisions/0009`)
+| 2026-08-02: Login Flow v2, gpoddersync, subscriptions and 3,022 episode actions read from Nextcloud 33.0.5 (`decisions/0009`)
 
 | *A real Nextcloud (write)*
 | ✅ *Verified*
-| 2026-08-02: on a dedicated test account -- `DOWNLOAD` confirmed discarded (`docs/decisions/0008`), mark-as-played `PLAY` round-tripped intact (`docs/architecture.adoc` §6)
+| 2026-08-02: on a dedicated test account -- `DOWNLOAD` confirmed discarded (`decisions/0008`), mark-as-played `PLAY` round-tripped intact (`architecture.adoc` §6)
 
 | *Revoking a declined app password*
 | ✅ *Verified*
@@ -138,7 +138,7 @@ below differ enormously in how well-proven they are.
 
 | *A full `SyncOrchestrator` pass on real data*
 | ✅ *Verified*
-| 2026-08-02: real subscriptions + a real episode -- outbox push, the echo of our own action, and server-clock `since` all confirmed (`docs/journal.adoc`)
+| 2026-08-02: real subscriptions + a real episode -- outbox push, the echo of our own action, and server-clock `since` all confirmed (`journal.adoc`)
 |===
 
 *In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
@@ -330,6 +330,9 @@ bash .devcontainer/post-create.sh
 yamllint .
 git ls-files -z '*.sh' | xargs -0 -r shellcheck
 git ls-files -z '*.adoc' | xargs -0 -r asciidoctor --failure-level=WARN -o /dev/null
+
+# 4. Build the documentation site (optional; not a CI step).
+antora --fetch antora-playbook.yml && echo "open build/site/index.html"
 ----
 
 *Verified 2026-08-01* -- `BUILD SUCCESSFUL`, exit 0:
@@ -411,10 +414,34 @@ run reach the same verdict:
 | `git ls-files -z '*.adoc' \\| xargs -0 -r asciidoctor --failure-level=WARN -o /dev/null`
 |===
 
+=== The documentation site
+
+The documents are an https://antora.org/[Antora] component, which is why they live at
+`docs/modules/ROOT/pages/` rather than directly in `docs/`. That layout is Antora's, not a
+preference: `antora.yml` and `modules/` must be siblings, and every page belongs to a family
+directory inside a module.
+
+[source,bash]
+----
+antora --fetch antora-playbook.yml     # -> build/site/index.html
+----
+
+Three things follow from choosing Antora, and the first is a real cost:
+
+* *Page links are `xref:` macros, which GitHub does not resolve.* Browsing `UI.adoc` in GitHub's file
+  view, an `xref:architecture.adoc[]` renders as a link to `architecture.html`, which does not exist
+  there. The site is the reading surface now; in-repo browsing still shows the prose and the diagrams
+  but not working cross-references.
+* *Mermaid renders on GitHub and not on the site.* GitHub draws `[source,mermaid]` natively; Antora's
+  stock UI shows it as source. Fixing that needs either `asciidoctor-kroki` (a Kroki server, public or
+  self-hosted) or a supplemental UI that loads `mermaid.js` client-side. Neither is wired up.
+* *The UI bundle is the rolling `HEAD` artifact*, because the branch-pinned URL 404s. `snapshot: true`
+  is required for that reason. To freeze it, vendor the zip rather than pin a URL that does not exist.
+
 `--failure-level=WARN` is what turns Asciidoctor from a renderer into a linter: a heading out of
 sequence or an unclosed block is a *warning*, and a warning that does not fail is a warning nobody
 reads. It earned that on the day it was added, catching a converter that had quietly folded an entire
-part of `docs/UI.adoc` into one paragraph.
+part of `UI.adoc` into one paragraph.
 
 All three are green as of 2026-08-23, with one yamllint *warning* left standing: a
 `echo "::warning::…"` line in `ci.yml` that is 171 characters and cannot be wrapped without changing
@@ -536,7 +563,7 @@ That Windows-server variant is still *untested*; only the WSL-server variant abo
 SAF grant and the episode ledger. Downloaded files are untouched (they are in the user's folder, not
 app storage). Export a backup from Settings first if the install holds anything worth keeping, and
 expect to reconnect afterwards; restoring that backup is itself gated on being connected again
-(`docs/UI.adoc` §7), which is the intended order.
+(`UI.adoc` §7), which is the intended order.
 
 *It never runs on CI, and that isolation is structural rather than a matter of tagging.*
 `.github/workflows/ci.yml` runs `ktlintCheck`, `detekt`, `test` and `assembleDebug` -- nothing else.
@@ -575,7 +602,7 @@ What the set covers, in rough order of what it has actually caught:
 
 | UI conformance
 | `PodcastListConformanceTest`
-| S1 against `docs/UI.adoc` §4 / §12.5 / §17 / §18
+| S1 against `UI.adoc` §4 / §12.5 / §17 / §18
 
 |
 | `SettingsConformanceTest`
@@ -587,7 +614,7 @@ What the set covers, in rough order of what it has actually caught:
 
 |
 | `LogoRenderConformanceTest`
-| the brand mark actually rasterises (`docs/UI.adoc` Part C), in both feature modules
+| the brand mark actually rasterises (`UI.adoc` Part C), in both feature modules
 
 |
 | `MarkLegibilityConformanceTest`, `NotificationIconConformanceTest`
@@ -663,7 +690,7 @@ because these never run on CI.
 `FOLDER_UNAVAILABLE` row. That label moved out of an inline `TextButton` and into the row overflow,
 so it is a tap away now. It opens the overflow first -- which is the better assertion anyway, since
 §12.1 makes that menu the mandatory non-gesture equivalent of the swipes -- and it now also asserts
-no bare _Retry_ is offered, the half `docs/architecture.adoc` §11 actually promises and the original name
+no bare _Retry_ is offered, the half `architecture.adoc` §11 actually promises and the original name
 claimed without checking.
 * `aPopulatedListCanBePulledToRefresh` used `onNode(hasScrollAction())`, which began matching *two*
 nodes once S1's chip row scrolled: an ambiguous-match error, not a refresh failure. It now swipes
@@ -735,7 +762,7 @@ disk.
 
 It is a `main`, not a ``, so JUnit never collects it and CLAUDE.md §7's "deterministic and
 offline" rule is untouched. It exists because one thing the whole suite cannot prove is that the
-client works against an actual server -- see ``docs/decisions/0009``'s verification section for what a
+client works against an actual server -- see ``decisions/0009``'s verification section for what a
 run of it settled.
 
 [,bash]
@@ -1345,7 +1372,7 @@ making a USB session painful, moving to Wi-Fi is a shorter route than the push-a
 
 You can't, directly. They are signed with different keys, so Android refuses the upgrade and the
 install must uninstall first -- *which erases the episode ledger, the Nextcloud login and the SAF
-folder grant*. Export a backup from Settings first (`docs/UI.adoc` §7), and expect to reconnect
+folder grant*. Export a backup from Settings first (`UI.adoc` §7), and expect to reconnect
 and re-grant afterwards.
 
 '''
@@ -1435,6 +1462,6 @@ Android SDK (`/opt/android-sdk`), `~/.gradle`, `~/.android`, Claude Code's confi
 == See also
 
 * `CLAUDE.md` §4 -- the requirements this document implements
-* `docs/journal.adoc` -- how each of these problems was actually diagnosed, including the wrong turns
-* `docs/architecture.adoc` -- module structure and what depends on what
-* `docs/decisions/` -- ADRs, notably 0008 (Nextcloud discards `DOWNLOAD`) and 0009 (wire contract)
+* `journal.adoc` -- how each of these problems was actually diagnosed, including the wrong turns
+* `architecture.adoc` -- module structure and what depends on what
+* `decisions/` -- ADRs, notably 0008 (Nextcloud discards `DOWNLOAD`) and 0009 (wire contract)

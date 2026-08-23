@@ -117,7 +117,7 @@ class FakeLedgerRepository(
                     val row = current[episode.episodeKey]
                     val matches =
                         when (filter.state) {
-                            // "New" is the absence of a row — no date clause (docs/decisions/0013).
+                            // "New" is the absence of a row — no date clause (decisions/0013).
                             LedgerFilterState.NEW -> row == null
                             LedgerFilterState.DOWNLOADED -> row?.state == LedgerState.DOWNLOADED
                             LedgerFilterState.SKIPPED -> row?.state == LedgerState.SKIPPED

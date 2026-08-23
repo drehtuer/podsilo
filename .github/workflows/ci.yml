@@ -11,7 +11,7 @@
 #
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
-# docs/dev-environment.adoc §6), and it exists precisely to check the things a
+# dev-environment.adoc §6), and it exists precisely to check the things a
 # hosted runner cannot: ICU regex strictness, the device's SQLite, the installed
 # manifest, the cleartext policy, a real Compose runtime. A runner has no device,
 # so such a job could only be skipped, fail, or boot an emulator — and an
@@ -24,7 +24,7 @@
 # (AGP signs it with the debug keystore) and is the sideload build.
 # `podsilo-<version>.apk` is the real release: R8-minified and resource-shrunk,
 # roughly a twelfth the size, and **signed only when the keystore secrets are
-# configured** — see docs/dev-environment.adoc §9. Without them it still builds,
+# configured** — see dev-environment.adoc §9. Without them it still builds,
 # but unsigned, and an unsigned APK cannot be installed. That is why the release
 # job below refuses to attach one rather than shipping a file that looks like a
 # download and isn't.
@@ -38,7 +38,7 @@
 # to the draft. You then write the notes and publish. Publishing first cannot be
 # undone — immutable releases refuse assets after publication, and GitHub keeps
 # the tag name reserved even if the release is deleted, so the version number is
-# spent. docs/dev-environment.adoc §10 has the procedure.
+# spent. dev-environment.adoc §10 has the procedure.
 name: CI
 
 on:
@@ -223,7 +223,7 @@ jobs:
           # release even after the release is deleted. Fail loudly rather than warn:
           # a silent skip is what left v0.5.0 with no APKs while every check passed.
           if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
-              echo "::error::$TAG is already published — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: docs/dev-environment.adoc §10."
+              echo "::error::$TAG is already published — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: dev-environment.adoc §10."
               exit 1
           fi
 
@@ -242,5 +242,5 @@ jobs:
               mv app/build/outputs/mapping/release/mapping.txt.gz "mapping-$TAG.txt.gz"
               gh release upload "$TAG" "mapping-$TAG.txt.gz" --clobber
           else
-              echo "::warning::Release APK is missing or unsigned — not attached. See docs/dev-environment.adoc §10."
+              echo "::warning::Release APK is missing or unsigned — not attached. See dev-environment.adoc §10."
           fi

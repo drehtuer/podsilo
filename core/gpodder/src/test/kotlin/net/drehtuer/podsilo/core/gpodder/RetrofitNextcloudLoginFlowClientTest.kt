@@ -23,7 +23,7 @@ import kotlin.time.toJavaDuration
 
 /**
  * Login Flow v2 against MockWebServer. The distinctions under test are the ones S5 renders as
- * different sentences (`docs/UI.adoc` §8) — "check the spelling" and "this Nextcloud has no GPodder
+ * different sentences (`UI.adoc` §8) — "check the spelling" and "this Nextcloud has no GPodder
  * Sync app" are different problems, and a single "login failed" would hide both.
  */
 class RetrofitNextcloudLoginFlowClientTest {

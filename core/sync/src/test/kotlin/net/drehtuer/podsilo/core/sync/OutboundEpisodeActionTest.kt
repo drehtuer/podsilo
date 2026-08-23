@@ -31,7 +31,7 @@ class OutboundEpisodeActionTest {
     )
 
     /**
-     * **Changed 2026-08-14** (`docs/decisions/0023`). A completed download used to emit `DOWNLOAD`
+     * **Changed 2026-08-14** (`decisions/0023`). A completed download used to emit `DOWNLOAD`
      * and nothing else, which against a real Nextcloud means *nothing at all*: the server discards
      * `DOWNLOAD` on arrival and still answers 200, so a downloaded episode stayed new in every other
      * client for ever.
@@ -88,7 +88,7 @@ class OutboundEpisodeActionTest {
      * `1` is not a fabricated duration. It is the smallest value that says "there was something and
      * it is finished", which is the claim a skip actually makes; CLAUDE.md §6's rule against
      * inventing a plausible-looking duration is what rules out guessing 45 minutes
-     * (`docs/decisions/0022`).
+     * (`decisions/0022`).
      */
     @Test
     fun `skipped with unknown duration sends 1, which is a marker and not a duration`() {

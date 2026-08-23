@@ -1,0 +1,9 @@
+# Antora component descriptor. The site is built from this repository only, so the
+# component is versionless: there is one Podsilo and one set of documents, and a
+# version dropdown offering "main" against nothing else is furniture.
+name: podsilo
+title: Podsilo
+version: ~
+start_page: ROOT:index.adoc
+nav:
+  - modules/ROOT/nav.adoc

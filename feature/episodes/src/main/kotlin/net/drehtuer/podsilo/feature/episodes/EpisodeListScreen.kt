@@ -47,12 +47,12 @@ internal const val SNIPPET_LINES = 2
 internal const val TITLE_LINES = 2
 
 /**
- * S2 — one feed's episodes (`docs/UI.adoc` §5).
+ * S2 — one feed's episodes (`UI.adoc` §5).
  *
  * Stateless with respect to everything that matters: it renders [state] and emits [onEvent], and
  * holds no decision of its own. Every affordance a row shows comes from `EpisodeUi.actions`, which
  * the view model computed once, so the row body, the overflow and the accessibility actions cannot
- * disagree about what an episode currently offers (`docs/UI.adoc` §12.6).
+ * disagree about what an episode currently offers (`UI.adoc` §12.6).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +66,7 @@ fun EpisodeListScreen(
         modifier = modifier,
         topBar = { EpisodeListAppBar(state, onEvent) },
     ) { padding ->
-        // Scoped to this feed (conditional GET — docs/UI.adoc §5). Like S1's, this gesture was
+        // Scoped to this feed (conditional GET — UI.adoc §5). Like S1's, this gesture was
         // specified and its event handled, but nothing ever emitted it: S2 had no refresh
         // affordance of any kind, so a feed that failed to parse could never be retried from here.
         PullToRefreshBox(
@@ -93,7 +93,7 @@ fun EpisodeListScreen(
                         }
                         if (state.isOffline) OfflineBanner()
                         // Above the list, never in place of it: a failed refresh must leave the
-                        // previously parsed episodes on screen (docs/UI.adoc §5).
+                        // previously parsed episodes on screen (UI.adoc §5).
                         state.feedError?.let { FeedErrorBanner(it, onEvent) }
                         FilterChips(state.filter, onEvent)
                         MarkAllRow(state, onEvent)
@@ -128,7 +128,7 @@ private fun PausedBanner(
     status: QueueStatus.Paused,
     onEvent: (EpisodeListEvent) -> Unit,
 ) {
-    // One condition, three causes, always with the fix as a button (docs/UI.adoc §12.11). The wording
+    // One condition, three causes, always with the fix as a button (UI.adoc §12.11). The wording
     // differs because "choose a folder" and "the one you chose is gone" are different problems.
     val (message, action) =
         when (status.cause) {
@@ -161,7 +161,7 @@ private fun PausedBanner(
 }
 
 /**
- * The failed-fetch banner from `docs/UI.adoc` §5 — **the state field existed and nothing ever set or
+ * The failed-fetch banner from `UI.adoc` §5 — **the state field existed and nothing ever set or
  * read it**, so until now a feed that would not load was silent on the screen that lists it.
  *
  * `circle-alert`, not `triangle-alert`: §18 draws the distinction and it matters here. A feed that
@@ -212,7 +212,7 @@ private fun OfflineBanner() {
 }
 
 /**
- * The four filter chips (`docs/UI.adoc` §5).
+ * The four filter chips (`UI.adoc` §5).
  *
  * **One horizontally scrollable line, not a wrap** (issue #48, decision D3). The four labels — the
  * longest being *Played / handled* — do not fit across a 360 dp phone, and the row that shipped had
@@ -306,7 +306,7 @@ private fun EpisodeRows(
     zone: ZoneId,
 ) {
     // Keyed by episodeKey: the sticky headers and any item animation both need stable keys, and a
-    // 500-episode feed under "All" is the case that punishes their absence (`docs/UI.adoc` §B14.3).
+    // 500-episode feed under "All" is the case that punishes their absence (`UI.adoc` §B14.3).
     // The gutter is what keeps a swipe-to-triage row off the system's own gesture strips
     // (issue #92) — the rows hand over their horizontal padding for it, so the content grid is
     // unchanged on a device whose inset is the usual 16 dp.
@@ -373,7 +373,7 @@ private fun DownloadAllDialog(
                 preview.perFeed.forEach { Text("${it.feedUrl}   ${it.count}") }
                 if (preview.exceedsFreeSpace) {
                     // A warning line only — the estimate is a guess and must never veto a decision
-                    // the user has made (docs/decisions/0014).
+                    // the user has made (decisions/0014).
                     Text(
                         "⚠ This may not fit in the download folder.",
                         color = MaterialTheme.colorScheme.error,

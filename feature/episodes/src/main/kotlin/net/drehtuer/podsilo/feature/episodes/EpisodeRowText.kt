@@ -20,7 +20,7 @@ internal const val MINUTES_PER_HOUR = 60
 
 /**
  * A `FOLDER_UNAVAILABLE` or `DISK_FULL` failure replaces *Retry* with the action that can actually
- * clear it (`docs/UI.adoc` §12.11, `docs/architecture.adoc` §11) — a Retry there is a button that cannot work.
+ * clear it (`UI.adoc` §12.11, `architecture.adoc` §11) — a Retry there is a button that cannot work.
  */
 internal fun EpisodeUiAction.labelFor(episode: EpisodeUi): String? =
     when (this) {
@@ -47,7 +47,7 @@ internal fun EpisodeUi.statusLine(): String? =
     when (ledgerState) {
         // An UNPLAYED row is the user withdrawing a decision, so the row reads exactly as an
         // undecided one: no status line, no badge, full emphasis. The row exists only so the ledger
-        // keeps its history and the state can reach other clients (`docs/decisions/0024`).
+        // keeps its history and the state can reach other clients (`decisions/0024`).
         null, LedgerState.UNPLAYED -> null
         LedgerState.QUEUED -> "queued"
         LedgerState.DOWNLOADING -> null
@@ -63,7 +63,7 @@ internal fun EpisodeUi.statusLine(): String? =
  *
  * `HANDLED_REMOTELY` gets `cloud-check`, **not** `check`: rendering it as the same tick as a download
  * this device performed would claim a decision the user did not make here, and the affordances differ
- * (`docs/UI.adoc` §12.6, §18). `play` is the *played* marker and never playback — Podsilo has no player
+ * (`UI.adoc` §12.6, §18). `play` is the *played* marker and never playback — Podsilo has no player
  * — which is why it only ever appears beside the word.
  */
 internal fun EpisodeUi.statusIcon(): Int? =
@@ -79,7 +79,7 @@ internal fun EpisodeUi.statusIcon(): Int? =
 private fun Instant.formatDate(zone: ZoneId): String =
     DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(zone).format(this)
 
-/** Never fabricated: an absent duration simply has no part in the meta line (`docs/UI.adoc` §5). */
+/** Never fabricated: an absent duration simply has no part in the meta line (`UI.adoc` §5). */
 private fun Duration.formatDuration(): String {
     val minutes = toMinutes()
     return if (minutes >= MINUTES_PER_HOUR) {
@@ -90,7 +90,7 @@ private fun Duration.formatDuration(): String {
 }
 
 /**
- * A percentage is only ever drawn from an update seen **in this process** (`docs/UI.adoc` Part B
+ * A percentage is only ever drawn from an update seen **in this process** (`UI.adoc` Part B
  * §7). After process death WorkManager's progress is gone, so a `DOWNLOADING` row with none reads
  * *resuming* rather than implying it knows how far along it is.
  */

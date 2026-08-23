@@ -14,7 +14,7 @@ import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
  * durable "already handled" record and its outbox, this one owns the joins the UI renders. Keeping
  * every query in this interface together is the point — they must share one definition of
  * "undecided", or a count badge could promise a different number than the list it opens shows
- * (`docs/UI.adoc` §12.5).
+ * (`UI.adoc` §12.5).
  */
 interface EpisodeListRepository {
     /**
@@ -87,7 +87,7 @@ interface EpisodeListRepository {
      * URL to count, largest first.
      *
      * This is the safeguard, not a nicety. A bulk *mark as played* emits `PLAY` actions to the
-     * shared log and **cannot be undone in bulk** (`docs/decisions/0013`); naming the exact count
+     * shared log and **cannot be undone in bulk** (`decisions/0013`); naming the exact count
      * and the feeds before anything is written is what replaced the old rule against writing backlog
      * rows at all.
      */
@@ -99,7 +99,7 @@ interface EpisodeListRepository {
      *
      * Returns [Episode]s rather than keys because the caller has to build ledger rows from them, and
      * a row needs the feed URL, enclosure URL and duration snapshotted at write time
-     * (`docs/architecture.adoc` §4). It deliberately does not write anything itself: *what* state to write
+     * (`architecture.adoc` §4). It deliberately does not write anything itself: *what* state to write
      * is the caller's decision — `SKIPPED` for the mark-old rule, `QUEUED` for *Download all*.
      */
     suspend fun undecided(scope: BulkScope): List<Episode>
@@ -114,7 +114,7 @@ interface EpisodeListRepository {
  *   an unknown `pubDate` are **excluded** rather than guessed at (an episode with no date is not
  *   evidence of being old).
  * @property feedUrl Narrows to one feed — *Download all* is deliberately per-podcast and there is
- *   no global variant (`docs/decisions/0014`).
+ *   no global variant (`decisions/0014`).
  */
 data class BulkScope(
     val kind: BulkScopeKind,
@@ -145,7 +145,7 @@ enum class LedgerFilterState { NEW, DOWNLOADED, SKIPPED, ALL }
 /**
  * The triage list filter. "New" is exactly "no ledger row" — there is no date clause and no
  * backlog flag: the read-time `pubDate >= Feed.firstSeenAt` cutoff was retired by
- * `docs/decisions/0013` in favour of writing `SKIPPED` rows, which is visible in the UI,
+ * `decisions/0013` in favour of writing `SKIPPED` rows, which is visible in the UI,
  * reversible per episode, and shared with the author's other clients.
  */
 data class LedgerFilter(

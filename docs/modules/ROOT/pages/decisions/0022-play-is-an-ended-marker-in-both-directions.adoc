@@ -3,9 +3,9 @@
 :idprefix:
 :idseparator: -
 
-*Status:* Accepted (2026-08-14). Amends the outbound encoding in `docs/architecture.adoc` §6 and the
+*Status:* Accepted (2026-08-14). Amends the outbound encoding in `architecture.adoc` §6 and the
 inbound reconciliation rule in the same section. Settles the author's decisions D2 and D7, taken in the working plan for #60 (since retired -- see
-`docs/journal.adoc`).
+`journal.adoc`).
 
 == Context
 
@@ -92,7 +92,7 @@ install or a second device. Accepted knowingly: the alternative is a permanent s
 own past output, and D2 exists precisely so that shape stops being produced.
 * *A partial listen is not a decision*, which it never should have been: an episode someone stopped
 halfway through on another device now stays in _To decide_ here rather than vanishing.
-* *`DOWNLOAD` remains invisible on a real Nextcloud* (`docs/decisions/0008`) -- unchanged and
+* *`DOWNLOAD` remains invisible on a real Nextcloud* (`decisions/0008`) -- unchanged and
 unrelated, but worth restating because it is the other half of #60's title.
 * The tests use the measured shapes rather than invented ones: `0/2838` (RePod unread), `1800/1800`
 (RePod played), `1/1` (ours, duration-less), `0/0` (ours, legacy), `900/1800` (partial), and a

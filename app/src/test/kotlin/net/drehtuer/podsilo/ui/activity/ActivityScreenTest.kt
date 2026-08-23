@@ -86,7 +86,7 @@ class ActivityScreenTest {
 
     @Test
     fun `a downloading row with no live progress says resuming, not zero percent`() {
-        // After process death WorkManager's progress is gone (docs/UI.adoc §B7).
+        // After process death WorkManager's progress is gone (UI.adoc §B7).
         render(ActivityUiState(downloading = listOf(episode(ledgerState = LedgerState.DOWNLOADING))))
 
         compose.onNodeWithContentDescription("resuming").assertIsDisplayed()

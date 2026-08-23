@@ -16,7 +16,7 @@ import java.util.Locale
 /**
  * **Where Android and the JVM disagree**, which is the whole reason this source set exists.
  *
- * `docs/decisions/0017` was written after a bug that 437 green JVM tests were structurally unable to
+ * `decisions/0017` was written after a bug that 437 green JVM tests were structurally unable to
  * see: `:core:naming`'s token regex ended in a bare `}`, which `java.util.regex` accepts and
  * Android's ICU engine rejects, so every filename in the app failed to resolve on a device while the
  * suite stayed green. These tests pin the *classes* of difference rather than that one instance —

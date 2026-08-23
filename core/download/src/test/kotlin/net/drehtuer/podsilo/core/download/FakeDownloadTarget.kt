@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.core.download
 import java.io.File
 
 /**
- * [DownloadTarget] over a plain temp directory — the test seam `docs/architecture.adoc` §11 exists for.
+ * [DownloadTarget] over a plain temp directory — the test seam `architecture.adoc` §11 exists for.
  * Behaves like the SAF implementation in the ways the pipeline depends on (folders created on
  * demand, same-named documents replaced) without needing a `DocumentsProvider`.
  */

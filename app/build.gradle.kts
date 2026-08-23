@@ -80,7 +80,7 @@ android {
      * The keystore is **never** in the repository (CLAUDE.md §9). It comes from `keystore.properties`
      * locally or the matching environment variables on CI, and when neither is present the release
      * variant simply builds unsigned rather than failing — an unsigned release APK is still a useful
-     * artifact to inspect, it just cannot be installed. `docs/dev-environment.adoc` §9 has the
+     * artifact to inspect, it just cannot be installed. `dev-environment.adoc` §9 has the
      * `keytool` invocation and the CI secret names.
      */
     signingConfigs {
@@ -188,7 +188,7 @@ androidComponents {
 dependencies {
     implementation(libs.coil.network.okhttp)
     // :app is the only module that sees every adapter: it binds each :core:model port to its
-    // implementation (docs/architecture.adoc §2's ports-and-adapters rule).
+    // implementation (architecture.adoc §2's ports-and-adapters rule).
     implementation(project(":core:model"))
     implementation(project(":core:database"))
     implementation(project(":core:datastore"))
@@ -234,7 +234,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     // Pinned: Compose UI tests pull Espresso transitively, and the version they pulled predates
     // Android 16+ — it calls InputManager.getInstance(), which no longer exists, so every Compose
-    // instrumented test died in onIdle() before running a line (docs/journal.adoc, 2026-08-08).
+    // instrumented test died in onIdle() before running a line (journal.adoc, 2026-08-08).
     androidTestImplementation(libs.androidx.test.espresso.core)
     // Reading tags back out of a delivered file is how DownloadPipelineInstrumentedTest proves the
     // tag step ran; :core:download keeps jaudiotagger as an `implementation` detail, so the test

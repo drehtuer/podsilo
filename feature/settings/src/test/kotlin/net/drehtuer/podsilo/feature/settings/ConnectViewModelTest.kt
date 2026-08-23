@@ -23,7 +23,7 @@ import org.junit.Test
 /**
  * S5. The load-bearing test in this file is the last one: **the app password is never stored unless
  * gpoddersync answered 200**, because connecting to a Nextcloud without it leaves the user with an
- * app that silently syncs nothing (`docs/UI.adoc` §8).
+ * app that silently syncs nothing (`UI.adoc` §8).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectViewModelTest {
@@ -49,7 +49,7 @@ class ConnectViewModelTest {
      *
      * The foreground event is not a default on the view model, deliberately — it starts `false`, so
      * a host that forgets to wire the lifecycle polls never rather than polling in the background,
-     * which is the failure `docs/decisions/0020` exists to prevent.
+     * which is the failure `decisions/0020` exists to prevent.
      */
     private fun viewModel() =
         ConnectViewModel(client, settings, syncTrigger, log).also {
@@ -65,13 +65,13 @@ class ConnectViewModelTest {
             viewModel.effect.test {
                 viewModel.onEvent(ConnectEvent.Submit)
 
-                // The browser is opened by the host, not by :core:gpodder (`docs/architecture.adoc` §2).
+                // The browser is opened by the host, not by :core:gpodder (`architecture.adoc` §2).
                 assertEquals(
                     ConnectEffect.OpenBrowser("https://cloud.example.org/login/flow"),
                     awaitItem(),
                 )
                 // A granted flow no longer connects on its own: the account is confirmed first
-                // (`docs/UI.adoc` §8).
+                // (`UI.adoc` §8).
                 assertNull(settings.storedCredentials)
                 viewModel.onEvent(ConnectEvent.ConfirmAccount)
                 assertEquals(ConnectEffect.Connected, awaitItem())
@@ -154,7 +154,7 @@ class ConnectViewModelTest {
     /**
      * The address a phone keyboard actually produces, and the one this check exists for: a space
      * after "cloud" cost a session of looking at a VPN's MTU before the error log was read
-     * (`docs/journal.adoc`, 2026-08-23). It used to report as `UNREACHABLE` — the same word a real
+     * (`journal.adoc`, 2026-08-23). It used to report as `UNREACHABLE` — the same word a real
      * network failure gets — which is what sent the reader to the network in the first place.
      */
     @Test
@@ -189,7 +189,7 @@ class ConnectViewModelTest {
         runTest {
             // Found by running the manual probe against a host with no DNS record: every start
             // failure used to collapse into NOT_NEXTCLOUD, which sends the user to check their
-            // server instead of their typing (docs/UI.adoc §8's table exists to prevent exactly this).
+            // server instead of their typing (UI.adoc §8's table exists to prevent exactly this).
             client.startResult =
                 Result.failure(LoginFlowException(LoginFlowFailure.UNREACHABLE, "Name or service not known"))
             val viewModel = viewModel()
@@ -294,7 +294,7 @@ class ConnectViewModelTest {
         }
 
     /**
-     * `docs/UI.adoc` §8 has always said the inline errors are "each also written to S8". They were
+     * `UI.adoc` §8 has always said the inline errors are "each also written to S8". They were
      * not, and the cost showed up the first time a connection failed against an unfamiliar server:
      * the dialog says "Can't reach that address", which is the same six words whether DNS failed,
      * the host is unroutable, or Android refused a cleartext URL the *server* asked for. Only the
@@ -326,7 +326,7 @@ class ConnectViewModelTest {
         }
 
     /**
-     * The Pixel 10a bug (`docs/decisions/0020`).
+     * The Pixel 10a bug (`decisions/0020`).
      *
      * `start()` succeeds and the browser opens — which *backgrounds this app*. On Android 17 the
      * backgrounded process could not resolve the host, and one `UnknownHostException` killed the
@@ -418,7 +418,7 @@ class ConnectViewModelTest {
         }
 
     /**
-     * The reported bug, as a test (`docs/UI.adoc` §8).
+     * The reported bug, as a test (`UI.adoc` §8).
      *
      * Login Flow v2 returns whichever account the *browser* was signed into and offers no chooser,
      * so the app's only defence is to name it and stop. This asserts the stopping: the flow is fully

@@ -11,7 +11,7 @@ import net.drehtuer.podsilo.core.database.entity.LogEntryEntity
 
 /**
  * DAO for the error log. The collapse and eviction rules live here **as queries**, not as UI logic
- * and not as an app-start sweep (`docs/UI.adoc` §11) — a sweep would run at the one moment the user
+ * and not as an app-start sweep (`UI.adoc` §11) — a sweep would run at the one moment the user
  * is waiting for the app to open, and would not run at all for a process that only ever wakes for a
  * worker.
  */
@@ -63,7 +63,7 @@ interface LogDao {
 
     /**
      * Ring buffer: keep the newest [MAX_ENTRIES] **collapsed** entries. "Or 7 days, whichever is
-     * larger" (`docs/UI.adoc` §11) needs no clause — an age-based rule can only ever delete rows this
+     * larger" (`UI.adoc` §11) needs no clause — an age-based rule can only ever delete rows this
      * one already keeps, so applying it too would make the buffer *smaller* than promised.
      */
     @Query(

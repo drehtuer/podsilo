@@ -17,7 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * **S4 and S5 against `docs/UI.adoc` §7–§8, on a real Compose runtime.**
+ * **S4 and S5 against `UI.adoc` §7–§8, on a real Compose runtime.**
  *
  * These four are the ones where being wrong has a consequence beyond looking untidy: a password
  * field would mean the app handles a credential it promised never to touch, an ungated restore would
@@ -59,7 +59,7 @@ class SettingsConformanceTest {
     }
 
     /**
-     * `docs/UI.adoc` §7's 2026-08-02 amendment, and the author's rule: **no backup is loaded
+     * `UI.adoc` §7's 2026-08-02 amendment, and the author's rule: **no backup is loaded
      * until the Nextcloud login has succeeded.** The row says why rather than silently doing nothing.
      */
     @Test
@@ -82,7 +82,7 @@ class SettingsConformanceTest {
     }
 
     /**
-     * §7 and `docs/decisions/0013`: the restore warning is **mandatory**, states that it cannot be
+     * §7 and `decisions/0013`: the restore warning is **mandatory**, states that it cannot be
      * undone, and appears before any file is chosen.
      */
     @Test
@@ -98,7 +98,7 @@ class SettingsConformanceTest {
     /**
      * §7: the bulk *mark as played* preview names the exact count and says in words that the state
      * reaches Nextcloud — the safeguard that replaced the old rule against writing backlog rows at
-     * all (`docs/decisions/0013`). Weakening this is explicitly forbidden.
+     * all (`decisions/0013`). Weakening this is explicitly forbidden.
      */
     @Test
     fun theBulkPreviewNamesTheCountAndMentionsNextcloud() {

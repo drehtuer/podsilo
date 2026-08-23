@@ -7,7 +7,7 @@
 sync. For now, any sync will happen manually."_
 
 Supersedes the periodic half of the sync scheduling introduced with `SyncWorker`. Does *not*
-touch ``docs/decisions/0025``'s two directional passes, ``docs/decisions/0023``'s mark-on-download, or
+touch ``decisions/0025``'s two directional passes, ``decisions/0023``'s mark-on-download, or
 the periodic *feed refresh*.
 
 == Context
@@ -53,7 +53,7 @@ is an invitation to schedule it again by accident.
 
 A different job with a different mandate: CLAUDE.md §1 requirement 2 asks for "periodic background
 refresh of the followed feeds", and it fetches RSS without ever talking to Nextcloud. What it _can_
-do is write `SKIPPED` rows through the mark-old rule (`docs/decisions/0013`) -- and those trigger a
+do is write `SKIPPED` rows through the mark-old rule (`decisions/0013`) -- and those trigger a
 pass, which is a consequence of a setting the author deliberately turned on, not a background sync.
 
 `DEFAULT_SYNC_INTERVAL_MINUTES` and `observeSyncIntervalMinutes` keep their names while now timing

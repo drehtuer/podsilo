@@ -34,7 +34,7 @@ badge on the https://github.com/drehtuer/podsilo/security/code-scanning[code sca
 The repository's other security checks -- *Dependabot* alerts and security updates, *secret
 scanning* and its push protection -- have no badge, and cannot have one. Their state is private to
 the repository even though the code is public, so GitHub publishes no endpoint for them and no
-third-party badge service can read them either. xref:SECURITY.adoc[`SECURITY.md`] records what they cover.
+third-party badge service can read them either. link:SECURITY.md[`SECURITY.md`] records what they cover.
 
 An Android *podcast catcher* that downloads episodes into a folder you control -- and deliberately
 does not play them.
@@ -68,7 +68,7 @@ at your network for a typo. It is now named while you type, before anything is c
 device test set is *61 tests, 0 failed, 0 skipped*, and the two fixes above were driven on the
 phone that reported them -- an edge swipe now goes to the system, and a real download measured
 *3 % janky frames* while scrolling a 2,468-episode library. See
-xref:docs/dev-environment.adoc[`docs/dev-environment.adoc`] §6.
+link:docs/modules/ROOT/pages/dev-environment.adoc[`docs/dev-environment.adoc`] §6.
 ____
 
 == The idea
@@ -109,7 +109,7 @@ Retrofit/OkHttp underneath. Feeds are parsed with
 https://github.com/prof18/RSS-Parser[rssparser], audio tags rewritten with the Android-compatible
 https://github.com/Kaned1as/jaudiotagger[jaudiotagger fork], and downloads written through the
 Storage Access Framework so you can point them at an SD card. Both library choices deviate from the
-first pick, and xref:docs/architecture.adoc[`docs/architecture.adoc`] §7 and §11 say why -- as does the
+first pick, and link:docs/modules/ROOT/pages/architecture.adoc[`docs/architecture.adoc`] §7 and §11 say why -- as does the
 decision to add no date-time library at all.
 
 The codebase is split into small modules (`:core:model`, `:core:feed`, `:core:naming`,
@@ -127,25 +127,32 @@ for instrumented runs, and a real device -- over USB or wireless debugging -- dr
 for everything a device has to answer for. Sync is tested against a disposable
 https://codeberg.org/kd2/opodsync[opodsync] server, never against a real Nextcloud.
 
-Setup instructions are in xref:docs/dev-environment.adoc[`docs/dev-environment.adoc`], which is also honest
+Setup instructions are in link:docs/modules/ROOT/pages/dev-environment.adoc[`docs/dev-environment.adoc`], which is also honest
 about which tiers have actually been run -- all three have, and its status table says what each run
 proved and what is still unverified. The module design, schema and sync semantics are in
-xref:docs/architecture.adoc[`docs/architecture.adoc`]; the whole of the UI -- the screen design, the Compose
-seam it binds to, and the brand mark -- is in xref:docs/UI.adoc[`docs/UI.adoc`].
+link:docs/modules/ROOT/pages/architecture.adoc[`docs/architecture.adoc`]; the whole of the UI -- the screen design, the Compose
+seam it binds to, and the brand mark -- is in link:docs/modules/ROOT/pages/UI.adoc[`docs/UI.adoc`].
 
 Five documents, and that is deliberate: `architecture.adoc` and `UI.adoc` are the two references,
-xref:docs/backlog.adoc[`docs/backlog.adoc`] holds what is not being built,
-xref:docs/third-party.adoc[`docs/third-party.adoc`] tracks licences, and
-xref:docs/journal.adoc[`docs/journal.adoc`] keeps a running log -- this project doubles as an experiment in
-agent-driven development, so the process is recorded alongside the result.
-link:docs/decisions/[`docs/decisions/`] keeps only the decisions that still constrain the code and
-cannot be re-derived from the two references; everything else was folded into the section that
-governs it.
+link:docs/modules/ROOT/pages/backlog.adoc[`backlog.adoc`] holds what is not being built,
+link:docs/modules/ROOT/pages/third-party.adoc[`third-party.adoc`] tracks licences, and
+link:docs/modules/ROOT/pages/journal.adoc[`journal.adoc`] keeps a running log -- this project doubles
+as an experiment in agent-driven development, so the process is recorded alongside the result.
+link:docs/modules/ROOT/pages/decisions/[`decisions/`] keeps only the decisions that still constrain
+the code and cannot be re-derived from the two references; everything else was folded into the
+section that governs it.
+
+They are an https://antora.org/[Antora] component, which is why the paths above are
+`docs/modules/ROOT/pages/` rather than plain `docs/` -- `antora.yml` and `modules/` have to be
+siblings. `antora --fetch antora-playbook.yml` builds the site into `build/site/`. One consequence
+worth knowing before clicking a link in here: pages reference each other with Antora's `xref:` macro,
+which GitHub's file view does not resolve, so cross-references work on the built site and not while
+browsing the repository.
 
 Two further markdown files sit outside `docs/` because they are addressed to the agent rather than
-to a reader: xref:.claude/CLAUDE.adoc[`.claude/CLAUDE.md`] is the standing brief every session starts
+to a reader: link:.claude/CLAUDE.md[`.claude/CLAUDE.md`] is the standing brief every session starts
 from -- scope, the non-goals, the mandated libraries, the definition of done -- and
-xref:.claude/skills/run-podsilo/SKILL.adoc[`.claude/skills/run-podsilo/SKILL.md`] documents the driver
+link:.claude/skills/run-podsilo/SKILL.md[`.claude/skills/run-podsilo/SKILL.md`] documents the driver
 that boots the headless emulator, builds and installs the app, seeds it with podcasts, and taps
 through it by on-screen text.
 

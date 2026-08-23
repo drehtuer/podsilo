@@ -6,7 +6,7 @@ import net.drehtuer.podsilo.core.model.port.LogCategory
 import net.drehtuer.podsilo.core.model.port.LogEntry
 
 /**
- * S8 — the error log (`docs/UI.adoc` §B6b).
+ * S8 — the error log (`UI.adoc` §B6b).
  *
  * A chronological, read-only failure log, so a single-user self-hosted setup can be debugged without
  * a laptop, `adb`, or a bug report. Successes are never here — S7's *recently downloaded* covers
@@ -16,7 +16,7 @@ import net.drehtuer.podsilo.core.model.port.LogEntry
  *   entry with an occurrence count, or one feed timing out hourly would evict every genuinely
  *   one-off error within a day.
  * @property canClear `false` when empty — Copy/Share/Clear go **disabled, not hidden**, so the
- *   affordance stays where the user learned it (`docs/UI.adoc` §11).
+ *   affordance stays where the user learned it (`UI.adoc` §11).
  */
 data class ErrorLogUiState(
     val filter: LogCategory? = null,

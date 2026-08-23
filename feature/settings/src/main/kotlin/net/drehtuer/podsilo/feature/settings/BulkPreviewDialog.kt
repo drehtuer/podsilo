@@ -17,7 +17,7 @@ private const val MAX_LISTED_FEEDS = 5
 
 /**
  * The safeguard that replaced the old rule against writing backlog rows at all
- * (`docs/decisions/0013`) — **mandatory, not decoration**.
+ * (`decisions/0013`) — **mandatory, not decoration**.
  *
  * A bulk *mark as played* is not undoable: the `PLAY` actions reach the shared log and the author's
  * other clients act on them. So this names the exact count and the per-feed breakdown, and says in
@@ -45,7 +45,7 @@ internal fun BulkPreviewDialog(
                 )
                 Text(
                     // Stated plainly rather than as a warning: sharing triage state across clients
-                    // is the point of the app, not a side effect (docs/UI.adoc §7).
+                    // is the point of the app, not a side effect (UI.adoc §7).
                     "Played state is sent to Nextcloud, so your other clients see it too.",
                     style = MaterialTheme.typography.bodySmall,
                 )

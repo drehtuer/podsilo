@@ -9,7 +9,7 @@ package net.drehtuer.podsilo.core.model.port
  * the user can change both in settings, and the decrypted app password is deliberately short-lived
  * (see [SettingsRepository]). So `SyncWorker` builds one per pass, through this port rather than
  * against the Retrofit implementation directly — which is also what lets the worker be tested with
- * a fake client and no HTTP at all (`docs/architecture.adoc` §2).
+ * a fake client and no HTTP at all (`architecture.adoc` §2).
  */
 fun interface GpodderClientFactory {
     fun create(credentials: NextcloudCredentials): GpodderClient

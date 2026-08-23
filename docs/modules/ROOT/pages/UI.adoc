@@ -25,7 +25,7 @@ A bare `§n` always means Part A. Parts B and C were separate documents (`UI_int
 `logo.md`) until 2026-08-13; they are one file now because every rule in B and C is a consequence of
 a rule in A, and three files meant three places for the same rule to drift.
 
-The companion is xref:architecture.adoc[`docs/architecture.adoc`] -- modules, schema, sync semantics.
+The companion is xref:architecture.adoc[`architecture.adoc`] -- modules, schema, sync semantics.
 Where Part A adds a screen or a rule that the architecture implies but does not state, it is marked
 *[gap]* in §2's inventory and argued in the section that owns it.
 
@@ -552,7 +552,7 @@ reconnecting.
 Nextcloud* when nothing is configured.
 * *Last sync* *[gap]* -- relative timestamp plus outbox depth (`syncedToServer = false` count);
 tapping opens S7.
-* *Apply Nextcloud's state here* / *Send this device's state to Nextcloud* (`docs/decisions/0025`)
+* *Apply Nextcloud's state here* / *Send this device's state to Nextcloud* (`decisions/0025`)
 -- the two directional passes, under _Last sync_ because that row already answers "when did this
 happen". Both are absent until an account is connected, both go dead while either runs, and both
 confirm first. The push names its count; *the pull cannot* -- the number worth showing is "how
@@ -562,7 +562,7 @@ not touch the network (§B0.3). It says what the operation does and does not do 
 `DOWNLOADED` row. That is a short enough promise to put in the subtitle, and it is why the pull
 needs no new conflict rule: it is the ordinary reconciliation over the whole log.
  ** The push is the only way to repair a decision the server never received -- a download recorded
-before `docs/decisions/0023` sent `DOWNLOAD` alone, which Nextcloud discards, and its row is
+before `decisions/0023` sent `DOWNLOAD` alone, which Nextcloud discards, and its row is
 already synced so no ordinary pass will retry it.
 
 *Downloads group*
@@ -638,7 +638,7 @@ ledger lands somewhere that renders it.
 * Once connected it opens a *warning dialog first, then* the file picker. A restore replaces the
 ledger, which is the app's only memory of what has already been handled, and that has to be said
 in words before a file is read -- the same rule the bulk-mark preview follows (§7,
-`docs/decisions/0013`). The dialog also states the reassuring half, which is true rather than
+`decisions/0013`). The dialog also states the reassuring half, which is true rather than
 soothing: Nextcloud is untouched, and the next sync pulls back whatever happened after the backup.
 * Both rows go *dead while either operation runs*, so a second tap cannot start a second export
 over the same file. They grey out rather than disappearing -- a row that vanished mid-operation
@@ -679,7 +679,7 @@ host, no spaces, optional `:port` and path allowed (Nextcloud in a subdirectory 
 button replaced by a spinner labelled *Waiting for authorization in your browser...*, Cancel stays
 enabled and aborts the poll.
 
-*The poll runs only while this dialog is on screen* (`docs/decisions/0020`). Opening the browser
+*The poll runs only while this dialog is on screen* (`decisions/0020`). Opening the browser
 backgrounds the app, and the poll stops until the user comes back -- which they must do anyway, since
 the whole point is to return with access granted. On Android 17 a backgrounded process could not
 resolve the host at all, and a single failure abandoned the entire flow while the browser was still
@@ -1284,7 +1284,7 @@ below 12 sp.
 
 == 13. Coverage check against the architecture
 
-Every feature in `docs/architecture.adoc` and the README was audited row by row against a screen or a
+Every feature in `architecture.adoc` and the README was audited row by row against a screen or a
 rule here while this document was being written. *It passed, and the table it produced was removed
 on 2026-08-23:* every row read either ✔ or _added_, and each _added_ row's reason is now written
 into the section that owns the screen, which is where a reader needs it.
@@ -1303,7 +1303,7 @@ Three rows changed a rule rather than confirming one, and those became ADRs -- �
 
 == 14. Decisions that needed an ADR -- all three accepted
 
-Three UX decisions here contradicted statements in `docs/architecture.adoc`, in CLAUDE.md, or in code
+Three UX decisions here contradicted statements in `architecture.adoc`, in CLAUDE.md, or in code
 that now exists. *All three were accepted by the author on 2026-08-01* and the documents holding
 the old rules were amended in the same pass, so nothing below is still a proposal.
 
@@ -1326,12 +1326,12 @@ the old rules were amended in the same pass, so nothing below is still a proposa
 *The ADRs are the rationale.* Each subsection below carried a copy of it until 2026-08-23,
 together with a note saying the ADR wins wherever the two differed -- which is a drift already
 declared. What remains here is only the part that is a _UI_ rule, plus the anchor, because
-`docs/decisions/` and `:feature:episodes` both cite these three numbers.
+`decisions/` and `:feature:episodes` both cite these three numbers.
 
 === 14.1 Terminal ledger states are re-openable *by explicit user action*
 
 Rationale and mechanism: *ADR 0012*, and the four user-initiated edges are drawn in
-`docs/architecture.adoc` §9's state machine. The half that belongs to this document: _Download again_
+`architecture.adoc` §9's state machine. The half that belongs to this document: _Download again_
 (§12.3) over a row that still carries its `writtenFileName` runs the pre-flight duplicate guard, and
 "already in your folder" is reported as *information* -- a snackbar and a status line, never an
 `ERROR` and never an error-log entry.
@@ -1359,7 +1359,7 @@ in the download volume.
 
 Everything this design binds to exists. This section was a 12-row table matching each thing the
 design needed against the built code; it was removed on 2026-08-23, because every row's answer is now
-stated where it binds -- Part B names the type, and `docs/architecture.adoc` names the port.
+stated where it binds -- Part B names the type, and `architecture.adoc` names the port.
 
 Four of its rows were *constraints on the UI rather than descriptions of it*, so they survive here:
 
@@ -1634,7 +1634,7 @@ Part A says what the screens are. This part defines the *seam*: for every screen
 state the UI renders, the events it emits, and the ports it reaches through. Nothing here describes
 rendering; nothing here describes I/O. If a Composable needs a value that is not in a `UiState`
 below, or performs an action that is not a `UiEvent`, the seam is wrong -- fix the seam, not the
-Composable. `docs/architecture.adoc` is what sits underneath it.
+Composable. `architecture.adoc` is what sits underneath it.
 
 Sections in this part are numbered *§B0--§B17*; a bare `§n` without the letter refers to Part A.
 
@@ -2079,7 +2079,7 @@ sealed interface ConnectEvent {
 }
 ----
 
-*The poll runs only while the dialog is on screen* (`docs/decisions/0020`). `ConnectDialog` emits
+*The poll runs only while the dialog is on screen* (`decisions/0020`). `ConnectDialog` emits
 `ForegroundChanged` from `LifecycleStartEffect` -- `ON_START`/`ON_STOP`, because the browser covering
 the app is a _stop_ while a notification shade is only a pause. The view model holds the started
 `LoginFlow` across the trip to the browser and resumes on return; its `isForeground` starts *false*,
@@ -2184,7 +2184,7 @@ every decided state, in-flight ones excluded because they are already the groups
 in SQL rather than by a `take()` (issue #47's lesson). `MarkAsUnplayedClicked` goes through the same
 `TriageWriter.markAsUnplayed` S2 and S3 use, so a decision withdrawn here is indistinguishable from
 one withdrawn there: a new `UNPLAYED` row that re-posts, never a deleted one
-(`docs/decisions/0024`).
+(`decisions/0024`).
 
 '''
 
@@ -2271,7 +2271,7 @@ Before this, none of the table was implemented: the worker published nothing, no
 
 This was a gap list of ten items the UI needed and the repository did not have. *Every one of them
 now exists* (2026-08-01), and each is declared where it is used -- B1--B7 name the types, and
-`docs/architecture.adoc` §5 names the ports -- so the index was removed on 2026-08-23. What cannot be
+`architecture.adoc` §5 names the ports -- so the index was removed on 2026-08-23. What cannot be
 read off those declarations is kept:
 
 *Three things came out differently from the sketch, and the built shape is the contract:*
@@ -2283,7 +2283,7 @@ need the optional per-feed narrowing _Download all_ uses. Both select only episo
 ledger row*, so a bulk action can never re-touch a decided episode; with a cutoff, episodes with
 an unknown `pubDate` are excluded, because a missing date is not evidence of being old and
 sweeping one up would emit a `PLAY` the user never agreed to.
-* `Instant` is *`java.time`*, and nothing was added to get it -- see §B1 and `docs/architecture.adoc` §5.
+* `Instant` is *`java.time`*, and nothing was added to get it -- see §B1 and `architecture.adoc` §5.
 
 *All five error-log write points exist* (2026-08-13): feed refresh, the S5 auth flow, sync passes
 and failed downloads. The rule that no entry ever carries a credential is enforced by the *store*
@@ -2536,10 +2536,10 @@ The cases below are where a plausible implementation is wrong. Each is a test, n
 | the title truncates first; the decision affordances never do (§12.12, Part A).
 
 | A feed with 500+ episodes under `All`
-| a keyed `LazyColumn` with stable ``episodeKey``s -- *not* Paging 3, settled by measurement in `docs/decisions/0027`. The sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them.
+| a keyed `LazyColumn` with stable ``episodeKey``s -- *not* Paging 3, settled by measurement in `decisions/0027`. The sticky headers and the fast-scroll thumb both depend on stable keys, and `animateItem` misbehaves without them.
 
 | `writtenFileName` present but the file is gone
-| the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists -- the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (`docs/decisions/0012`).
+| the row still reads `DOWNLOADED`. Podsilo does not check, track, or care whether the file still exists -- the only permitted existence check is the pre-flight duplicate guard on an explicit re-download (`decisions/0012`).
 |===
 
 === B14.4 Disconnect

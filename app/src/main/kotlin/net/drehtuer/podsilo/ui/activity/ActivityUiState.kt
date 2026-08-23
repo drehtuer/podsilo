@@ -8,7 +8,7 @@ import net.drehtuer.podsilo.feature.episodes.QueueStatus
 import java.time.Instant
 
 /**
- * S7 — activity (`docs/UI.adoc` §B6). The one place that answers *what is the app doing, and
+ * S7 — activity (`UI.adoc` §B6). The one place that answers *what is the app doing, and
  * what is stuck?*
  *
  * @property recent the last ~20 delivered files. It exists to answer "did it actually land?" and
@@ -55,7 +55,7 @@ data class ActionUi(
 
 /**
  * @property canSyncNow `false` with [blockedReason] set rather than a button that fails — an offline
- *   tap should say so instead of timing out (`docs/UI.adoc` §12.10).
+ *   tap should say so instead of timing out (`UI.adoc` §12.10).
  */
 data class SyncUi(
     val lastSyncAt: Instant? = null,
@@ -121,7 +121,7 @@ sealed interface ActivityEvent {
     /**
      * Withdraws a decision from the *recent actions* group (issue #90).
      *
-     * A new `UNPLAYED` row, never a deleted one (`docs/decisions/0024`): the row is the dedup
+     * A new `UNPLAYED` row, never a deleted one (`decisions/0024`): the row is the dedup
      * authority and has to outlive the decision it records.
      */
     data class MarkAsUnplayedClicked(

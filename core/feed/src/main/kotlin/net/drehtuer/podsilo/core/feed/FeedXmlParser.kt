@@ -10,7 +10,7 @@ import com.prof18.rssparser.RssParser
  * -tested, not built yet) -- this class only ever sees bytes already in hand, so its tests need
  * no network at all (CLAUDE.md section 7 item 2).
  *
- * Uses rssparser (`docs/architecture.adoc` §7, not Stalla). [rssParser]'s default construction eagerly
+ * Uses rssparser (`architecture.adoc` §7, not Stalla). [rssParser]'s default construction eagerly
  * creates an `OkHttpClient` internally (for its own `getRssChannel(url)` entry point) but that
  * client is never touched by [parse], which only calls the byte-string [RssParser.parse] overload.
  */

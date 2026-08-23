@@ -16,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The undo window (issue #49, `docs/UI.adoc` §12.3).
+ * The undo window (issue #49, `UI.adoc` §12.3).
  *
  * Its own class because the behaviour is its own: everything here is about *when* a decision becomes
  * durable, and every test moves virtual time. The rest of S2's behaviour lives in

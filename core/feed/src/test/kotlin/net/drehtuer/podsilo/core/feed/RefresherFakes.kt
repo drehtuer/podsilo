@@ -30,7 +30,7 @@ import net.drehtuer.podsilo.core.model.port.ThemePreference
 /**
  * Ledger double for the refresher tests. Records every write so a test can assert not just the end
  * state but **what state was written** — the whole point being that a refresh may write `SKIPPED`
- * and must never write `QUEUED` (`docs/decisions/0013`).
+ * and must never write `QUEUED` (`decisions/0013`).
  */
 class RecordingLedgerRepository(
     private val undecided: MutableList<Episode> = mutableListOf(),

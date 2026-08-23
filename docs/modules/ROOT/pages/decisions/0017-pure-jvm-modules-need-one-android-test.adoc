@@ -42,7 +42,7 @@ Android dependency the architecture deliberately denies it.
 
 == Consequences
 
-* Tier 2 stops being purely a convenience. `docs/dev-environment.adoc` §6 already says it is minutes
+* Tier 2 stops being purely a convenience. `dev-environment.adoc` §6 already says it is minutes
 per run against seconds for Tier 1, and that stays true -- but there is now a class of bug that
 *only* Tier 2 can see, and the emulator became usable (2026-08-02) in time to see this one.
 * The rule to apply when adding to a pure-JVM module: if it constructs a `Regex`, formats a date,
@@ -50,8 +50,8 @@ compares strings by locale, or normalises Unicode, it is using an implementation
 Those are the places where a green JVM suite proves less than it appears to.
 * The cost is small and bounded: one file per module, not a mirrored suite. Duplicating the table
 tests onto an emulator would trade minutes of CI for coverage that is already there.
-* CI still runs no emulator job (`docs/dev-environment.adoc` §6). This test therefore runs when someone
-runs it, which is honest rather than satisfying; a CI emulator job is in `docs/backlog.adoc`.
+* CI still runs no emulator job (`dev-environment.adoc` §6). This test therefore runs when someone
+runs it, which is honest rather than satisfying; a CI emulator job is in `backlog.adoc`.
 
 == Alternatives considered
 

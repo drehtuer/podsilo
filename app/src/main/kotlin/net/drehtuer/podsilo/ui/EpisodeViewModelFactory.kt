@@ -34,7 +34,7 @@ import javax.inject.Singleton
  * They are not `@HiltViewModel` on purpose: two of them take a feed URL or an episode key as a
  * construction parameter, and keeping all three plain classes means `:feature:episodes` needs no
  * Hilt dependency and every one of them is testable with fakes and no test runner
- * (`docs/architecture.adoc` §2).
+ * (`architecture.adoc` §2).
  */
 @Suppress("LongParameterList") // A composition root's parameter list is its graph; see FeedRefresher.
 @Singleton

@@ -1,0 +1,38 @@
+# Antora playbook — how the documentation site is built.
+#
+# The site is one component from one repository, so this is deliberately minimal.
+# `url: .` builds from this working tree rather than cloning, which is what makes a
+# local preview show uncommitted edits; CI passes `--fetch` and a branch instead.
+site:
+  title: Podsilo
+  url: https://drehtuer.github.io/podsilo
+  start_page: podsilo::index.adoc
+
+content:
+  sources:
+    - url: .
+      start_path: docs
+      branches: HEAD
+
+# The stock Antora UI. This is the rolling "HEAD" artifact because it is the only one
+# GitLab actually serves — the branch-pinned form (v3.1.x) 404s. `snapshot: true` is
+# required for exactly that reason: it tells Antora the bundle is not immutable and
+# must be re-fetched rather than cached forever. If the UI ever needs to be frozen,
+# the answer is to vendor a copy of the zip, not to pin a URL that does not exist.
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true
+
+output:
+  dir: ./build/site
+
+asciidoc:
+  attributes:
+    # Same two attributes every page carries, so ids are generated the same way here
+    # as they are when GitHub renders the file directly.
+    idprefix: ''
+    idseparator: '-'
+    # Antora warns on an unresolved xref rather than failing; this makes the build
+    # itself the check, matching what --failure-level=WARN does for a single file.
+    'page-pagination': ''

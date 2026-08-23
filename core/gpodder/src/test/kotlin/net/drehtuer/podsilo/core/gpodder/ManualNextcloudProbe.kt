@@ -125,7 +125,7 @@ fun main(args: Array<String>) {
  *
  * **The second GET is the real assertion.** A 200 from the DELETE proves the server answered, not
  * that the password is gone; re-using it afterwards and being refused is what proves that. This is
- * also exactly what the app does when the user declines an account (`docs/UI.adoc` §8) — the same
+ * also exactly what the app does when the user declines an account (`UI.adoc` §8) — the same
  * method, on the same credentials, at the same point in the flow.
  */
 private suspend fun revokeAndProveItIsDead(
@@ -215,7 +215,7 @@ private fun reportRecent(
         val rePod = if (action.isEndedByRePodsRule()) "played" else "NOT played"
         // The *real* predicate, imported rather than restated. This column was the hardcoded string
         // "HANDLED_REMOTELY", which was true when the probe was written and became a lie the moment
-        // `docs/decisions/0022` landed — a diagnostic describing last week's behaviour is worse than
+        // `decisions/0022` landed — a diagnostic describing last week's behaviour is worse than
         // none, and this one printed "← DISAGREE" against a disagreement that no longer existed.
         val podsilo = if (action.meansHandledElsewhere()) "HANDLED_REMOTELY" else "left in To decide"
         val skew = authored?.let { (it - serverNowMillis) / MILLIS_PER_SECOND }
@@ -243,7 +243,7 @@ private fun EpisodeAction.isEndedByRePodsRule(): Boolean {
  *
  * The per-action `timestamp` is ISO-8601 while `since` is Unix seconds, and getting them confused
  * does not crash — it silently breaks incremental sync in a way that looks like "sync just doesn't
- * work". `docs/decisions/0009` records that the two reference servers emit `+00:00` and `Z`, and
+ * work". `decisions/0009` records that the two reference servers emit `+00:00` and `Z`, and
  * that Podsilo parses all three forms; this is the first time that claim meets a real Nextcloud.
  */
 private fun reportTimestamps(stamps: List<String>) {
@@ -276,13 +276,13 @@ private fun String.describeShape(): String =
  * The write half — **only** reached with an explicit `-Pwrite=<loginName>`, and only after the
  * approved account matched that name.
  *
- * It exists to settle `docs/decisions/0008`, which has been "source-read-only" since it was written:
+ * It exists to settle `decisions/0008`, which has been "source-read-only" since it was written:
  * `nextcloud-gpodder`'s controller filters posted actions down to `play` and returns 200 regardless,
  * so a `DOWNLOAD` looks accepted and vanishes. That was read out of PHP, never observed. Everything
  * downstream — the outbox, `syncedToServer`, mark-on-download — behaves differently depending on
  * whether it is true.
  *
- * It also checks the mark-as-played encoding from `docs/architecture.adoc` §6
+ * It also checks the mark-as-played encoding from `architecture.adoc` §6
  * (`started = 0, position = total`) survives a round trip.
  *
  * Both actions name a **synthetic feed and episode** that no real subscription uses, so nothing the
@@ -323,7 +323,7 @@ private suspend fun verifyActionWrites(
                     guid = "probe-$marker-play",
                     action = EpisodeActionType.PLAY,
                     timestamp = stamp,
-                    // `docs/architecture.adoc` §6: "done with this episode" is a full-length PLAY.
+                    // `architecture.adoc` §6: "done with this episode" is a full-length PLAY.
                     started = 0,
                     position = 1800,
                     total = 1800,

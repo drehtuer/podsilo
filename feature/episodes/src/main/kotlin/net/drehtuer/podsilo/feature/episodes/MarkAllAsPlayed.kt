@@ -18,7 +18,7 @@ import net.drehtuer.podsilo.core.ui.RowPadding
  * *Mark all as played*, on the **Downloaded** filter only.
  *
  * Scoped there deliberately. On *To decide* the equivalent already exists in S4 with a per-feed
- * preview (`docs/decisions/0013`), and on *Played / handled* it would be a no-op. What it answers is
+ * preview (`decisions/0013`), and on *Played / handled* it would be a no-op. What it answers is
  * the case the author actually hit: a pile of episodes already fetched onto the phone, all of which
  * should stop being offered anywhere else.
  *

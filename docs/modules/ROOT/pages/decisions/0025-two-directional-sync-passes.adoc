@@ -16,7 +16,7 @@ pulls only actions newer than the cursor, and never overrides a terminal local s
 append-only log with two writers has no automatic answer to "these disagree", and a person looking at
 both screens does.
 
-There is now a second, sharper reason. A download recorded before `docs/decisions/0023` emitted
+There is now a second, sharper reason. A download recorded before `decisions/0023` emitted
 `DOWNLOAD` alone, which Nextcloud discards -- and its row is already `syncedToServer = true`, so *no
 ordinary pass will ever retry it*. Without a force push those episodes are permanently invisible to
 every other client. The author has such rows on their phone.
@@ -70,11 +70,11 @@ argument is one typo away from confusing them.
 Both rows confirm first, for different reasons.
 
 * *The push names its count.* It writes to a shared log other clients act on and the API cannot
-retract -- the safeguard `docs/decisions/0013` established for every bulk write here. The count is a
+retract -- the safeguard `decisions/0013` established for every bulk write here. The count is a
 ledger query, so it costs nothing.
 * *The pull names none.* The plan asked for a two-phase dialog -- _"3,022 actions from
 Nextcloud. 87 change something here."_ -- and that number cannot be produced without fetching,
-while a view model may not touch the network (`docs/UI.adoc` §B0.3). Rather than smuggle a fetch into
+while a view model may not touch the network (`UI.adoc` §B0.3). Rather than smuggle a fetch into
 a view model or invent a plausible figure, the dialog says what the operation can and cannot do.
 It is a shorter promise than the push's, and it is true.
 
@@ -84,10 +84,10 @@ holds however the event arrives.
 == Consequences
 
 * *The author's stranded downloads become fixable.* One press of _Send this device's state_ re-posts
-them with the `PLAY` that `docs/decisions/0023` added.
+them with the `PLAY` that `decisions/0023` added.
 * *Every step of the #60 plan is complete*, including the device verification: both buttons were
 driven on the author's phone against their own Nextcloud on 2026-08-14, and the push repaired a
-download stranded since before `docs/decisions/0023` -- `position=0` became `position=2766
+download stranded since before `decisions/0023` -- `position=0` became `position=2766
 total=2766`, which RePod reads as played.
 * The NEXTCLOUD group on S4 is now long enough that its buttons sit below the fold in a test
 viewport. That is a real consequence of the placement chosen, and the tests scroll rather than the

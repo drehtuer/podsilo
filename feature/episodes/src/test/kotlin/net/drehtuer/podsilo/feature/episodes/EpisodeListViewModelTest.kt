@@ -46,7 +46,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     @Test
     fun `an episode published long before the feed was first seen still appears`() =
         runTest {
-            // docs/decisions/0013 at the screen: the backlog is cleared by writing SKIPPED rows, never
+            // decisions/0013 at the screen: the backlog is cleared by writing SKIPPED rows, never
             // by hiding rows at read time. A date filter reappearing here would be invisible in the UI.
             seed(episode("ancient", pubDate = 0))
 
@@ -89,7 +89,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     @Test
     fun `only Download again carries the flag that passes the terminal-row refusal`() =
         runTest {
-            // The UI half of docs/decisions/0012. If a plain Download ever set this, the
+            // The UI half of decisions/0012. If a plain Download ever set this, the
             // no-auto-download invariant would stop being provable from one grep.
             seed(episode("e1"))
             ledger.seedRow(ledgerRow("e1", LedgerState.DOWNLOADED, writtenFileName = "old.mp3"))
@@ -106,7 +106,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     fun `a re-decision resets attempts and error but keeps the written file name`() =
         runTest {
             // Keeping writtenFileName is what arms the duplicate guard; losing it here would let a
-            // later re-download write a second copy (docs/decisions/0012 §3a).
+            // later re-download write a second copy (decisions/0012 §3a).
             seed(episode("e1"))
             ledger.seedRow(
                 ledgerRow("e1", LedgerState.DOWNLOADED, writtenFileName = "kept.mp3", attempts = 4, lastError = "boom"),
@@ -144,14 +144,14 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     fun `a swipe performs the configured action, not a hard-coded one`() =
         runTest {
             // The swipe background renders from the same mapping, so this is what stops the UI
-            // advertising one verb and performing another (docs/UI.adoc §12.1).
+            // advertising one verb and performing another (UI.adoc §12.1).
             settings.swipeMapping = SwipeMapping(right = SwipeAction.MARK_AS_PLAYED, left = SwipeAction.DOWNLOAD)
             seed(episode("e1"))
             val vm = viewModel()
             runCurrent()
 
             vm.onEvent(EpisodeListEvent.SwipeCommitted("e1", SwipeDirection.RIGHT))
-            // The write is deferred by the undo window now (`docs/UI.adoc` §12.3); *which* action it
+            // The write is deferred by the undo window now (`UI.adoc` §12.3); *which* action it
             // is remains this test's point, so it waits the window out rather than changing subject.
             advanceTimeBy(UNDO_WINDOW_FOR_TEST + 1)
             runCurrent()
@@ -183,7 +183,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     fun `a bulk action is one write, not one per episode`() =
         runTest {
             // 412 upserts would be 412 transactions and 412 list emissions into a LazyColumn
-            // (`docs/UI.adoc` §B7).
+            // (`UI.adoc` §B7).
             val keys = (1..50).map { "e$it" }
             seed(*keys.map { episode(it) }.toTypedArray())
             val vm = viewModel()
@@ -248,7 +248,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     fun `Download all produces a preview and writes absolutely nothing`() =
         runTest {
             // The regression guard for the bug this replaced: it used to emit a "Queued (n)" snackbar
-            // without queueing anything, which is worse than not implementing it. docs/decisions/0014
+            // without queueing anything, which is worse than not implementing it. decisions/0014
             // makes naming the count *before* writing the whole safeguard.
             seed(episode("a"), episode("b"), episode("c"))
             ledger.seedRow(ledgerRow("c", LedgerState.DOWNLOADED))
@@ -341,7 +341,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
     @Test
     fun `a lost folder grant offers Choose folder, never a bare Retry`() =
         runTest {
-            // The guarantee `docs/architecture.adoc` §11 and docs/UI.adoc §12.11 make, and the reason the cause
+            // The guarantee `architecture.adoc` §11 and UI.adoc §12.11 make, and the reason the cause
             // is stored rather than parsed out of the message: retrying cannot possibly succeed until
             // the user re-picks the folder, so a Retry button here would be a button that lies.
             seed(episode("e1"))
@@ -591,7 +591,7 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
             assertTrue(ledger.writes.isEmpty())
         }
 
-    // ---- Live download progress (issue #47), per docs/UI.adoc §B7's table ----
+    // ---- Live download progress (issue #47), per UI.adoc §B7's table ----
 
     @Test
     fun `a live update gives the row its real percentage`() =
@@ -755,8 +755,8 @@ class EpisodeListViewModelTest : EpisodeListTestHarness() {
         }
 
     /**
-     * The two app-bar routes (`docs/UI.adoc` §3), as effects rather than as navigation the screen
-     * performs itself — S2 owns no `NavController` (`docs/UI.adoc` §B0.2).
+     * The two app-bar routes (`UI.adoc` §3), as effects rather than as navigation the screen
+     * performs itself — S2 owns no `NavController` (`UI.adoc` §B0.2).
      */
     @Test
     fun `the app bar navigates and decides nothing`() =

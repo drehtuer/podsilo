@@ -18,9 +18,9 @@ private const val HTTP_SERVER_ERROR_FLOOR = 500
 
 /**
  * Refreshes followed feeds: conditional `GET` → parse → replace that feed's cached episodes
- * (`docs/architecture.adoc` §7's refresh sequence).
+ * (`architecture.adoc` §7's refresh sequence).
  *
- * **Refreshing never downloads.** This writes `Episode` rows, and — since `docs/decisions/0013` —
+ * **Refreshing never downloads.** This writes `Episode` rows, and — since `decisions/0013` —
  * `SKIPPED` ledger rows for episodes older than the user's *mark old as played* cutoff, when they
  * have set one. It never writes `QUEUED`, never enqueues download work, and has no download or
  * GPodder dependency at all, which is what keeps CLAUDE.md §1's no-auto-download rule structural
@@ -46,7 +46,7 @@ class FeedRefresher(
 ) {
     /**
      * Refreshes every followed feed, or just [feedUrl] when given — S2's pull-to-refresh is scoped
-     * to the feed the user is looking at (`docs/UI.adoc` §5). One feed failing never stops the others.
+     * to the feed the user is looking at (`UI.adoc` §5). One feed failing never stops the others.
      *
      * @return how many feeds failed *transiently* — i.e. how many are worth another attempt.
      */
@@ -61,7 +61,7 @@ class FeedRefresher(
                 listOfNotNull(feedRepository.get(feedUrl))
             }
         val failures = feeds.count { feed -> !refreshOne(feed) }
-        // Applied to whatever just arrived, once per pass — docs/decisions/0013.
+        // Applied to whatever just arrived, once per pass — decisions/0013.
         markOldEpisodesRule.apply()
         return failures
     }

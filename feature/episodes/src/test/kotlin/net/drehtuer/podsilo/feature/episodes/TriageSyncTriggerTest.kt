@@ -15,7 +15,7 @@ import java.time.ZoneOffset
  *
  * `TriageWriter` wrote the row with `syncedToServer = false` and returned, and nothing anywhere
  * asked for a pass. A skip therefore waited for a completed download or an app-bar tap before
- * Nextcloud heard about it — and since `docs/decisions/0026` there is no periodic pass to fall
+ * Nextcloud heard about it — and since `decisions/0026` there is no periodic pass to fall
  * back on at all, so these triggers are the whole mechanism.
  *
  * These pin the trigger where the write is, rather than at the four call sites that reach it.

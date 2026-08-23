@@ -25,7 +25,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * S4's two directional sync rows (`docs/decisions/0025`).
+ * S4's two directional sync rows (`decisions/0025`).
  *
  * The property worth pinning is not that the buttons work — it is that **nothing happens until the
  * confirmation is accepted**, and that the push's count is honest. The push writes to a shared,

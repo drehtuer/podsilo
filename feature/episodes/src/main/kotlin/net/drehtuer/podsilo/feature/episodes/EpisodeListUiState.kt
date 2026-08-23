@@ -9,14 +9,14 @@ import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
 
 /**
- * S2's whole state (`docs/UI.adoc` §B3).
+ * S2's whole state (`UI.adoc` §B3).
  *
  * One non-null state type with **sealed content variants** — never an `isLoading` flag beside a
  * nullable payload, which is the shape that lets a screen render "empty" and "not loaded yet"
  * identically and then argue about which it meant.
  *
  * @property feedError renders as an inline banner *above* the list, never in place of it: a failed
- *   refresh must leave the previously parsed episodes on screen (`docs/UI.adoc` §5).
+ *   refresh must leave the previously parsed episodes on screen (`UI.adoc` §5).
  * @property swipeMapping the swipe background's icon and word are rendered **from** this, so the UI
  *   cannot advertise one verb and perform another.
  */
@@ -40,13 +40,13 @@ data class EpisodeListUiState(
      * Non-null while *Mark all as played* is being confirmed.
      *
      * A separate field from [pendingBulk] on purpose: the two dialogs say different things and one
-     * of them writes `PLAY` actions to a shared log that no undo reaches (`docs/decisions/0013`).
+     * of them writes `PLAY` actions to a shared log that no undo reaches (`decisions/0013`).
      * Sharing a field would make it possible to render the download wording over a mark-as-played
      * confirmation.
      */
     val pendingMarkAll: List<String>? = null,
     /**
-     * Non-null while a **selection-mode** action is being confirmed (`docs/UI.adoc` §5).
+     * Non-null while a **selection-mode** action is being confirmed (`UI.adoc` §5).
      *
      * Its own field, like [pendingBulk] and [pendingMarkAll], and for the same reason: the three
      * dialogs say different things, and one of them writes `PLAY` actions to a shared log no undo
@@ -55,7 +55,7 @@ data class EpisodeListUiState(
      */
     val pendingSelectionAction: EpisodeUiAction? = null,
     /**
-     * A swipe decision inside its undo window — **not yet written anywhere** (`docs/UI.adoc` §12.3).
+     * A swipe decision inside its undo window — **not yet written anywhere** (`UI.adoc` §12.3).
      *
      * The row renders as though the decision had been made, because a swipe that appeared to do
      * nothing for five seconds would read as the app ignoring it. The ledger, the outbox and the
@@ -85,7 +85,7 @@ data class Selection(
 )
 
 /**
- * A swipe decision being held for its undo window (`docs/UI.adoc` §12.3).
+ * A swipe decision being held for its undo window (`UI.adoc` §12.3).
  *
  * Exactly one at a time: a second swipe commits this one first. Two live undo windows would need two
  * snackbars and an answer to "which does *Undo* mean", and neither is worth having.
@@ -96,7 +96,7 @@ data class PendingUndo(
 )
 
 /**
- * The four chips of `docs/UI.adoc` §5. `TO_DECIDE` is the default and the primary working surface.
+ * The four chips of `UI.adoc` §5. `TO_DECIDE` is the default and the primary working surface.
  *
  * Maps to [LedgerFilterState] rather than being it: the UI vocabulary ("Played / handled" covers
  * both a local skip and another client's decision) is not the storage vocabulary.
@@ -112,12 +112,12 @@ enum class EpisodeFilter(
 
 /** Everything S2 can emit upward. Composables never call a repository or `WorkManager` themselves. */
 sealed interface EpisodeListEvent {
-    /** Opens S3. **Never triages** — a mis-tap must not queue a download (`docs/UI.adoc` §5). */
+    /** Opens S3. **Never triages** — a mis-tap must not queue a download (`UI.adoc` §5). */
     data class RowClicked(
         val episodeKey: String,
     ) : EpisodeListEvent
 
-    /** Up navigation. Back from S2 returns to S1 with its scroll position intact (`docs/UI.adoc` §3). */
+    /** Up navigation. Back from S2 returns to S1 with its scroll position intact (`UI.adoc` §3). */
     data object BackClicked : EpisodeListEvent
 
     /** S2's app bar → S7, one of the two routes into Activity the navigation map draws. */
@@ -152,7 +152,7 @@ sealed interface EpisodeListEvent {
     /**
      * Opens the confirmation for a selection-mode action. **Writes nothing** — only
      * [BulkConfirmed] does, which is the same "name the count before you write" rule
-     * *Download all* and *Mark all as played* already follow (`docs/UI.adoc` §5).
+     * *Download all* and *Mark all as played* already follow (`UI.adoc` §5).
      */
     data class SelectionActionRequested(
         val action: EpisodeUiAction,
@@ -186,7 +186,7 @@ sealed interface EpisodeListEvent {
 
     data object PullToRefresh : EpisodeListEvent
 
-    /** The banner always carries its fix as a button (`docs/UI.adoc` §12.11). */
+    /** The banner always carries its fix as a button (`UI.adoc` §12.11). */
     data object PausedBannerActionClicked : EpisodeListEvent
 
     /** *Try again* on the feed-error banner. Same refresh as the pull gesture, different affordance. */
@@ -195,7 +195,7 @@ sealed interface EpisodeListEvent {
 
 /**
  * One-shot effects, delivered over a `Channel` rather than held in state so a snackbar or a
- * navigation cannot replay on rotation (`docs/UI.adoc` §B0.7).
+ * navigation cannot replay on rotation (`UI.adoc` §B0.7).
  */
 sealed interface EpisodeListEffect {
     data class OpenDetail(
@@ -225,7 +225,7 @@ sealed interface EpisodeListEffect {
     ) : EpisodeListEffect
 
     /**
-     * The snackbar that carries *Undo* (`docs/UI.adoc` §12.3).
+     * The snackbar that carries *Undo* (`UI.adoc` §12.3).
      *
      * Its own effect rather than a [ShowMessage] variant because it needs an action button and a
      * reply — the host turns a tap into [EpisodeListEvent.UndoRequested]. The **view model** owns the
@@ -242,7 +242,7 @@ sealed interface EpisodeListEffect {
 
 /**
  * A snackbar's *identity*, not its text — the string is resolved at render, so nothing here holds a
- * user-facing sentence (`docs/UI.adoc` §B0.6).
+ * user-facing sentence (`UI.adoc` §B0.6).
  */
 sealed interface SnackbarText {
     data class Queued(
@@ -253,12 +253,12 @@ sealed interface SnackbarText {
         val count: Int,
     ) : SnackbarText
 
-    /** The inverse of [BulkApplied] — a decision withdrawn (`docs/decisions/0024`). */
+    /** The inverse of [BulkApplied] — a decision withdrawn (`decisions/0024`). */
     data class MarkedUnplayed(
         val count: Int,
     ) : SnackbarText
 
-    /** Informational, **not** an error: the file was already there (`docs/decisions/0012` §4). */
+    /** Informational, **not** an error: the file was already there (`decisions/0012` §4). */
     data class AlreadyInFolder(
         val fileName: String,
     ) : SnackbarText

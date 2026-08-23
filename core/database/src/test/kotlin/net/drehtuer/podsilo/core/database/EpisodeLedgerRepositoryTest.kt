@@ -118,7 +118,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
         }
 
     /**
-     * `docs/decisions/0024`. The SQL is the half the compiler cannot check: adding `UNPLAYED` to the
+     * `decisions/0024`. The SQL is the half the compiler cannot check: adding `UNPLAYED` to the
      * enum compiles everywhere without this, and the feature silently does nothing.
      *
      * The row is still there — that is the entire design — so this asserts both halves: the episode
@@ -154,7 +154,7 @@ class EpisodeLedgerRepositoryTest : RoomTestBase() {
     @Test
     fun `observeEpisodes NEW does not apply a firstSeenAt cutoff`() =
         runTest {
-            // The regression guard for docs/decisions/0013. An episode published long before its feed
+            // The regression guard for decisions/0013. An episode published long before its feed
             // was first seen is still undecided, and must appear — the backlog is cleared by writing
             // SKIPPED rows, never by hiding rows at read time. If a date clause ever comes back, this
             // fails and the two mechanisms cannot silently coexist.

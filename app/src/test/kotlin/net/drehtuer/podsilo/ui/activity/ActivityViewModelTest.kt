@@ -300,7 +300,7 @@ class ActivityViewModelTest {
         }
 
     /**
-     * The recovery itself. A new `UNPLAYED` row, never a deleted one (`docs/decisions/0024`): the
+     * The recovery itself. A new `UNPLAYED` row, never a deleted one (`decisions/0024`): the
      * ledger row is the dedup authority and has to outlive the decision it records.
      */
     @Test

@@ -15,7 +15,7 @@ package net.drehtuer.podsilo.core.model
  *   server's `add[]`. Never updated after that.
  *
  *   **No longer a query predicate.** It used to drive a read-time `pubDate >= firstSeenAt` cutoff on
- *   the "New" filter; `docs/decisions/0013` retired that in favour of *writing* `SKIPPED` rows, so
+ *   the "New" filter; `decisions/0013` retired that in favour of *writing* `SKIPPED` rows, so
  *   "new" now means exactly "no ledger row". This is kept because it is the only sensible default
  *   cutoff date to offer for a feed that has just appeared.
  * @property lastRefreshedAt Epoch millis, local clock, updated after a successful (200, not 304)

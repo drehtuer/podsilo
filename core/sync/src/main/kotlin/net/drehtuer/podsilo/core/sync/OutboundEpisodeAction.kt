@@ -36,7 +36,7 @@ private const val UNKNOWN_DURATION_SECONDS = 1
  * position -- it never plays audio), `position == total`, and `total` is the duration in seconds if
  * known, else [UNKNOWN_DURATION_SECONDS] -- never a fabricated plausible-looking value.
  *
- * **A completed download also emits `PLAY`** (`docs/decisions/0023`, 2026-08-14). CLAUDE.md §5 used
+ * **A completed download also emits `PLAY`** (`decisions/0023`, 2026-08-14). CLAUDE.md §5 used
  * to forbid this in terms, on the grounds that it asserts something untrue and can trigger
  * auto-delete in other clients. The author has ruled the other way, for a reason the original rule
  * did not account for: on this setup a download *is* the end of the episode's life in Podsilo — it
@@ -48,12 +48,12 @@ fun EpisodeLedgerRow.toOutboundActions(): List<EpisodeAction> =
         // Both, in this order. `DOWNLOAD` is the honest record that this device fetched the file, and
         // it is what a server that keeps it (opodsync) should store. `PLAY` is what makes the episode
         // read as handled in Nextcloud, where `DOWNLOAD` is discarded on arrival
-        // (`docs/decisions/0008`) — so on that server the second action is the only one that survives,
+        // (`decisions/0008`) — so on that server the second action is the only one that survives,
         // and on a server that keeps both, the later one wins.
         LedgerState.DOWNLOADED -> listOf(downloadAction(), playedAction())
         LedgerState.SKIPPED -> listOf(playedAction())
         // The one action that *withdraws* a claim rather than making one, and the API's only way of
-        // saying it (`docs/decisions/0024`).
+        // saying it (`decisions/0024`).
         LedgerState.UNPLAYED -> listOf(unplayedAction())
         LedgerState.QUEUED, LedgerState.DOWNLOADING, LedgerState.ERROR, LedgerState.HANDLED_REMOTELY ->
             emptyList()
@@ -87,7 +87,7 @@ private fun EpisodeLedgerRow.unplayedAction(): EpisodeAction =
         total = durationSeconds ?: UNKNOWN_DURATION_SECONDS,
     )
 
-/** `position == total > 0` — the encoding every reader treats as *finished* (`docs/decisions/0022`). */
+/** `position == total > 0` — the encoding every reader treats as *finished* (`decisions/0022`). */
 private fun EpisodeLedgerRow.playedAction(): EpisodeAction {
     val total = durationSeconds ?: UNKNOWN_DURATION_SECONDS
     return EpisodeAction(

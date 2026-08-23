@@ -125,7 +125,7 @@ follows from it.
 
 | `:core:ui`
 | Android library (Compose)
-| The shared Compose vocabulary: the icon allow-list (`docs/UI.adoc` §18) and the spacing invariants (§17). No state, no ports, no screens -- it exists so those cannot drift between modules.
+| The shared Compose vocabulary: the icon allow-list (`UI.adoc` §18) and the spacing invariants (§17). No state, no ports, no screens -- it exists so those cannot drift between modules.
 
 | `:feature:episodes`
 | Android library (Compose)
@@ -223,7 +223,7 @@ graph LR
 == 4. Database schema
 
 *Five tables.* The first four are exactly as specified in CLAUDE.md §5 -- deliberately not a typical
-podcast app's schema. The fifth, `ERROR_LOG`, was added by the UI design (`docs/UI.adoc` §11's error
+podcast app's schema. The fifth, `ERROR_LOG`, was added by the UI design (`UI.adoc` §11's error
 log had no data source at all); it is purely additive and changes no existing type.
 Room entities live in `:core:database`; the plain-Kotlin equivalents (`Feed`, `Episode`,
 `EpisodeLedgerRow`, `SyncState`, `LogEntry`) live in `:core:model` and are what everything outside
@@ -376,7 +376,7 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 | `String`
 | Yes
 | RSS `<item><link>`
-| The episode's own page, for the UI's _Open in browser_ affordance (`docs/UI.adoc` §6). `null` for feeds that omit it -- the affordance is then absent, never a dead tap. *Not* derivable from `enclosureUrl`, which points at an audio file. Added in schema v2.
+| The episode's own page, for the UI's _Open in browser_ affordance (`UI.adoc` §6). `null` for feeds that omit it -- the affordance is then absent, never a dead tap. *Not* derivable from `enclosureUrl`, which points at an audio file. Added in schema v2.
 
 | `title`
 | `String`
@@ -811,7 +811,7 @@ ____
 older reality. Both reference servers now emit an offset -- `nextcloud-gpodder` sends
 `2021-10-06T11:49:23+00:00` (PHP `format("c")`), `opodsync` sends a trailing `Z`. Podsilo parses
 all three forms and emits the bare one, which both servers read as UTC. See
-`docs/decisions/0009` for the full verified contract and `0003` for the amended timestamp
+`decisions/0009` for the full verified contract and `0003` for the amended timestamp
 decision.
 ____
 
@@ -831,7 +831,7 @@ string. That guessing is what the typed failure replaces: it works until a serve
 
 ⚠️ *`POST episode_action/create` is not as reliable as a 2xx implies.* `nextcloud-gpodder` >=
 3.13.3 discards any non-`PLAY` action and still returns 200, so `DOWNLOAD` never lands on a real
-Nextcloud. Podsilo emits it regardless -- see `docs/decisions/0008` before designing anything that
+Nextcloud. Podsilo emits it regardless -- see `decisions/0008` before designing anything that
 depends on downloads being visible to other clients.
 
 === Sequence: full sync pass
@@ -903,13 +903,13 @@ sequenceDiagram
 | *also* `PLAY`, posted after the `DOWNLOAD`
 | `0`
 | equal to `total`
-| as above -- `docs/decisions/0023`
+| as above -- `decisions/0023`
 |===
 
 Resolved per AntennaPod's own convention: verified against `SynchronizationQueueImpl.enqueueEpisodePlayed`, not guessed.
 Implemented in `net.drehtuer.podsilo.core.sync.toOutboundAction()` (`:core:sync`).
 
-*The `1` is not a duration* (`docs/decisions/0022`, amended 2026-08-14 -- this table said `0` until
+*The `1` is not a duration* (`decisions/0022`, amended 2026-08-14 -- this table said `0` until
 then). A reader decides _played_ from `position > 0 && total > 0 && position >= total`, so a `0/0`
 action is stored, returned by the API, and rendered as *unplayed for ever*. One second is the
 smallest value that says "there was something and it is finished" without inventing the
@@ -939,7 +939,7 @@ plausible-looking duration CLAUDE.md §6 forbids.
 Identification rule for both directions: *`guid`, falling back to `episode` (enclosure URL) when
 `guid` is absent* -- matches ``episodeKey``'s definition exactly (§4).
 
-*A `PLAY` is not automatically "handled"* (`docs/decisions/0022`, 2026-08-14 -- this table said it
+*A `PLAY` is not automatically "handled"* (`decisions/0022`, 2026-08-14 -- this table said it
 was until then). The API cannot delete an action and has no _unread_ type, so a client says _unread_
 by writing a `PLAY` with `position = 0`, keeping whatever `total` the row already had. Reading the
 type alone inverted the user's intent: the episode they had just marked as *not* listened to was
@@ -1179,7 +1179,7 @@ stateDiagram-v2
     HANDLED_REMOTELY --> [*]
 ----
 
-*`UNPLAYED` is the one state that means "no decision"* (`docs/decisions/0024`). The user reached it
+*`UNPLAYED` is the one state that means "no decision"* (`decisions/0024`). The user reached it
 by withdrawing a decision, so the list treats it exactly as a row-less episode while the row itself
 survives -- which is what keeps the ledger free of a delete. It is never reached by reconciliation: a
 remote unread mark does not re-open a decision made here.
@@ -1189,13 +1189,13 @@ sync never revisits them. A later remote action arriving for an already-`DOWNLOA
 no-op (idempotent), not a state change; test this explicitly (§7 item 8, "triage durability" -- the
 highest-value test in the project).
 
-The *user* may re-open any of the three via _Download again_ (`docs/UI.adoc` §12.3), which is the
+The *user* may re-open any of the three via _Download again_ (`UI.adoc` §12.3), which is the
 four extra edges above. The mechanism is an explicit `userRequested` flag on the work request
 (`:core:download`, `KEY_USER_REQUESTED`), settable *only* from a UI event and never from a worker
 or a sync path -- that is what keeps ``DownloadWorker``'s refusal of terminal rows intact as the thing
 that makes the no-auto-download invariant provable. The same flag is the only thing that enables the
 pre-flight duplicate-file guard, so `writtenFileName` never becomes the general "have I downloaded
-this?" test; that stays the ledger (§11's central invariant). Specified in `docs/decisions/0012`,
+this?" test; that stays the ledger (§11's central invariant). Specified in `decisions/0012`,
 accepted 2026-08-01 and built.
 
 '''
@@ -1257,7 +1257,7 @@ No separate diagram needed -- this is just "the sync pass runs again later." Bec
 recovery code. This is precisely why the outbox flag is durable in the DB rather than tracked
 in-memory (§5).
 
-*"Later" is now user-initiated* (`docs/decisions/0026`): there is no periodic sync pass, so the
+*"Later" is now user-initiated* (`decisions/0026`): there is no periodic sync pass, so the
 next pass is a pull-to-refresh, S7's _Sync now_, one of S4's directional buttons, or the pass the
 next triage decision or finished download triggers. The row survives indefinitely either way -- but
 the triggers are the whole mechanism now rather than a promptness optimisation over a four-hour
@@ -1295,7 +1295,7 @@ diagnosable value rather than a silent one. No date is ever invented from anothe
 been released since 2021 and references desktop-only JDK APIs that do not exist on Android; the
 Adonai/Kaned1as fork exists precisely to strip those. It comes from JitPack, which is the one
 dependency in this project not served from Maven Central -- and the reason F-Droid submission would
-need it built from source or vendored (`docs/backlog.adoc`).
+need it built from source or vendored (`backlog.adoc`).
 
 *Built (Tier 2 + Tier 4b):* the whole flowchart. `EnclosureDownloader` does A/B (resumable HTTP
 into the app cache, `Range` continuation, truncated-body detection), `EpisodeDownloader` sequences
@@ -1337,7 +1337,7 @@ is the only implementation and is itself untested.
 
 == 12. Decision record
 
-`docs/decisions/` holds the decisions that still constrain the code and cannot be re-derived from
+`decisions/` holds the decisions that still constrain the code and cannot be re-derived from
 this document -- a server limitation, a wire contract, a rule that amends CLAUDE.md, a platform trap.
 Everything else this project decided is _in_ this document, in the section that governs it: an ADR
 restating a rule already written here is a second place for it to go stale, so those were folded in
@@ -1370,11 +1370,11 @@ and deleted (2026-08-13).
 
 | xref:decisions/0017-pure-jvm-modules-need-one-android-test.adoc[0017]
 | A pure-JVM module that ships in the app gets *one* test on a real Android runtime -- the JVM and ICU do not agree
-| §2, `docs/dev-environment.adoc` §6
+| §2, `dev-environment.adoc` §6
 
 | xref:decisions/0020-the-login-poll-runs-only-in-the-foreground.adoc[0020]
 | The Login Flow v2 poll runs only while S5 is on screen -- a backgrounded process could not resolve the host at all
-| `docs/UI.adoc` §8, §B5
+| `UI.adoc` §8, §B5
 
 | xref:decisions/0022-play-is-an-ended-marker-in-both-directions.adoc[0022]
 | A `PLAY` means _ended_, both ways: a duration-less skip sends `1/1`, and an inbound `PLAY` is only terminal when `position >= total > 0` -- which is how a client says _unread_
@@ -1390,7 +1390,7 @@ and deleted (2026-08-13).
 
 | xref:decisions/0025-two-directional-sync-passes.adoc[0025]
 | Two directional passes -- the pull is `since = 0` over the *unchanged* reconciliation, the push re-asserts every row and is chunked
-| §6, `docs/UI.adoc` §7
+| §6, `UI.adoc` §7
 
 | xref:decisions/0026-manual-sync-only.adoc[0026]
 | *No periodic sync pass* -- every pass is one the user asked for, and the schedule an older build persisted is _cancelled_ on start, not merely un-scheduled
@@ -1398,16 +1398,16 @@ and deleted (2026-08-13).
 
 | xref:decisions/0027-no-paging-3-the-list-is-already-fast-enough.adoc[0027]
 | *No Paging 3* -- measured: 9,500 episodes reach the screen in 82--132 ms, so a keyed `LazyColumn` is the requirement rather than one of two options. Amends CLAUDE.md §3's table
-| `docs/UI.adoc` §B14.3
+| `UI.adoc` §B14.3
 |===
 
 === Decisions folded into this document
 
 Fourteen of the original 21 ADRs were deleted on 2026-08-13 and their rules written into the section
 that governs each -- the schema rules into §4, the wire and sync rules into §6, naming and tagging
-into §11, the module rules into §2, and the UI-facing ones into `docs/UI.adoc`. The same commit
+into §11, the module rules into §2, and the UI-facing ones into `UI.adoc`. The same commit
 (`7a9545a`) repointed all 95 KDoc citations, so nothing in the code still refers to a deleted number;
-the mapping table that stood here until 2026-08-23 had no readers left. `+git log -- docs/decisions/+`
+the mapping table that stood here until 2026-08-23 had no readers left. `+git log -- decisions/+`
 recovers any of them in full.
 
 Four further decisions were made while building and are recorded here rather than as ADRs, because
@@ -1422,7 +1422,7 @@ all (§10).
 alternative was the hand-rolled service locator CLAUDE.md §3 forbids.
 * *`ktlintCheck` is the sole authority on formatting* -- detekt's duplicate formatting rules are
 off and `.editorconfig` sets `max_line_length = 120`, because no code shape satisfies both
-bundled ktlint versions on an annotated constructor. See `docs/dev-environment.adoc` §8.6.
+bundled ktlint versions on an annotated constructor. See `dev-environment.adoc` §8.6.
 
 === Still open
 
@@ -1452,7 +1452,7 @@ amended in the same pass rather than left to contradict the decision:
 The three pieces that were unverified rather than undecided -- `SafDownloadTarget` (§11),
 `KeystoreAppPasswordCipher` (§2) and the foreground-service notification -- have all since run:
 instrumented, on the emulator, on 2026-08-02, and then against a real Nextcloud on a real phone.
-`docs/dev-environment.adoc` §10 is the register of what has actually been executed and where.
+`dev-environment.adoc` §10 is the register of what has actually been executed and where.
 
 When the next open decision appears, it goes here, and the section stops saying "nothing".
 
@@ -1475,7 +1475,7 @@ these sections because it dates what was built when.
 | 1
 | Dev container + Gradle skeleton
 | ✅ done
-| `docs/dev-environment.adoc`, `docs/journal.adoc`
+| `dev-environment.adoc`, `journal.adoc`
 
 | 2
 | `:core:model` + `:core:database` (+ `:core:datastore`)
@@ -1510,7 +1510,7 @@ these sections because it dates what was built when.
 | 8
 | UI (`:feature:settings`, `:feature:episodes`, `:app`, `:core:ui`)
 | ✅ done -- all eight screens, navigable and icon-complete
-| <<3-data-flow,§3>>, <<8-external-interface-storage-access-framework,§8>>, `docs/UI.adoc` (Parts A and B)
+| <<3-data-flow,§3>>, <<8-external-interface-storage-access-framework,§8>>, `UI.adoc` (Parts A and B)
 
 | 9
 | Polish (error surfacing, per-feed counts)
@@ -1520,13 +1520,13 @@ these sections because it dates what was built when.
 
 *The UI is complete.* All eight screens render, every route between them exists, and the app has
 been installed, launched and driven through all of them -- on the in-container emulator and on a real
-phone. Every port in `docs/UI.adoc` §B8 is implemented, not just declared.
+phone. Every port in `UI.adoc` §B8 is implemented, not just declared.
 
-`:core:ui` joined the module list with the icon allow-list (`docs/UI.adoc` §18) and the spacing
+`:core:ui` joined the module list with the icon allow-list (`UI.adoc` §18) and the spacing
 invariants (§17), both of which are shared by every screen and were starting to drift.
 
 *What has actually been _run_ -- against a real Nextcloud, real SAF, a real download -- is recorded
-in one place: `docs/dev-environment.adoc` §1, and deliberately not restated here.* Two registers of
+in one place: `dev-environment.adoc` §1, and deliberately not restated here.* Two registers of
 the same runs is how this section came to say, until 2026-08-22, that nothing had ever run against a
 real Nextcloud and that no episode had been downloaded by the running app. Both had, on 2026-08-02,
 and again on hardware on 2026-08-14.

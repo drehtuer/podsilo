@@ -91,14 +91,14 @@ class EpisodeDetailViewModelTest {
     fun `the sheet opens for a skipped episode too, and offers download anyway`() =
         runTest {
             // "Reachable for every episode regardless of state, including greyed-out ones"
-            // (docs/UI.adoc §6) — an explicit requirement, so it gets an explicit test.
+            // (UI.adoc §6) — an explicit requirement, so it gets an explicit test.
             episodes.seed(sampleEpisode())
             ledger.seedRow(ledgerRow("e1", state = LedgerState.SKIPPED))
 
             viewModel().state.test {
                 val state = awaitItem() ?: awaitItem()!!
                 assertEquals(LedgerState.SKIPPED, state.episode.ledgerState)
-                // Since `docs/decisions/0024` a decided episode also offers the way back out of the
+                // Since `decisions/0024` a decided episode also offers the way back out of the
                 // decision — the sheet is where a user who disagrees with a past self goes.
                 assertEquals(
                     setOf(EpisodeUiAction.DOWNLOAD, EpisodeUiAction.MARK_AS_UNPLAYED),
@@ -162,7 +162,7 @@ class EpisodeDetailViewModelTest {
         }
 
     /**
-     * `docs/UI.adoc` §B7's first row, which nothing in the app could satisfy before issue
+     * `UI.adoc` §B7's first row, which nothing in the app could satisfy before issue
      * #47: `DownloadWorker` never published progress and no screen observed any, so a running
      * download drew the indeterminate bar from start to finish.
      */
@@ -225,7 +225,7 @@ class EpisodeDetailViewModelTest {
     fun `download again is the only action that carries userRequested`() =
         runTest {
             // The flag is the sole way past DownloadWorker's terminal-row refusal
-            // (docs/decisions/0012); setting it for an ordinary download would erase the guarantee.
+            // (decisions/0012); setting it for an ordinary download would erase the guarantee.
             episodes.seed(sampleEpisode())
             ledger.seedRow(ledgerRow("e1", state = LedgerState.DOWNLOADED, writtenFileName = "a.mp3"))
 
@@ -250,7 +250,7 @@ class EpisodeDetailViewModelTest {
                 assertEquals(false, written.syncedToServer)
 
                 assertEquals(EpisodeDetailEffect.ShowMessage(SnackbarText.BulkApplied(1)), awaitItem())
-                // Deciding closes the sheet (docs/UI.adoc §6).
+                // Deciding closes the sheet (UI.adoc §6).
                 assertEquals(EpisodeDetailEffect.Close, awaitItem())
             }
         }
@@ -259,7 +259,7 @@ class EpisodeDetailViewModelTest {
     fun `opening the episode page does not close the sheet`() =
         runTest {
             // Leaving to read show notes is not a triage decision, and coming back must not cost the
-            // user their place (docs/UI.adoc §6).
+            // user their place (UI.adoc §6).
             episodes.seed(sampleEpisode(link = "https://example.org/episodes/1"))
             val viewModel = viewModel()
             viewModel.state.test { awaitItem() ?: awaitItem() }

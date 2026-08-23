@@ -13,10 +13,10 @@ import java.time.temporal.ChronoField
 /**
  * The GPodder episode-action `timestamp` field is ISO-8601, and is a different format -- and a
  * different meaning -- from the Unix-seconds `since`/response-level `timestamp` used elsewhere in
- * the API (`docs/architecture.adoc` section 6).
+ * the API (`architecture.adoc` section 6).
  *
  * **Servers disagree on whether it carries an offset**, so parsing is deliberately lenient
- * (verified against both reference implementations -- see `docs/architecture.adoc` §6):
+ * (verified against both reference implementations -- see `architecture.adoc` §6):
  * - `nextcloud-gpodder` emits an offset (PHP `format("c")` -> `2021-10-06T11:49:23+00:00`)
  * - `opodsync` emits a trailing `Z` (`2021-10-06T11:49:23Z`)
  * - the gpodder API README shows a bare form (`2009-12-12T09:00:00`), which is what CLAUDE.md

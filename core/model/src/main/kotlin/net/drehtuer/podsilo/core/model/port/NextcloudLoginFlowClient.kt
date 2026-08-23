@@ -5,11 +5,11 @@ package net.drehtuer.podsilo.core.model.port
 /**
  * Port for **Nextcloud Login Flow v2**, implemented in `:core:gpodder` (still a JVM module —
  * nothing here touches an Android API; launching the browser is the UI's concern, delivered as a
- * one-shot effect, `docs/architecture.adoc` §2).
+ * one-shot effect, `architecture.adoc` §2).
  *
  * This is the *only* way Podsilo obtains credentials. The app never sees, asks for, or stores a
  * user's Nextcloud password: the flow hands back an **app password**, which is what gets encrypted
- * and persisted (CLAUDE.md §5, `docs/architecture.adoc` §2). There is no username/password form anywhere
+ * and persisted (CLAUDE.md §5, `architecture.adoc` §2). There is no username/password form anywhere
  * in the UI and there must never be one.
  *
  * Distinct from [GpodderClient], which speaks the three gpoddersync endpoints — these three live
@@ -21,7 +21,7 @@ interface NextcloudLoginFlowClient {
      * a subdirectory is common, so a path is legal here.
      *
      * A failure at this step usually means "not a Nextcloud", which is a different message to the
-     * user than a refused authorization (`docs/UI.adoc` §8).
+     * user than a refused authorization (`UI.adoc` §8).
      */
     suspend fun start(baseUrl: String): Result<LoginFlow>
 
@@ -47,7 +47,7 @@ interface NextcloudLoginFlowClient {
      * `DELETE /ocs/v2.php/core/apppassword`, authenticated with the app password it is deleting —
      * which is the only credential this app ever holds, and exactly what the endpoint expects.
      *
-     * Called when a granted account is **rejected** rather than stored (`docs/UI.adoc` §8). Nextcloud
+     * Called when a granted account is **rejected** rather than stored (`UI.adoc` §8). Nextcloud
      * issues the password before the user is asked "is this the right account?", so answering *no*
      * used to leave a live password listed under *Security* on the server for ever, belonging to an
      * account the user had just declined.
@@ -86,7 +86,7 @@ data class LoginResult(
 }
 
 /**
- * Why a login attempt failed, in the vocabulary S5 renders (`docs/UI.adoc` §8).
+ * Why a login attempt failed, in the vocabulary S5 renders (`UI.adoc` §8).
  *
  * **Distinguishing these is the whole point.** "Check the spelling and your network" and "this
  * Nextcloud has no GPodder Sync app installed" are different problems with different fixes, and a

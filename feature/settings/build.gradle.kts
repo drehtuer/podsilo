@@ -59,7 +59,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     // Pinned: Compose UI tests pull Espresso transitively, and the version they pulled predates
     // Android 16+ — it calls InputManager.getInstance(), which no longer exists, so every Compose
-    // instrumented test died in onIdle() before running a line (docs/journal.adoc, 2026-08-08).
+    // instrumented test died in onIdle() before running a line (journal.adoc, 2026-08-08).
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.junit4)

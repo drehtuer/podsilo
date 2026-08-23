@@ -45,7 +45,7 @@ import kotlin.coroutines.CoroutineContext
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * How long a swipe decision is held before it is written (`docs/UI.adoc` §12.3).
+ * How long a swipe decision is held before it is written (`UI.adoc` §12.3).
  *
  * Matched to a Material `SnackbarDuration.Short`, so the window closes at roughly the moment the
  * undo affordance leaves the screen. The view model is the authority on when it actually closes.
@@ -54,7 +54,7 @@ private const val UNDO_WINDOW_MS = 5_000L
 
 /**
  * S2. Observes the ledger join, projects it into rows, and turns events into ledger writes plus
- * scheduling requests — never into network calls (`docs/UI.adoc` §B0.1/§0.3).
+ * scheduling requests — never into network calls (`UI.adoc` §B0.1/§0.3).
  *
  * Not a `@HiltViewModel`: the feed URL is a construction parameter, so `:app` builds it through a
  * factory. That also keeps `:feature:episodes` free of a Hilt dependency, so this whole class is
@@ -80,7 +80,7 @@ class EpisodeListViewModel(
      *
      * A scope that **outlives this view model**, because `viewModelScope` is already cancelled by
      * the time `onCleared` runs — a write launched there would never happen. Injected so tests can
-     * pass the test scope rather than waiting on a real dispatcher (`docs/UI.adoc` §12.3).
+     * pass the test scope rather than waiting on a real dispatcher (`UI.adoc` §12.3).
      */
     private val commitScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     /**
@@ -119,7 +119,7 @@ class EpisodeListViewModel(
         }
 
     /**
-     * The banner `docs/UI.adoc` §5 specifies for a failed fetch — **which nothing has ever been able
+     * The banner `UI.adoc` §5 specifies for a failed fetch — **which nothing has ever been able
      * to show.** `feedError` existed as a state field with a KDoc, set by nobody and read by nobody,
      * so a feed that failed to load was completely silent on the screen that lists it.
      *
@@ -192,7 +192,7 @@ class EpisodeListViewModel(
             )
 
     /**
-     * `docs/UI.adoc` §B7's third case: a `DOWNLOADING` row with no work behind it was killed
+     * `UI.adoc` §B7's third case: a `DOWNLOADING` row with no work behind it was killed
      * mid-download, so the work is re-enqueued **on first observation**.
      *
      * This does not weaken the no-auto-download invariant (CLAUDE.md §1). It resumes a download the
@@ -227,7 +227,7 @@ class EpisodeListViewModel(
             items
                 .map { it.toUi(feedTitle = feedTitle, feedArtworkUrl = feedArtwork, work = work) }
                 // The held decision is shown as though it had been taken. Nothing is written yet
-                // (`docs/UI.adoc` §12.3) — but a swipe that appeared to do nothing for five seconds
+                // (`UI.adoc` §12.3) — but a swipe that appeared to do nothing for five seconds
                 // would read as the app ignoring it, and the user would swipe again.
                 .map { row ->
                     pendingUndo?.takeIf { it.episodeKey == row.episodeKey }?.let { row.asPending(it) } ?: row
@@ -303,7 +303,7 @@ class EpisodeListViewModel(
                 }
             EpisodeListEvent.DownloadAllDismissed -> pendingBulk.value = null
             // Confirmed before writing, like every other bulk mark-as-played: these become `PLAY`
-            // actions on a shared log and no undo reaches them (docs/decisions/0013).
+            // actions on a shared log and no undo reaches them (decisions/0013).
             EpisodeListEvent.MarkAllRequested ->
                 pendingMarkAll.value =
                     (state.value.content as? EpisodeListUiState.Content.Episodes)
@@ -319,7 +319,7 @@ class EpisodeListViewModel(
             EpisodeListEvent.MarkAllDismissed -> pendingMarkAll.value = null
             EpisodeListEvent.UndoRequested -> {
                 // Nothing was written, so there is nothing to revert: the held decision is simply
-                // dropped and the row returns to undecided (`docs/UI.adoc` §12.3).
+                // dropped and the row returns to undecided (`UI.adoc` §12.3).
                 undoJob?.cancel()
                 pendingUndo.value = null
             }
@@ -334,7 +334,7 @@ class EpisodeListViewModel(
 
     /**
      * A swipe decision, **held for [UNDO_WINDOW_MS] before anything is written**
-     * (`docs/UI.adoc` §12.3).
+     * (`UI.adoc` §12.3).
      *
      * The deferral is the whole design. A skip becomes a `PLAY` action in an append-only log that
      * other clients act on, and the GPodder API has no retraction — so the only reliably reversible
@@ -352,7 +352,7 @@ class EpisodeListViewModel(
         viewModelScope.launch {
             // Read from the stored mapping rather than from `state.value`: the swipe background
             // renders from the same setting, so the gesture and its label cannot disagree
-            // (docs/UI.adoc §12.1) — and this stays correct even before anything collects `state`.
+            // (UI.adoc §12.1) — and this stays correct even before anything collects `state`.
             val action = settingsRepository.observeSwipeMapping().first().triageFor(direction) ?: return@launch
 
             // One pending decision at a time: a second swipe commits the first rather than
@@ -446,7 +446,7 @@ class EpisodeListViewModel(
                 triageWriter.queue(episodes)
                 // userRequested only for a re-decision: it is the sole way past DownloadWorker's
                 // terminal-row refusal, and setting it unconditionally would erase that guarantee
-                // (docs/decisions/0012).
+                // (decisions/0012).
                 val userRequested = action == EpisodeUiAction.DOWNLOAD_AGAIN
                 episodes.forEach { scheduler.enqueueDownload(it.episodeKey, userRequested) }
                 if (notify) emit(EpisodeListEffect.ShowMessage(SnackbarText.Queued(episodes.size)))
@@ -474,7 +474,7 @@ class EpisodeListViewModel(
     }
 
     /**
-     * Produces the confirmation dialog's preview and **writes nothing** — `docs/decisions/0014`'s
+     * Produces the confirmation dialog's preview and **writes nothing** — `decisions/0014`'s
      * whole safeguard is that the count is named before anything happens. Only
      * [EpisodeListEvent.DownloadAllConfirmed] writes.
      */
@@ -487,7 +487,7 @@ class EpisodeListViewModel(
     private fun refresh() {
         viewModelScope.launch {
             // Checked before anything is started: an offline pull returns immediately rather than
-            // hanging on a timeout the user could have been told about instantly (docs/UI.adoc §12.10).
+            // hanging on a timeout the user could have been told about instantly (UI.adoc §12.10).
             if (!connectivityMonitor.observe().first().online) {
                 emit(EpisodeListEffect.ShowMessage(SnackbarText.Offline))
                 return@launch
@@ -497,7 +497,7 @@ class EpisodeListViewModel(
             // pull-to-refresh indicator would never appear.
             refreshing.value = true
             try {
-                // Both halves, and the indicator covers both — `docs/UI.adoc` §4 specifies a sync pass
+                // Both halves, and the indicator covers both — `UI.adoc` §4 specifies a sync pass
                 // *and* a feed refresh, and until issue #60 only the second one happened. Which is
                 // why pulling to refresh could not make a decision reach Nextcloud, nor bring one
                 // back: the gesture fetched RSS and touched the server's action log not at all.
@@ -557,7 +557,7 @@ class EpisodeListViewModel(
 /**
  * The scheduling surface a screen is allowed to touch.
  *
- * A view model never sees `WorkManager` (`docs/UI.adoc` §B0.2); `:app`'s `WorkScheduler`
+ * A view model never sees `WorkManager` (`UI.adoc` §B0.2); `:app`'s `WorkScheduler`
  * implements this, which also keeps `:feature:episodes` free of a WorkManager dependency and
  * therefore testable without Robolectric.
  */
@@ -574,7 +574,7 @@ interface EpisodeScheduler {
 
     /**
      * A full sync pass — subscriptions, outbox, episode actions, reconcile — suspending until it
-     * finishes, for the same reason [requestFeedRefresh] does: `docs/UI.adoc` §4 says pull-to-refresh
+     * finishes, for the same reason [requestFeedRefresh] does: `UI.adoc` §4 says pull-to-refresh
      * holds its indicator for *the whole chain*, and half a chain is what shipped until issue #60.
      *
      * Distinct from [SyncTrigger.requestSyncNow], which is fire-and-forget and is what a *writer*

@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.core.model
 /**
  * The only values [EpisodeLedgerRow.state] ever holds. There is deliberately no `NEW` value here
  * (CLAUDE.md §5/§9) — "new" is the absence of any ledger row for an episode key, not a stored
- * state. See `docs/architecture.adoc` §9 for the full transition diagram.
+ * state. See `architecture.adoc` §9 for the full transition diagram.
  *
  * [DOWNLOADED], [SKIPPED], and [HANDLED_REMOTELY] are terminal: once reached, sync reconciliation
  * never revisits them, even if a later remote action arrives for the same episode. That is the
@@ -21,7 +21,7 @@ enum class LedgerState {
 
     /**
      * *Undo a decision*: the user has said this episode is **not** handled after all, so it belongs
-     * back in *To decide* (`docs/decisions/0024`).
+     * back in *To decide* (`decisions/0024`).
      *
      * **This is why the ledger still needs no delete.** "Undecided" is normally the *absence* of a
      * row, and the obvious way to un-mark an episode is to remove one — which the project refused
@@ -31,7 +31,7 @@ enum class LedgerState {
      *
      * Emitted as a `PLAY` with `position = 0` — the encoding every gpodder client already uses to say
      * *unread*, because the API can neither delete an action nor express the idea any other way
-     * (`docs/decisions/0022`). Not terminal, and deliberately never reached by reconciliation: a
+     * (`decisions/0022`). Not terminal, and deliberately never reached by reconciliation: a
      * remote unread mark does not re-open a decision made on this device.
      */
     UNPLAYED,

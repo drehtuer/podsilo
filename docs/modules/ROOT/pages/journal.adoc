@@ -5949,3 +5949,55 @@ file was excluded: 7a9545a settled that a log is not edited to match the present
 no different from a rename. The header note says so.
 
 `asciidoctor --failure-level=WARN` is CI's eighth check, beside yamllint and shellcheck.
+
+
+'''
+
+== 2026-08-23 (antora) — a layout that made every comment too long
+
+*Attempted:* the author's second thought — Antora rather than a plain Asciidoctor build — and the
+restructure that goes with it.
+
+=== What Antora costs
+
+Two things, and both were visible before starting rather than discovered afterwards:
+
+* *Pages must live at `docs/modules/ROOT/pages/`.* `antora.yml` and `modules/` have to be siblings,
+  and every page belongs to a family directory inside a module. There is no flatter arrangement.
+* *Page links are `xref:` macros, which GitHub's file view does not resolve.* An
+  `xref:architecture.adoc[]` renders there as a link to `architecture.html`, which does not exist.
+  The built site is the reading surface now; browsing the repository still shows prose and diagrams,
+  but its cross-references are dead. That directly contradicts the criterion the author started from
+  — "compatible with GitHub" — and is the price of the navigation, search and single start page.
+
+=== The cost that was not visible
+
+Rewriting 629 source citations to the new path pushed KDoc comment lines past detekt's 120-character
+limit in six files, and `MaxLineLength` failed the build. `docs/modules/ROOT/pages/UI.adoc §12.3` is
+28 characters of directory to say "UI".
+
+The fix is not to rewrap 600 comments: it is to stop putting a path in them. There is one module and
+one page per name, so `UI.adoc §12.3` and `decisions/0013` are unambiguous, and the path lives in one
+place — this document and the README — rather than in every comment that cites a section. Citations
+in the pages themselves are module-relative for the same reason.
+
+=== What was verified
+
+* `antora --fetch antora-playbook.yml` builds 22 pages with *no unresolved xrefs* — checked by
+  looking for Antora's `xref page unresolved` class in the output rather than trusting a silent exit.
+* Every `xref:`/`link:` target across the pages and the README resolves to a file that exists. That
+  check caught a converter bug worth knowing: *kramdoc rewrites `.md` link targets to `.adoc`*, so
+  the README's links to `SECURITY.md`, `.claude/CLAUDE.md` and `SKILL.md` — the three files that
+  deliberately stay Markdown — had been silently repointed at files that do not exist.
+* `./gradlew ktlintCheck detekt test` green.
+
+=== Left undone, deliberately
+
+*Mermaid does not render on the site.* GitHub draws `[source,mermaid]` natively; Antora's stock UI
+shows it as source. Fixing it needs either `asciidoctor-kroki` — which means a Kroki server, public
+or self-hosted — or a supplemental UI that loads `mermaid.js` in the reader's browser. Both are
+choices about what the site depends on, not implementation details, so neither was made here.
+
+*Nothing publishes the site.* The playbook writes `build/site/`; no workflow deploys it. GitHub Pages
+cannot build AsciiDoc itself, so publishing means an Actions job that runs Antora and uploads the
+artifact.

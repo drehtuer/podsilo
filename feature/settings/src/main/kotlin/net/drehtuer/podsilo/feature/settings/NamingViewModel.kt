@@ -17,7 +17,7 @@ import net.drehtuer.podsilo.core.naming.DefaultNamingTemplateEngine
 import java.time.ZoneId
 
 /**
- * S6 — the naming template editor (`docs/UI.adoc` §9).
+ * S6 — the naming template editor (`UI.adoc` §9).
  *
  * Contains **zero** sanitisation, truncation or date logic: every preview goes through the
  * already-tested `NamingTemplateEngine.resolve()` (architecture §11). That is the point of the
@@ -137,9 +137,9 @@ class NamingViewModel(
 }
 
 /**
- * The synthetic worst cases (`docs/UI.adoc` §9). Deliberately unpleasant: an over-long title, an
+ * The synthetic worst cases (`UI.adoc` §9). Deliberately unpleasant: an over-long title, an
  * episode with no date, and a title full of characters FAT32 rejects. The `MISSING_DATE` preview is
- * *expected* to render `00000000` (`docs/architecture.adoc` §11) — if it ever shows an empty segment, the
+ * *expected* to render `00000000` (`architecture.adoc` §11) — if it ever shows an empty segment, the
  * engine regressed, not this screen.
  */
 internal fun sample(case: PreviewCase): Episode =

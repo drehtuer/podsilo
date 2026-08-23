@@ -4,7 +4,7 @@
 
 == Status
 
-Accepted. Resolves `docs/architecture.adoc` §12 open decision #2 (subscriptions `add`/`remove`
+Accepted. Resolves `architecture.adoc` §12 open decision #2 (subscriptions `add`/`remove`
 response shape).
 
 == Context
@@ -82,7 +82,7 @@ timezone offset (`2009-12-12T09:00:00`). Neither server emits that form any more
 repository formats with PHP `format("c")`.
 
 `parseGpodderTimestamp` (`:core:sync`) therefore accepts *all three* forms -- bare, `+HH:MM`, and
-`Z` -- and `docs/architecture.adoc` §6 is updated accordingly. Podsilo still _emits_ the bare form, which
+`Z` -- and `architecture.adoc` §6 is updated accordingly. Podsilo still _emits_ the bare form, which
 both servers parse as UTC (`new DateTime($ts, new DateTimeZone("UTC"))`).
 
 One trap worth naming: an offset-bearing timestamp must be parsed as `OffsetDateTime`, not
@@ -102,7 +102,7 @@ middleware; no explicit header handling appears in the app's own source.)
 feeds disappear from its `GET`. `nextcloud-gpodder` does not. Podsilo tolerates either -- its
 ledger is keyed by episode, not by subscription (CLAUDE.md §5).
 * *`nextcloud-gpodder` silently discards `DOWNLOAD`/`DELETE` on POST.* Big enough for its own
-ADR: see `docs/decisions/0008`.
+ADR: see `decisions/0008`.
 
 == Verification status
 

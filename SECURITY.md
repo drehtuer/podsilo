@@ -29,9 +29,9 @@ Honest expectations rather than an SLA: this is a hobby project maintained in th
 |---|---|
 | First reply | best effort, usually within a week |
 | Fix for something exploitable | as fast as the author can manage; it is one person |
-| Fix for something theoretical or low-impact | may become a `docs/backlog.adoc` entry with the reasoning, rather than a patch |
+| Fix for something theoretical or low-impact | may become a `backlog.adoc` entry with the reasoning, rather than a patch |
 | Disclosure | coordinated. Please allow 90 days, or until a release goes out — whichever is sooner. |
-| Credit | happily given in the advisory and `docs/journal.adoc`, or withheld if you prefer |
+| Credit | happily given in the advisory and `journal.adoc`, or withheld if you prefer |
 
 Only the **latest release** is supported. There are no backports to older tags — the fix lands on
 `main` and in the next APK.
@@ -68,7 +68,7 @@ Stated so you can check it rather than trust it. Each claim points at where it l
 
 - **The app never sees your Nextcloud account password.** Authentication is **Login Flow v2** only:
   the browser grants an app password, and the app stores that. There is no password field anywhere in
-  the UI, and adding one was declined deliberately (`docs/UI.adoc` §8, `docs/backlog.adoc`).
+  the UI, and adding one was declined deliberately (`UI.adoc` §8, `backlog.adoc`).
 - **The app password is encrypted at rest** with an AES-256/GCM key held in the Android Keystore that
   never leaves the TEE/StrongBox; the plaintext exists only in memory
   (`core/datastore/.../KeystoreAppPasswordCipher.kt`).
@@ -76,9 +76,9 @@ Stated so you can check it rather than trust it. Each claim points at where it l
   `overwriteprotocol`, which behind a TLS-terminating proxy are frequently `http`. Podsilo rewrites
   them to `https` when the flow started over `https`, because `server` is persisted and one
   misconfigured field would otherwise put the app password on the wire in cleartext on every sync
-  (`docs/UI.adoc` §8).
+  (`UI.adoc` §8).
 - **The error log is redacted by construction**: it never contains the app password, the Basic-auth
-  header, or URLs carrying credentials (`docs/UI.adoc` §11). It is device-local — *Copy*/*Share* are
+  header, or URLs carrying credentials (`UI.adoc` §11). It is device-local — *Copy*/*Share* are
   user actions, and the log ships nowhere on its own.
 - **The backup archive holds no credentials.** The app password is in DataStore, not the database, so
   it is not in the zip and a restored install must be reconnected. The archive *does* contain your
@@ -91,7 +91,7 @@ Stated so you can check it rather than trust it. Each claim points at where it l
 - **No telemetry, no analytics, no ads, no crash reporting.** Podsilo talks to your Nextcloud, the
   feed servers on your subscription list, and nothing else.
 - **Dependencies are pinned** in `gradle/libs.versions.toml` (no floating versions) and every one is
-  licence-reviewed in [`docs/third-party.adoc`](docs/third-party.adoc). Releases are minified R8 builds
+  licence-reviewed in [`third-party.adoc`](third-party.adoc). Releases are minified R8 builds
   signed with a key that is not in this repository — `*.jks` and `keystore.properties` are
   gitignored. Android enforces signature continuity, so an update that will not install over your
   existing one is a signal worth reporting.
@@ -107,14 +107,14 @@ open backlog item, not an oversight:
   backup. Narrowing this is worth doing; it has not been done.
 - **jaudiotagger comes from JitPack**, which builds from a GitHub tag rather than a reviewed registry
   release — a weaker supply-chain trust model, accepted knowingly
-  (`docs/architecture.adoc` §11, `docs/third-party.adoc`).
+  (`architecture.adoc` §11, `third-party.adoc`).
 - **Cleartext `http://` in feeds is blocked by Android and not worked around.** A feed advertising an
-  `http://` enclosure fails to download with an unhelpful error. Options are in `docs/backlog.adoc`;
+  `http://` enclosure fails to download with an unhelpful error. Options are in `backlog.adoc`;
   none weakens TLS by default.
 - **A rejected login leaves its app password on the server.** It is unused, harmless and revocable
-  under *Security* in Nextcloud; automatic revocation is in `docs/backlog.adoc`.
+  under *Security* in Nextcloud; automatic revocation is in `backlog.adoc`.
 - **A `DOWNLOAD`/`PLAY` action reaching the shared log is not retractable.** That is the design
-  (`docs/decisions/0023`), and the reason S5 confirms the account and bulk marking shows a preview
+  (`decisions/0023`), and the reason S5 confirms the account and bulk marking shows a preview
   dialog before writing — privacy consequences of connecting the wrong account are user-visible by
   intent, not a flaw.
 - **The device test tier is not run in CI** (no hosted runner has a device), so device-only code —

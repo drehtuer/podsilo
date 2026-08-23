@@ -48,7 +48,7 @@ private const val RECENT_LIMIT = 20
 private const val HISTORY_LIMIT = 50
 
 /**
- * S7 (`docs/UI.adoc` §B6).
+ * S7 (`UI.adoc` §B6).
  *
  * Reads the ledger rather than WorkManager for what is queued and what failed: the ledger is the
  * durable record and survives process death, whereas `WorkInfo` does not (architecture §9). Live
@@ -220,7 +220,7 @@ class ActivityViewModel(
     /**
      * A retry is a re-decision, so it goes through [TriageWriter.queue] exactly as S2's does —
      * `attempts` resets and `lastError` clears, and a fresh download does not render as "attempt 3
-     * of 3" before it starts (`docs/decisions/0012` §3).
+     * of 3" before it starts (`decisions/0012` §3).
      */
     private suspend fun retry(episodeKey: String) {
         val episode = episodeRepository.get(episodeKey) ?: return
@@ -236,7 +236,7 @@ class ActivityViewModel(
     /**
      * Issue #90's recovery path. The same writer S2 and S3 use, so a decision withdrawn here is
      * indistinguishable from one withdrawn there — a new `UNPLAYED` row that re-posts, never a
-     * deleted one (`docs/decisions/0024`).
+     * deleted one (`decisions/0024`).
      */
     private suspend fun markAsUnplayed(episodeKey: String) {
         val episode = episodeRepository.get(episodeKey) ?: return

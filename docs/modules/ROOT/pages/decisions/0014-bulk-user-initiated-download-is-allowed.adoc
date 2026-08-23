@@ -4,7 +4,7 @@
 
 == Status
 
-*Accepted 2026-08-01.* Resolves the ADR `docs/UI.adoc` §14.3 asks for. Amends the wording of
+*Accepted 2026-08-01.* Resolves the ADR `UI.adoc` §14.3 asks for. Amends the wording of
 *README* and *CLAUDE.md §1*, both of which said "no download all" without qualification.
 
 == Context
@@ -20,7 +20,7 @@ ____
 
 The UI design adds two bulk affordances at the author's request: a per-podcast *Download all (n)*
 overflow item, and a selection mode where several rows are picked and acted on together
-(`docs/UI.adoc` §5). Left unrecorded, a future reader finds a stated non-goal and a shipped feature
+(`UI.adoc` §5). Left unrecorded, a future reader finds a stated non-goal and a shipped feature
 that violates it, and cannot tell which one is current.
 
 == Decision
@@ -75,5 +75,5 @@ that no worker or sync path can reach the bulk enqueue API at all.
 * `WorkScheduler` enqueues one work request per episode, as a normal download would -- bulk is a loop
 at the call site, not a new work type. Each row is therefore individually cancellable in S7, which
 is what makes the "visible" column of the table above true rather than aspirational.
-* The ledger writes go through `upsertAll` in one transaction (`docs/UI.adoc` §B8.6), not one
+* The ledger writes go through `upsertAll` in one transaction (`UI.adoc` §B8.6), not one
 `upsert` per episode.

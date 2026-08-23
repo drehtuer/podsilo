@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+= Podsilo documentation
+:idprefix:
+:idseparator: -
+
+Podsilo is an Android *podcast catcher*: it follows the podcast subscriptions stored in a self-hosted
+Nextcloud, lists their episodes for manual triage, and downloads what you choose into a folder you
+control. It deliberately does not play anything.
+
+This is the documentation site. The code, the README and the issue tracker live at
+https://github.com/drehtuer/podsilo[github.com/drehtuer/podsilo].
+
+== Where to start
+
+xref:architecture.adoc[*Architecture*]:: The implementation reference — module design, database
+schema, the GPodder wire contract, the download and naming pipelines, and the state machine the
+whole app turns on. Start here to change behaviour.
+
+xref:UI.adoc[*UI*]:: The canonical UX document in three parts: the screen design (Part A), the seam
+the Compose code binds to (Part B), and the brand mark (Part C). Start here to change a screen.
+
+xref:dev-environment.adoc[*Development environment*]:: The dev container, the three testing tiers,
+the disposable sync server, release signing, and an honest register of what has actually been run
+versus what has only been reasoned about.
+
+== The rest
+
+xref:decisions/0008-nextcloud-gpodder-discards-download-actions.adoc[*Decisions*]:: Only the ones
+that still constrain the code and cannot be re-derived from the two references above. Everything
+else was folded into the section that governs it.
+
+xref:backlog.adoc[*Backlog*]:: What is deliberately not being built, and why. Nothing here is
+committed to.
+
+xref:third-party.adoc[*Third-party code*]:: Every dependency's licence, and every place code was
+adapted from another project. Podsilo is GPL-3.0-or-later, so this is a constraint rather than a
+courtesy.
+
+xref:journal.adoc[*Journal*]:: A running log of agent-driven work sessions — what was attempted,
+what worked, what did not, and what needed human correction. This project doubles as an experiment
+in agent-driven development, so the process is recorded alongside the result.

@@ -24,7 +24,7 @@ import net.drehtuer.podsilo.core.model.port.FeedRepository
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * S3 — the detail sheet (`docs/UI.adoc` §B4).
+ * S3 — the detail sheet (`UI.adoc` §B4).
  *
  * Shares [TriageWriter] and [EpisodeScheduler] with S2 rather than writing rows itself, which is the
  * whole reason that class exists: a decision taken in the sheet and the same decision taken in the
@@ -78,7 +78,7 @@ class EpisodeDetailViewModel(
         combine(source, ledgerRepository.observeRow(episodeKey), workMonitor.observe()) { loaded, row, work ->
             loaded?.let {
                 // Same §7 projection as S2's rows: a sheet open on a running download shows the same
-                // bar, from the same source, as the row it was opened from (docs/UI.adoc §12.2).
+                // bar, from the same source, as the row it was opened from (UI.adoc §12.2).
                 val ui = EpisodeListItem(it.episode, row).toUi(it.feedTitle, it.feedArtwork, work)
                 EpisodeDetailUiState(
                     episode = ui,
@@ -99,7 +99,7 @@ class EpisodeDetailViewModel(
             EpisodeDetailEvent.Dismissed -> emit(EpisodeDetailEffect.Close)
             EpisodeDetailEvent.ErrorDetailsClicked -> emit(EpisodeDetailEffect.OpenErrorLog)
             // Opening a link is not a decision, so the sheet stays open behind the browser
-            // (docs/UI.adoc §6) — no Close effect here, deliberately.
+            // (UI.adoc §6) — no Close effect here, deliberately.
             is EpisodeDetailEvent.LinkClicked -> emit(EpisodeDetailEffect.OpenUrl(event.url))
             EpisodeDetailEvent.OpenInBrowserClicked ->
                 state.value?.episodePageUrl?.let { emit(EpisodeDetailEffect.OpenUrl(it)) }
@@ -120,7 +120,7 @@ class EpisodeDetailViewModel(
             EpisodeUiAction.DOWNLOAD, EpisodeUiAction.DOWNLOAD_AGAIN, EpisodeUiAction.RETRY -> {
                 triageWriter.queue(listOf(episode))
                 // Same rule as S2: only a re-decision carries userRequested, because that flag is
-                // the sole way past DownloadWorker's terminal-row refusal (docs/decisions/0012).
+                // the sole way past DownloadWorker's terminal-row refusal (decisions/0012).
                 scheduler.enqueueDownload(episodeKey, userRequested = action == EpisodeUiAction.DOWNLOAD_AGAIN)
                 emit(EpisodeDetailEffect.ShowMessage(SnackbarText.Queued(1)))
             }
@@ -134,7 +134,7 @@ class EpisodeDetailViewModel(
                     emit(EpisodeDetailEffect.ShowMessage(SnackbarText.LinkCopied))
                 }
         }
-        // Deciding closes the sheet (docs/UI.adoc §6) — the list animates the row into its new state,
+        // Deciding closes the sheet (UI.adoc §6) — the list animates the row into its new state,
         // and a sheet left open over a row that has already changed is the confusing half of that.
         if (action != EpisodeUiAction.OPEN_IN_BROWSER && action != EpisodeUiAction.COPY_LINK) {
             emit(EpisodeDetailEffect.Close)

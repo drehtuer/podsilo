@@ -262,7 +262,7 @@ class FakeLoginFlowClient(
      * When true, `poll` **waits** instead of returning at once, and [grantAccess] releases it.
      *
      * A real poll is a loop that sits there until the user grants access in a browser, and every
-     * interesting property of `docs/decisions/0020` — that backgrounding cancels the wait, that
+     * interesting property of `decisions/0020` — that backgrounding cancels the wait, that
      * returning resumes it — is invisible against a fake that has already returned by the time the
      * test can background anything.
      */

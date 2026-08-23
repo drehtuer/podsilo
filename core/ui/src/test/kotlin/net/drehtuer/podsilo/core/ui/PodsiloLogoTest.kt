@@ -22,7 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * The brand mark's rules from `docs/UI.adoc` Part C, checked rather than trusted.
+ * The brand mark's rules from `UI.adoc` Part C, checked rather than trusted.
  *
  * The three worth asserting are the ones a reasonable change breaks silently: the mark must not be
  * announced twice when a wordmark is beside it, the lockup's wordmark must stay lowercase, and the

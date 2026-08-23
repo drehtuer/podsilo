@@ -52,7 +52,7 @@ interface EpisodeLedgerRepository {
     suspend fun markSynced(episodeKeys: List<String>)
 
     /**
-     * Writes many rows in **one transaction and one [Flow] emission**. Bulk triage (`docs/UI.adoc`
+     * Writes many rows in **one transaction and one [Flow] emission**. Bulk triage (`UI.adoc`
      * §5's *Download all* and selection mode, §7's *mark old/all as played*) routinely touches
      * hundreds of episodes; doing that as N calls to [upsert] is N transactions and N list
      * re-emissions into a `LazyColumn`.

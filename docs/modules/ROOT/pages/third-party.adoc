@@ -15,7 +15,7 @@ or carrying a non-commercial / field-of-use restriction is permitted (CLAUDE.md 
 
 AntennaPod (GPL-3.0) has been _read_ as the reference implementation for gpodder-sync conventions --
 its `SynchronizationQueueImpl.enqueueEpisodePlayed` is quoted in
-`docs/architecture.adoc` §6 and its behaviour is what our skip encoding matches.
+`architecture.adoc` §6 and its behaviour is what our skip encoding matches.
 Reading an implementation and matching its wire behaviour is not derivation, so no attribution
 header is required; the ADR names the file and commit anyway, which is what makes the claim
 checkable. If any AntennaPod code is ever pasted or transliterated, it needs a header naming the
@@ -57,22 +57,22 @@ acceptable_, not the current version, so it does not need touching on a version 
 | `com.prof18.rssparser:rssparser`
 | Apache-2.0
 | ✅
-| Chosen over Stalla -- `docs/architecture.adoc` §7
+| Chosen over Stalla -- `architecture.adoc` §7
 
 | `com.github.Adonai:jaudiotagger`
 | LGPL-2.1-or-later
 | ✅
-| Android-compatible fork of `net.jthink:jaudiotagger`; original copyright (Paul Taylor) retained. Distributed via *JitPack*, which builds from GitHub source rather than a reviewed registry release -- a different trust model, recorded in `docs/architecture.adoc` §11
+| Android-compatible fork of `net.jthink:jaudiotagger`; original copyright (Paul Taylor) retained. Distributed via *JitPack*, which builds from GitHub source rather than a reviewed registry release -- a different trust model, recorded in `architecture.adoc` §11
 
 | Coil (`io.coil-kt.coil3:coil-compose` + `:coil-network-okhttp`)
 | Apache-2.0 (confirmed in the 3.5.0 POM)
 | ✅
-| Feed/episode artwork. `coil-network-okhttp` is what makes it reuse the OkHttp already pinned instead of bringing a second HTTP stack -- the reason it was chosen over Glide. `docs/UI.adoc` §18
+| Feed/episode artwork. `coil-network-okhttp` is what makes it reuse the OkHttp already pinned instead of bringing a second HTTP stack -- the reason it was chosen over Glide. `UI.adoc` §18
 
 | `com.composables:icons-lucide-android`
 | MIT (the artifact, per its POM); the Lucide icon set itself is ISC
 | ✅
-| Icons; `docs/UI.adoc` §18 is the allow-list
+| Icons; `UI.adoc` §18 is the allow-list
 
 | JUnit 4
 | EPL-1.0
@@ -102,7 +102,7 @@ acceptable_, not the current version, so it does not need touching on a version 
 
 | `assets/icons/*.svg`
 | https://lucide.dev[Lucide]
-| ISC -- attribution retained here; the set is the allow-list in `docs/UI.adoc` §18
+| ISC -- attribution retained here; the set is the allow-list in `UI.adoc` §18
 
 | `assets/art/*.svg`
 | Generated placeholder cover art for the design mock-ups
@@ -114,13 +114,13 @@ acceptable_, not the current version, so it does not need touching on a version 
 * *`kotlinx-datetime`* -- would have been a third time vocabulary in a codebase that already uses
 `java.time` throughout, for a multiplatform benefit this project does not want. `java.time` is free
 at `minSdk 33`; the conversion to the ``Long``s in storage lives in one `EpochTime` object.
-`docs/architecture.adoc` §5.
+`architecture.adoc` §5.
 * *`androidx.security:security-crypto`* (`EncryptedSharedPreferences`) -- deprecated by Jetpack, and
 it would have put a second settings store beside the DataStore already in use.
-`docs/architecture.adoc` §2.
-* *Glide* -- brings its own HTTP stack where Coil reuses the pinned OkHttp. `docs/UI.adoc` §18.
+`architecture.adoc` §2.
+* *Glide* -- brings its own HTTP stack where Coil reuses the pinned OkHttp. `UI.adoc` §18.
 * *`net.jthink:jaudiotagger`* (upstream) and *`RouHim/jaudiotagger`* -- the first has no confirmed
 Android support and no release since 2021, the second explicitly removed Android compatibility.
-`docs/architecture.adoc` §11.
+`architecture.adoc` §11.
 * *`dev.stalla:stalla`* -- CLAUDE.md's original primary pick; no release since 2021.
-`docs/architecture.adoc` §7.
+`architecture.adoc` §7.

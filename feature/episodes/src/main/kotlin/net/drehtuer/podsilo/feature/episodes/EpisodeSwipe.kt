@@ -27,11 +27,11 @@ import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
 
-/** `docs/UI.adoc` §12.1: a swipe must pass ~40 % of the row before it commits, so a flick cannot. */
+/** `UI.adoc` §12.1: a swipe must pass ~40 % of the row before it commits, so a flick cannot. */
 private const val COMMIT_THRESHOLD = 0.4f
 
 /**
- * The swipe gesture on an episode row (`docs/UI.adoc` §5 and §12.1).
+ * The swipe gesture on an episode row (`UI.adoc` §5 and §12.1).
  *
  * `SwipeCommitted` and its view-model handler shipped without anything to fire them — the third
  * affordance in this project to be specified, wired at both ends, and left with no gesture in the
@@ -140,7 +140,7 @@ internal fun SwipeableEpisodeRow(
 /**
  * The panel revealed behind a swiping row.
  *
- * Carries **both an icon and the word**, because `docs/UI.adoc` §12.7 requires status to be legible
+ * Carries **both an icon and the word**, because `UI.adoc` §12.7 requires status to be legible
  * without relying on colour, and because the two actions are otherwise distinguishable only by which
  * way the finger went. Colours come from the theme's container roles rather than raw values so the
  * ≥ 3:1 contrast holds in both schemes — darkening a light-mode colour for dark mode is exactly what

@@ -89,7 +89,7 @@ private fun <T> List<Pair<T, List<EpisodeAction>>>.chunkedByActionCount(
  * sentences, so the two contexts that need them — a failed pass and a failed push — can each supply
  * their own frame instead of duplicating a message per failure per caller.
  *
- * Neither half ever contains a URL or a header: `docs/UI.adoc` §11 puts the technical detail in the
+ * Neither half ever contains a URL or a header: `UI.adoc` §11 puts the technical detail in the
  * entry's collapsed half, and that half is the exception's own message.
  */
 private fun GpodderFailure.reason(): String =
@@ -123,10 +123,10 @@ private fun GpodderException.plainMessage(): String =
 /**
  * Runs one full sync pass in the exact order CLAUDE.md section 5 mandates: pull subscriptions
  * (full) -> push unsynced ledger rows -> pull episode actions since last timestamp -> reconcile ->
- * persist new timestamps. See `docs/architecture.adoc` section 6 for the sequence diagram this
+ * persist new timestamps. See `architecture.adoc` section 6 for the sequence diagram this
  * mirrors.
  *
- * Depends only on `:core:model` ports (never Room or Retrofit directly -- `docs/architecture.adoc`
+ * Depends only on `:core:model` ports (never Room or Retrofit directly -- `architecture.adoc`
  * section 2's ports-and-adapters rule), so it's constructed here with plain interfaces and tested
  * with hand-written in-memory fakes, not a real database or `MockWebServer`.
  *
@@ -163,7 +163,7 @@ class SyncOrchestrator(
      *
      * That is the entire difference: `since = 0` and nothing else. It overrides no rule, because the
      * two the user might expect it to override are exactly the two they said it must not
-     * (`docs/decisions/0025`) — a decided episode is never re-opened, and a `DOWNLOADED` row is never
+     * (`decisions/0025`) — a decided episode is never re-opened, and a `DOWNLOADED` row is never
      * replaced by a remote action the server structurally cannot carry. So this can only ever
      * *shorten* the To-decide list: it decides episodes this device has not decided, and leaves
      * everything else alone.
@@ -184,8 +184,8 @@ class SyncOrchestrator(
      *
      * The one operation in the app that deliberately writes to a shared, append-only log on purpose
      * rather than as a consequence, so the confirmation naming the count is not decoration
-     * (`docs/decisions/0025`). It is also the only way to repair state the server never received —
-     * a download recorded before `docs/decisions/0023` sent `DOWNLOAD` alone, which Nextcloud
+     * (`decisions/0025`). It is also the only way to repair state the server never received —
+     * a download recorded before `decisions/0023` sent `DOWNLOAD` alone, which Nextcloud
      * discards, and its row is already `syncedToServer = true` so no ordinary pass will retry it.
      */
     suspend fun forcePush(): SyncOutcome =
@@ -243,7 +243,7 @@ class SyncOrchestrator(
      * hours used to leave no trace a user could see, which is why issue #60 had to be diagnosed by
      * reading source instead of by reading the app.
      *
-     * Plain sentence first, technical half separate (`docs/UI.adoc` §11). The exception's own message
+     * Plain sentence first, technical half separate (`UI.adoc` §11). The exception's own message
      * is [detail] and never the headline — "unable to resolve host" is not a sentence the user asked
      * for. Credentials are stripped by the store, not here ([LogRepository.record]).
      *
@@ -316,7 +316,7 @@ class SyncOrchestrator(
      */
     private suspend fun pushRows(rows: List<EpisodeLedgerRow>): SyncOutcome? {
         // One row can produce more than one action -- a completed download emits both `DOWNLOAD` and
-        // `PLAY` (`docs/decisions/0023`) -- so the row and its actions are kept paired: the actions
+        // `PLAY` (`decisions/0023`) -- so the row and its actions are kept paired: the actions
         // are what gets posted, the rows are what gets marked synced.
         val outbox =
             rows

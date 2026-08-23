@@ -39,7 +39,7 @@ import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
- * S6 (`docs/UI.adoc` §9). Two fields, the placeholder chips the engine actually knows, and a live
+ * S6 (`UI.adoc` §9). Two fields, the placeholder chips the engine actually knows, and a live
  * preview that calls the same `resolve()` a download does.
  *
  * Existing files are never renamed, and the screen says so — a template change applies to what
@@ -203,7 +203,7 @@ private fun PlaceholderChips(
     )
 }
 
-/** One real episode and three synthetic worst cases, all resolved by the engine (`docs/UI.adoc` §9). */
+/** One real episode and three synthetic worst cases, all resolved by the engine (`UI.adoc` §9). */
 @Composable
 private fun PreviewSection(previews: List<NamingPreviewLine>) {
     Text("PREVIEW", style = MaterialTheme.typography.labelMedium)

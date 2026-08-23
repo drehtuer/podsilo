@@ -5,14 +5,14 @@
 
 *Date:* 2026-08-14
 *Status:* accepted
-*Amends:* CLAUDE.md §3's dependency table ("Long lists → Paging 3"), `docs/UI.adoc` §B14.3
+*Amends:* CLAUDE.md §3's dependency table ("Long lists → Paging 3"), `UI.adoc` §B14.3
 
 == The rule this deviates from
 
 CLAUDE.md §3 names *Paging 3* as the mandated library for long lists, and §5 repeats it: _"Page or
 lazily load the episode list (Paging 3 or a `Flow` of a limited query). Do not load 5,000 rows into
-memory to render 20."_ `docs/UI.adoc` §B14.3 hedged, allowing "paging or a keyed ``LazyColumn``", and
-`docs/backlog.adoc` carried the open question with one instruction attached: *measure before adding
+memory to render 20."_ `UI.adoc` §B14.3 hedged, allowing "paging or a keyed ``LazyColumn``", and
+`backlog.adoc` carried the open question with one instruction attached: *measure before adding
 the dependency.*
 
 == What was measured
@@ -37,7 +37,7 @@ Room DAO and the real entity→domain mapping, with realistic show-notes-sized `
 | *132 ms*
 |===
 
-500 is the size `docs/UI.adoc` §B14.3 names. 9,500 is what the author's own four subscriptions hold on
+500 is the size `UI.adoc` §B14.3 names. 9,500 is what the author's own four subscriptions hold on
 the real device (README), i.e. the whole library at once -- which no screen actually asks for, since
 S2 is per-podcast.
 
@@ -51,7 +51,7 @@ at that size.
 
 == The decision
 
-*Do not add Paging 3.* The keyed `LazyColumn` `docs/UI.adoc` §B14.3 already permits stays, and that
+*Do not add Paging 3.* The keyed `LazyColumn` `UI.adoc` §B14.3 already permits stays, and that
 document now says so definitely rather than offering a choice.
 
 The reasoning, in the order it matters:
@@ -82,7 +82,7 @@ measured, and it is the one part of this decision that JVM numbers cannot settle
 
 == Consequences
 
-* `docs/UI.adoc` §B14.3 now states the keyed `LazyColumn` as the requirement, not one of two options.
+* `UI.adoc` §B14.3 now states the keyed `LazyColumn` as the requirement, not one of two options.
 * CLAUDE.md §3's table entry is superseded for this list specifically. It stands as a general
 preference; nothing else in the app renders a long list.
 * No new dependency, and `gradle/libs.versions.toml` gains nothing.

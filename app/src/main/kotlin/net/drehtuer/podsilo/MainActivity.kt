@@ -69,11 +69,11 @@ private val BACKUP_MIME_TYPES =
     )
 
 /**
- * Single activity, as `docs/UI.adoc` §B9 specifies: one `NavHost`, S1 the start destination.
+ * Single activity, as `UI.adoc` §B9 specifies: one `NavHost`, S1 the start destination.
  *
  * The activity owns the two things a Composable cannot do for itself — launching the SAF picker
  * (an `ActivityResultContract`) and opening a link — and hands them to the host as callbacks. The
- * theme is observed and applied at the root without recreating the activity (`docs/UI.adoc` §12.7).
+ * theme is observed and applied at the root without recreating the activity (`UI.adoc` §12.7).
  *
  * S4–S8 are not built, so there is no route to them yet; the navigation host says so out loud
  * rather than dropping those events.
@@ -162,7 +162,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * A plain `ACTION_VIEW`. `docs/UI.adoc` §6 asks for a Custom Tab with this as the fallback; the
+     * A plain `ACTION_VIEW`. `UI.adoc` §6 asks for a Custom Tab with this as the fallback; the
      * Custom Tabs dependency is not in the catalog, so this is the fallback on its own — and a
      * device with no browser at all must not crash the app over a show-notes link.
      */

@@ -7,7 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room row for the error log (S8, `docs/UI.adoc` §11). Added in **schema v2**.
+ * Room row for the error log (S8, `UI.adoc` §11). Added in **schema v2**.
  *
  * Purely additive: no existing table or type changes, and nothing else in the app reads it. It
  * exists because every failure in Podsilo is currently returned as a value and then discarded once

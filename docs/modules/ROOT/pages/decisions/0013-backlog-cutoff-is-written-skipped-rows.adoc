@@ -4,7 +4,7 @@
 
 == Status
 
-*Accepted 2026-08-01.* Resolves the ADR `docs/UI.adoc` §14.2 asks for. *This changes a rule in
+*Accepted 2026-08-01.* Resolves the ADR `UI.adoc` §14.2 asks for. *This changes a rule in
 CLAUDE.md §5*, which has been amended to match -- see <<consequences,Consequences>>.
 
 == Context
@@ -16,11 +16,11 @@ is useless for triage.
 
 Two mechanisms for it now exist in the repository, and *they do not compose*:
 
-. *A read-time filter* (CLAUDE.md §5, `docs/architecture.adoc` §4/§5). "New" means _no ledger row
+. *A read-time filter* (CLAUDE.md §5, `architecture.adoc` §4/§5). "New" means _no ledger row
 *and* `pubDate >= Feed.firstSeenAt`_. Implemented in Tier 4a inside
 `EpisodeLedgerDao.observeNewEpisodes`, behind an `includeBacklog` flag that lifts the restriction
 for the "show full archive" case.
-. *A written state* (`docs/UI.adoc` §7/§12.5/§14.2). S4's _Mark old episodes as played_ upserts
+. *A written state* (`UI.adoc` §7/§12.5/§14.2). S4's _Mark old episodes as played_ upserts
 `SKIPPED` rows for undecided episodes older than a user-chosen cutoff, so they leave _To decide_
 the same way a swipe would.
 
@@ -34,7 +34,7 @@ of either mechanism alone would draw the wrong conclusion about why a row is mis
 * ``LedgerFilter``'s _To decide_ predicate is a single condition. The episode-list query and the S1
 count badge both use it, and neither passes a date at all.
 * Old episodes are hidden by *writing* `SKIPPED` rows -- the user's own decision, applied in bulk
-behind the counted preview dialog (`docs/UI.adoc` §7), never silently at first sync.
+behind the counted preview dialog (`UI.adoc` §7), never silently at first sync.
 * ``EpisodeLedgerDao.observeNewEpisodes``'s `firstSeenAt` cutoff is *retired, not merely unused*:
 the parameter and its SQL clause are removed, so a future caller cannot re-enable a second
 mechanism by passing a flag. The `MigrationTest`-adjacent DAO tests covering it go with it.
@@ -91,10 +91,10 @@ than left to contradict the built behaviour.
 * *CLAUDE.md §5* ("The backlog is a UI problem, not a download problem") is rewritten to describe
 the written-`SKIPPED` mechanism and to keep the _reason_ the old rule existed -- that a bulk write
 to a shared log is irreversible -- as the justification for the preview being mandatory.
-* `docs/architecture.adoc` §4/§5's description of the "New" filter is amended; `firstSeenAt` keeps its
+* `architecture.adoc` §4/§5's description of the "New" filter is amended; `firstSeenAt` keeps its
 column and its KDoc changes to say what it is now for.
 * `:core:database` loses the cutoff clause and gains `upsertAll`/`previewUndecided`
-(`docs/UI.adoc` §B8.6).
+(`UI.adoc` §B8.6).
 * `FeedRefresher` gains the after-refresh application of the rule, which makes it -- for the first
 time -- a component that writes ledger rows. *The no-auto-download invariant is unaffected*:
 these rows are `SKIPPED`, never `QUEUED`, and `NoAutoDownloadInvariantTest` should be extended to

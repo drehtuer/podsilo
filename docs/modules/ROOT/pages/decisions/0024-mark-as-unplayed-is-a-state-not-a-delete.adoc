@@ -4,7 +4,7 @@
 :idseparator: -
 
 *Status:* Accepted (2026-08-14). Reverses *D4* and the standing decline recorded in
-`docs/backlog.adoc`, without reversing the invariant that produced them.
+`backlog.adoc`, without reversing the invariant that produced them.
 
 == Context
 
@@ -25,12 +25,12 @@ nobody had separated the two.
 
 Two things changed since:
 
-. *The wire has a representation for it.* `docs/decisions/0022` established that a `PLAY` with
+. *The wire has a representation for it.* `decisions/0022` established that a `PLAY` with
 `position = 0` is how every gpodder client says _unread_ -- the API can neither delete an action
 nor express the idea any other way. So the state is now expressible to Nextcloud, which it was not
 when the feature was last declined.
 . *The author asked for it as a gap, not as a nice-to-have*, alongside a round-trip test that
-found the download-marking bug (`docs/decisions/0023`).
+found the download-marking bug (`decisions/0023`).
 
 == Decision
 
@@ -53,7 +53,7 @@ the ordinary outbox, and asks for a sync pass like any other decision.
 === What it deliberately does _not_ do
 
 *An incoming remote unread mark still does not re-open a local decision.* That is D4, and it stands:
-reconciliation ignores a `PLAY` that does not read as ended (`docs/decisions/0022`), so another
+reconciliation ignores a `PLAY` that does not read as ended (`decisions/0022`), so another
 client marking something unread cannot un-handle it here. The asymmetry is intentional -- this device's
 user pressing a button is a decision; a remote row arriving is not.
 
@@ -69,6 +69,6 @@ is why the DAO test is the load-bearing one.
 the complexity ceiling, and the seam it wanted is real: actions that _write a decision_ have
 durability rules, actions that only move the user around do not. Fifth time that ceiling has
 pointed at a genuine boundary.
-* ``docs/backlog.adoc``'s decline is removed rather than struck through, and D4's entry in
+* ``backlog.adoc``'s decline is removed rather than struck through, and D4's entry in
 D4's surviving half -- a _remote_ unread mark still cannot re-open a decision -- is recorded in
-`docs/decisions/0025`.
+`decisions/0025`.

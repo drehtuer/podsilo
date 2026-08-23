@@ -22,7 +22,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * S3's rendering. The sheet reuses the row's action labels deliberately (`docs/UI.adoc` §12.6), so
+ * S3's rendering. The sheet reuses the row's action labels deliberately (`UI.adoc` §12.6), so
  * these assert the parts that are the *sheet's* own: the description arrives sanitised, the
  * browser row appears only when the feed supplied a link, and the delivered-file line is shown.
  */
@@ -92,7 +92,7 @@ class EpisodeDetailSheetTest {
     @Test
     fun `a feed with no item link simply has no browser row`() {
         // Never synthesised from the enclosure URL, which points at an audio file rather than a
-        // page — so the absent row beats a dead tap (docs/UI.adoc §6).
+        // page — so the absent row beats a dead tap (UI.adoc §6).
         render(episode = ui(pageUrl = null))
 
         compose.onAllNodes(hasText("Open episode page", substring = true)).assertCountEquals(0)
@@ -127,7 +127,7 @@ class EpisodeDetailSheetTest {
 
     @Test
     fun `a lost folder grant offers Choose folder here too, never Retry`() {
-        // The same guarantee as the row (`docs/architecture.adoc` §11) — reusing `labelFor` is what makes the
+        // The same guarantee as the row (`architecture.adoc` §11) — reusing `labelFor` is what makes the
         // two impossible to drift apart, and this test is what proves the reuse is wired up.
         render(
             episode =

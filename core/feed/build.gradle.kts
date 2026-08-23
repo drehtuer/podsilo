@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Android library (wraps rssparser for feed parsing — see `docs/architecture.adoc` §7,
+// Android library (wraps rssparser for feed parsing — see `architecture.adoc` §7,
 // not Stalla as CLAUDE.md's dependency table originally names). Gradle resolves
 // rssparser's "android" Kotlin Multiplatform target here, which needs Robolectric
 // in local unit tests for org.xmlpull.v1.XmlPullParserFactory resolution — see
-// `docs/architecture.adoc` §7 for why that's still Tier 1/2 in spirit (CLAUDE.md §4
+// `architecture.adoc` §7 for why that's still Tier 1/2 in spirit (CLAUDE.md §4
 // explicitly allows Robolectric for "Android-framework bits", headless, no emulator).
 plugins {
     alias(libs.plugins.android.library)

@@ -55,7 +55,7 @@ class DownloadNotifications(
             .setContentText(episodeTitle)
             // The brand mark, not the platform's download arrow: in a shade full of other apps'
             // progress notifications, a stock glyph makes ours the one the user cannot pick out
-            // (docs/UI.adoc §C3).
+            // (UI.adoc §C3).
             .setSmallIcon(R.drawable.ic_podsilo_notification)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

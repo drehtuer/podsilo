@@ -18,7 +18,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * Where the brand mark appears across S7 and S8 (`docs/UI.adoc` §C4 and §5): nowhere.
+ * Where the brand mark appears across S7 and S8 (`UI.adoc` §C4 and §5): nowhere.
  *
  * Both are screens the user reaches when something needs attention, which is precisely when a mark
  * costs the most — §5's "a mark there competes with the one thing the user is looking for". The

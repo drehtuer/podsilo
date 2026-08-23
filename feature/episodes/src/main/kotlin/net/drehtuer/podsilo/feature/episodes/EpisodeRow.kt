@@ -61,7 +61,7 @@ internal fun EpisodeRow(
                 .fillMaxWidth()
                 .heightIn(min = MinRowHeight)
                 // Tapping the body opens detail and never triages — a mis-tap must not queue a
-                // download (docs/UI.adoc §5). Long-press enters selection mode, which is the entry
+                // download (UI.adoc §5). Long-press enters selection mode, which is the entry
                 // point issue #46 was missing: the whole selection model existed and was tested,
                 // and `clickable` gave it no way in.
                 .combinedClickable(
@@ -108,7 +108,7 @@ internal fun EpisodeRow(
                 contentDescription = if (selected) "Selected" else "Not selected",
             )
         }
-        // Leading artwork, per docs/UI.adoc §5's row anatomy — the episode's own image when the feed
+        // Leading artwork, per UI.adoc §5's row anatomy — the episode's own image when the feed
         // supplied one, otherwise the podcast's. `EpisodeUi.artworkUrl` already resolves that.
         PodsiloArtwork(url = episode.artworkUrl, title = episode.title)
         EpisodeRowBody(episode, zone, Modifier.weight(1f))
@@ -119,7 +119,7 @@ internal fun EpisodeRow(
 }
 
 /**
- * The row overflow `docs/UI.adoc` §5 specifies, and §12.1 calls a **mandatory** non-gesture equivalent
+ * The row overflow `UI.adoc` §5 specifies, and §12.1 calls a **mandatory** non-gesture equivalent
  * of the swipes — which did not exist. The row rendered its applicable actions as inline
  * `TextButton`s instead, and two actions had no row-level call site at all because `labelFor`
  * returned `null` for them: *Copy episode link* and *Open in browser* were reachable only from S3.
@@ -182,7 +182,7 @@ private fun EpisodeRowBody(
         Text(
             text = episode.title,
             style = MaterialTheme.typography.titleMedium,
-            // The title truncates first; the decision affordances never do (docs/UI.adoc §12.12).
+            // The title truncates first; the decision affordances never do (UI.adoc §12.12).
             maxLines = TITLE_LINES,
             overflow = TextOverflow.Ellipsis,
             // De-emphasised, not unreadable: onSurfaceVariant rather than an opacity that would drop
@@ -229,7 +229,7 @@ private fun EpisodeRowBody(
 }
 
 /**
- * A percentage is only ever drawn from an update seen **in this process** (`docs/UI.adoc` Part B
+ * A percentage is only ever drawn from an update seen **in this process** (`UI.adoc` Part B
  * §7). After process death WorkManager's progress is gone, so a `DOWNLOADING` row with none reads
  * *resuming* rather than implying it knows how far along it is.
  */
