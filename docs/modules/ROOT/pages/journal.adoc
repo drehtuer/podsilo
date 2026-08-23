@@ -6088,7 +6088,13 @@ mangles it, and the failure reads as a broken diagram rather than a broken reque
 
 === State
 
-Locally green from the rebuilt container: 22 pages, all 26 diagrams, no warnings. *The workflow itself
-has never run* — it cannot until it is on `main`, so its service pair and the `deploy-pages` half are
-reasoned about rather than observed. `dev-environment.adoc` §1 says so in the status table, and it is
-the row to update once a first deployment either works or does not.
+Locally green from the rebuilt container: 22 pages, all 26 diagrams, no warnings.
+
+The build half then proved itself sooner than expected: because the workflow's own path filter matches
+the pull request that adds it, PR #107 ran it — green in 1m18s, Kroki rendering on the first attempt,
+the same 22 pages CI produced as the container did. That is the half I had written off as unobservable
+until merge, and it was observable one push earlier.
+
+*The deploy half is still unrun*, because it is skipped on pull requests by design. `deploy-pages` and
+the repository's Pages-source setting are reasoned about rather than observed, and the first push to
+`main` is what will say. `dev-environment.adoc` §1 carries both rows.
