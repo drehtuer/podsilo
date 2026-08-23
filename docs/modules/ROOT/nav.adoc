@@ -3,9 +3,9 @@
 * xref:UI.adoc[UI — design, seam and brand mark]
 * xref:dev-environment.adoc[Development environment]
 * xref:third-party.adoc[Third-party code and licences]
-// Not a page: SECURITY.md stays Markdown at the repository root because that is where
-// GitHub looks for a security policy. Linked rather than copied — one source of truth.
-* https://github.com/drehtuer/podsilo/security/policy[Security policy^]
+// Generated at build time from SECURITY.md, which stays Markdown at the repository root
+// because that filename is what GitHub's Security tab reads. See scripts/build-docs.sh.
+* xref:security.adoc[Security policy]
 * xref:backlog.adoc[Backlog]
 * xref:journal.adoc[Journal]
 * Decisions

@@ -84,15 +84,17 @@ Stated so you can check it rather than trust it. Each claim points at where it l
   it is not in the zip and a restored install must be reconnected. The archive *does* contain your
   subscription list, episode titles and show notes in readable form — treat it accordingly
   (`core/model/.../port/DatabaseArchive.kt`).
-- **Four permissions**, all in [`app/src/main/AndroidManifest.xml`](app/src/main/AndroidManifest.xml):
+- **Four permissions**, all in
+  [`app/src/main/AndroidManifest.xml`](https://github.com/drehtuer/podsilo/blob/main/app/src/main/AndroidManifest.xml):
   `INTERNET`, `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_DATA_SYNC` (active downloads), and
   `POST_NOTIFICATIONS`. No storage permission — downloads go through the Storage Access Framework
   into a folder you pick, so the app can write there and nowhere else.
 - **No telemetry, no analytics, no ads, no crash reporting.** Podsilo talks to your Nextcloud, the
   feed servers on your subscription list, and nothing else.
 - **Dependencies are pinned** in `gradle/libs.versions.toml` (no floating versions) and every one is
-  licence-reviewed in [`third-party.adoc`](third-party.adoc). Releases are minified R8 builds
-  signed with a key that is not in this repository — `*.jks` and `keystore.properties` are
+  licence-reviewed in
+  [`third-party.adoc`](https://drehtuer.github.io/podsilo/podsilo/third-party.html). Releases are
+  minified R8 builds signed with a key that is not in this repository — `*.jks` and `keystore.properties` are
   gitignored. Android enforces signature continuity, so an update that will not install over your
   existing one is a signal worth reporting.
 

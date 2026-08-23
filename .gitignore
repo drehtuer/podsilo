@@ -1,3 +1,8 @@
+# The security policy page, rendered from SECURITY.md by scripts/build-docs.sh at
+# build time. SECURITY.md is the single source — that filename is what GitHub's
+# Security tab reads — and a generated file in git is a file that drifts.
+docs/modules/ROOT/pages/security.adoc
+
 # Gradle
 .gradle/
 build/

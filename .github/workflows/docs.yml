@@ -35,6 +35,10 @@ on:
       - 'antora-playbook.yml'
       - 'antora-extensions/**'
       - 'supplemental-ui/**'
+      - 'scripts/build-docs.sh'
+      # The security policy is a source file for this site: scripts/build-docs.sh
+      # renders SECURITY.md into a page, so editing it has to rebuild the site.
+      - 'SECURITY.md'
       - '.github/workflows/docs.yml'
   # Built but not deployed. A broken xref or an unparsable diagram should fail on
   # the pull request, not after it is merged and live.
@@ -45,6 +49,10 @@ on:
       - 'antora-playbook.yml'
       - 'antora-extensions/**'
       - 'supplemental-ui/**'
+      - 'scripts/build-docs.sh'
+      # The security policy is a source file for this site: scripts/build-docs.sh
+      # renders SECURITY.md into a page, so editing it has to rebuild the site.
+      - 'SECURITY.md'
       - '.github/workflows/docs.yml'
   # The UI bundle is the rolling HEAD artifact (antora-playbook.yml explains why),
   # so the site can change with no commit here. This is how it gets rebuilt.
@@ -103,6 +111,12 @@ jobs:
       - name: Install Antora
         run: npm install -g --no-fund --no-audit antora@3.1.10 asciidoctor-kroki@0.18.1
 
+      # kramdoc renders SECURITY.md into a page of the site (scripts/build-docs.sh
+      # says why the policy stays Markdown at the repository root). Same pin as
+      # .devcontainer/Dockerfile; Ruby is already on the runner image.
+      - name: Install kramdoc
+        run: sudo gem install --no-document kramdown-asciidoc:2.1.1
+
       # The core container is health-checked by the runner, but its Mermaid
       # companion is not, and the core answers /health long before the browser
       # behind it can draw anything. So the readiness check is an actual render —
@@ -124,15 +138,14 @@ jobs:
           echo "::error::Kroki never rendered a Mermaid diagram — every diagram in the site would be missing."
           exit 1
 
-      # --fetch re-fetches the UI bundle, which is a snapshot and would otherwise be
-      # cached; there is no cache on a fresh runner, but it keeps the command
-      # identical to the documented local one.
-      #
-      # --log-failure-level=warn is what makes this a check. Antora reports an
-      # unresolved xref, a missing nav entry or a diagram Kroki refused as a
-      # *warning* and still exits 0, which would publish a site with holes in it.
+      # One script rather than an `antora` invocation, because the site is no longer
+      # only Antora: the security page is rendered from SECURITY.md first, and a
+      # build that skipped that step would fail on the nav's unresolved xref. The
+      # script carries the flags — including --log-failure-level=warn, which is what
+      # makes this a check rather than a render — so the local build and this one
+      # cannot drift apart.
       - name: Build the site
-        run: antora --fetch --log-failure-level=warn antora-playbook.yml
+        run: ./scripts/build-docs.sh
 
       - name: Upload the site as a Pages artifact
         uses: actions/upload-pages-artifact@v5
