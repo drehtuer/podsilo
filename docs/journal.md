@@ -5562,3 +5562,61 @@ that is honest rather than lazy; the two that back tests of this feature return 
 write goes through the same `TriageWriter` as S2's, but nobody has swiped an episode on a phone,
 opened S7 and taken it back. Fifty entries is a guess at "enough to find a mis-swipe in": there is no
 paging and no *load more*, so a decision older than the last fifty is not reachable here.
+
+---
+
+## 2026-08-23 (emulator) — the fix that only broke where the tests could not look
+
+**Attempted:** run the three issue fixes (#90, #91, #92) on the in-container emulator, since all
+three had shipped with "verified on the JVM, nobody has looked at it" attached.
+
+### What the run proved
+
+- **#90 end to end, which is what the emulator is good for.** Marked *Folge 2* as played from S2's
+  overflow, waited out the undo window, opened S7: the **RECENT ACTIONS** group listed it as
+  *Played · just now · Silo Stories*, newest first, above the two older decisions. Tapped *Mark as
+  unplayed*; `episode_ledger` went `SKIPPED → UNPLAYED` with `syncedToServer = 0`, the row intact.
+  The row then re-rendered as *Marked unplayed · just now* **with no button**, which is the one rule
+  a JVM test asserts abstractly and a screen can still get wrong.
+- **`driver.py smoke` green** on the full stack: seed → SAF grant → mark played → real 100 KB
+  download over HTTPS → ID3 rewrite → SAF delivery → both ledger rows.
+- **#92's gutter is 30 dp on this device, not 16.** `WindowInsets.systemGestures` reports 78 px at
+  density 420. Taking the max rather than hardcoding 16 dp was the right call, and this is the first
+  evidence for it: a fixed 16 would have left a 14 dp strip of live swipe surface under the system's
+  own gesture.
+
+### The defect, and why the tests were blind to it
+
+That same 30 dp is what broke the layout. The lists moved out to the gutter; the filter chips and
+banners, which sit *outside* the list and keep their own `RowPadding`, stayed on the 16 dp grid. The
+result is a visible step between the chip row and the first row under it — measured 42 px against
+78 px.
+
+**Robolectric reports a zero gesture inset**, so in every JVM test the gutter is exactly the 16 dp
+floor and the two grids coincide. The suite could not have caught this, and the PR I had already
+written said "the content grid does not move at all", which is true only on a device that reserves
+16 dp or less. The emulator was the first place the claim met a number that was not 16.
+
+Fixed with `chromeGutterFor(gutter)` — what a chrome row needs *added* to its own padding to reach
+the gutter, zero when they agree. First attempt put it on the container that also holds the list,
+which applied the gutter twice and pushed the rows out to 43 dp; caught by measuring rather than by
+looking, which is the argument for `dump` over screenshots. It belongs on the #92 branch, so the
+stack was rebased: `fix/92` → `fix/91` → `feat/90`, all three re-verified after.
+
+### Still not settled, and the phone is the only place it can be
+
+- **#91's actual smoothness.** The structural fix is in and the app works during a download, but
+  this emulator is software-rendered under nested virtualisation — frame timing here measures the
+  emulator, not the fix.
+- **#92's original symptom.** The headless AVD has no gesture navigation to compete with, so the
+  30 dp inset is a number, not a resolved collision.
+
+### A tooling papercut worth knowing
+
+`driver.py smoke` is not idempotent: it taps *Folge 1* by name, and its own previous run leaves that
+episode with a ledger row, which hides it under the default *To decide* filter. It needs a `reset`
+first, every time after the first. Not worth a rebase of four branches today — noted here, and the
+second run's file came out as `… (2).mp3`, which is the collision suffixing behaving correctly
+against the file the first run had already written.
+
+`./gradlew ktlintCheck detekt test` green: **814 tests, 0 failures, 3 skipped.**
