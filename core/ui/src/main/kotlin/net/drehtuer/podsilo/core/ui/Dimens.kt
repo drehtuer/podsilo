@@ -85,3 +85,33 @@ fun listGutterPadding(): PaddingValues {
         end = gutterFor(insets.calculateEndPadding(direction)),
     )
 }
+
+/**
+ * The part of the list gutter a chrome row's own [RowPadding] does not already provide.
+ *
+ * Banners, filter chips and the mark-all row sit *outside* the list, so they keep their 16 dp
+ * padding while the list is inset by [listGutterPadding] — which on a device reserving more than
+ * 16 dp leaves the chrome on one grid and the rows on another, a step you can see between the chip
+ * row and the first row under it. Found on the emulator, which reports 30 dp; invisible in the JVM
+ * tests, where the reported inset is 0 and the two grids coincide.
+ *
+ * Applied to the container rather than to each banner, and zero whenever the gutter is the 16 dp
+ * floor — so on a device that reserves nothing, this changes no pixel.
+ */
+@Composable
+fun chromeGutterPadding(): PaddingValues {
+    val gutter = listGutterPadding()
+    val direction = LocalLayoutDirection.current
+    return PaddingValues(
+        start = chromeGutterFor(gutter.calculateStartPadding(direction)),
+        end = chromeGutterFor(gutter.calculateEndPadding(direction)),
+    )
+}
+
+/**
+ * What a chrome row needs *added* to its own [RowPadding] to reach [gutter] — never negative.
+ *
+ * Split out for the same reason as [gutterFor]: it is arithmetic, and arithmetic is worth pinning
+ * with a test rather than a screenshot.
+ */
+fun chromeGutterFor(gutter: Dp): Dp = (gutter - RowPadding).coerceAtLeast(0.dp)

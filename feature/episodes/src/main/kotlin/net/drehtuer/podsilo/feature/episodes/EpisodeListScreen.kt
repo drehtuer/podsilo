@@ -38,6 +38,7 @@ import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
+import net.drehtuer.podsilo.core.ui.chromeGutterPadding
 import net.drehtuer.podsilo.core.ui.listGutterPadding
 import java.time.ZoneId
 
@@ -80,15 +81,22 @@ fun EpisodeListScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
-                    state.queueStatus.let { status ->
-                        if (status is QueueStatus.Paused) PausedBanner(status, onEvent)
+                    // The chrome sits outside the list, so it keeps its own RowPadding and takes
+                    // only what the list's gutter has *beyond* it — otherwise the chips stay on the
+                    // 16 dp grid while the rows move out to the gutter, a step you can see between
+                    // them (issue #92). Wrapped here rather than around the list too, which would
+                    // add the gutter twice.
+                    Column(modifier = Modifier.padding(chromeGutterPadding())) {
+                        state.queueStatus.let { status ->
+                            if (status is QueueStatus.Paused) PausedBanner(status, onEvent)
+                        }
+                        if (state.isOffline) OfflineBanner()
+                        // Above the list, never in place of it: a failed refresh must leave the
+                        // previously parsed episodes on screen (docs/UI.md §5).
+                        state.feedError?.let { FeedErrorBanner(it, onEvent) }
+                        FilterChips(state.filter, onEvent)
+                        MarkAllRow(state, onEvent)
                     }
-                    if (state.isOffline) OfflineBanner()
-                    // Above the list, never in place of it: a failed refresh must leave the
-                    // previously parsed episodes on screen (docs/UI.md §5).
-                    state.feedError?.let { FeedErrorBanner(it, onEvent) }
-                    FilterChips(state.filter, onEvent)
-                    MarkAllRow(state, onEvent)
 
                     when (val content = state.content) {
                         EpisodeListUiState.Content.Loading -> LoadingRows()
