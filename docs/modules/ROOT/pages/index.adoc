@@ -36,6 +36,13 @@ xref:third-party.adoc[*Third-party code*]:: Every dependency's licence, and ever
 adapted from another project. Podsilo is GPL-3.0-or-later, so this is a constraint rather than a
 courtesy.
 
+https://github.com/drehtuer/podsilo/security/policy[*Security policy*]:: How to report a
+vulnerability privately, what is in scope, what the app does today about credentials, transport and
+data at rest -- and the known limitations that are deliberate trade-offs rather than oversights, so a
+report is a surprise rather than a rediscovery. It is the one document not on this site: GitHub reads
+a security policy from `SECURITY.md` at the repository root, so it stays there and is linked rather
+than copied.
+
 xref:journal.adoc[*Journal*]:: A running log of agent-driven work sessions — what was attempted,
 what worked, what did not, and what needed human correction. This project doubles as an experiment
 in agent-driven development, so the process is recorded alongside the result.

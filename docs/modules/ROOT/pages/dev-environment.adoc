@@ -1559,3 +1559,7 @@ Android SDK (`/opt/android-sdk`), `~/.gradle`, `~/.android`, Claude Code's confi
 * `journal.adoc` -- how each of these problems was actually diagnosed, including the wrong turns
 * `architecture.adoc` -- module structure and what depends on what
 * `decisions/` -- ADRs, notably 0008 (Nextcloud discards `DOWNLOAD`) and 0009 (wire contract)
+* https://github.com/drehtuer/podsilo/security/policy[`SECURITY.md`] -- the build and release path
+  is in its scope: dependency integrity, the signing setup in <<10-builds-versioning-and-release-signing,§10>>,
+  and these workflows. It also records that the device tier is not run in CI, which is why
+  <<1-what-works-and-what-has-never-been-run,§1>> exists
