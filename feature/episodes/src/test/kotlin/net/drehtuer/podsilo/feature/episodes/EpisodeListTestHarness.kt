@@ -80,6 +80,9 @@ abstract class EpisodeListTestHarness {
                 // onCleared runs after viewModelScope is cancelled, so the commit needs a scope that
                 // outlives the view model. backgroundScope is the test-owned equivalent.
                 commitScope = backgroundScope,
+                // Issue #91: the projection runs off the main thread in production, so a test has
+                // to say where it runs here too, or its emissions race the test scheduler.
+                projectionContext = UnconfinedTestDispatcher(testScheduler),
             )
         backgroundScope.launch { vm.state.collect { } }
         // A row that already carries a ledger state is invisible under the default "To decide"

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -38,6 +39,7 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SwipeDirection
 import net.drehtuer.podsilo.core.model.port.SwipeMapping
 import java.time.ZoneId
+import kotlin.coroutines.CoroutineContext
 
 /** `WhileSubscribed` grace period: survives a rotation without restarting the query. */
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
@@ -81,6 +83,15 @@ class EpisodeListViewModel(
      * pass the test scope rather than waiting on a real dispatcher (`docs/UI.md` §12.3).
      */
     private val commitScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    /**
+     * Where the projection runs — **not** the main thread (issue #91).
+     *
+     * `stateIn(viewModelScope)` collects on `Dispatchers.Main.immediate`, so without this every
+     * mapping above it is main-thread work: once per ledger write, and once per second for the whole
+     * of a download, because live byte progress is one of the sources being combined. Injected so a
+     * test can supply its own dispatcher and assert where the work happened.
+     */
+    private val projectionContext: CoroutineContext = Dispatchers.Default,
 ) : ViewModel() {
     private val filter = MutableStateFlow(EpisodeFilter.TO_DECIDE)
     private val selection = MutableStateFlow<Selection?>(null)
@@ -173,11 +184,12 @@ class EpisodeListViewModel(
                     feedError = lastFeedError.takeIf { it.isNewerThanLastSuccess(feed) }?.message,
                 )
             }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
-            initialValue = EpisodeListUiState(feedUrl = feedUrl, feedTitle = feedUrl),
-        )
+        }.flowOn(projectionContext)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                initialValue = EpisodeListUiState(feedUrl = feedUrl, feedTitle = feedUrl),
+            )
 
     /**
      * `docs/UI.md` §B7's third case: a `DOWNLOADING` row with no work behind it was killed

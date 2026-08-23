@@ -4,6 +4,7 @@ package net.drehtuer.podsilo.feature.episodes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,6 +27,7 @@ import net.drehtuer.podsilo.core.model.port.FeedRepository
 import net.drehtuer.podsilo.core.model.port.FeedUndecidedCount
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 import net.drehtuer.podsilo.core.model.port.SettingsRepository
+import kotlin.coroutines.CoroutineContext
 
 /** Matches S2's grace period, so navigating into a feed and back does not restart S1's queries. */
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
@@ -48,6 +51,15 @@ class PodcastListViewModel(
     private val scheduler: EpisodeScheduler,
     private val folderStatus: DownloadFolderStatus,
     private val namingPreview: NamingPreview,
+    /**
+     * Where the projection runs — **not** the main thread (issue #91).
+     *
+     * `stateIn(viewModelScope)` collects on `Dispatchers.Main.immediate`, so without this every
+     * mapping above it is main-thread work: once per ledger write, and once per second for the whole
+     * of a download, because live byte progress is one of the sources being combined. Injected so a
+     * test can supply its own dispatcher and assert where the work happened.
+     */
+    private val projectionContext: CoroutineContext = Dispatchers.Default,
 ) : ViewModel() {
     private val filter = MutableStateFlow(PodcastFilter.WITH_NEW)
     private val refreshing = MutableStateFlow(false)
@@ -83,11 +95,12 @@ class PodcastListViewModel(
             },
         ) { feeds, counts, frozen, chrome, environment ->
             build(feeds, counts, frozen, chrome, environment)
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
-            initialValue = PodcastListUiState(),
-        )
+        }.flowOn(projectionContext)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                initialValue = PodcastListUiState(),
+            )
 
     private fun build(
         feeds: List<Feed>,
