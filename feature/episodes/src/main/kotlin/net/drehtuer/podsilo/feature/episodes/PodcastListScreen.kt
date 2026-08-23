@@ -42,6 +42,8 @@ import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.PodsiloMark
 import net.drehtuer.podsilo.core.ui.RowPadding
+import net.drehtuer.podsilo.core.ui.chromeGutterPadding
+import net.drehtuer.podsilo.core.ui.listGutterPadding
 import java.time.Duration
 import java.time.Instant
 
@@ -103,23 +105,16 @@ fun PodcastListScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
-                    // Not while the checklist is up: on first run both would say "choose a folder",
-                    // and the checklist says it better — with the step it belongs to. Seen on the first
-                    // device run, where the two stacked.
-                    if (state.setup == null) {
-                        (state.queueStatus as? QueueStatus.Paused)?.let {
-                            PodcastPausedBanner(it, onEvent)
-                        }
-                    }
-                    if (state.isOffline) PodcastOfflineBanner()
-                    state.setup?.let { SetupCard(it, onEvent) }
+                    PodcastChrome(state, onEvent)
 
                     when (val content = state.content) {
                         PodcastListUiState.Content.NotConfigured -> NotConfiguredState(onEvent)
                         PodcastListUiState.Content.Loading -> PodcastLoadingState()
                         PodcastListUiState.Content.NoSubscriptions -> NoSubscriptionsState(onEvent)
                         is PodcastListUiState.Content.Feeds -> {
-                            PodcastFilterChips(state.filter, onEvent)
+                            Column(modifier = Modifier.padding(chromeGutterPadding())) {
+                                PodcastFilterChips(state.filter, onEvent)
+                            }
                             FeedRows(content.feeds, state.totalUndecided, state.filter, now, onEvent)
                         }
                     }
@@ -145,6 +140,30 @@ private fun PodcastListTitle() {
         // null: the word "Podsilo" is right there. Describing the mark too reads the name twice.
         PodsiloMark(contentDescription = null)
         Text("Podsilo")
+    }
+}
+
+/**
+ * The banners and the first-run checklist — everything above the list.
+ *
+ * Its own composable for the gutter (issue #92): the chrome keeps its own [RowPadding] and takes
+ * only what the list's gutter has *beyond* it, so the two stay on one grid. Wrapping the list in
+ * the same padding would apply the gutter twice.
+ */
+@Composable
+private fun PodcastChrome(
+    state: PodcastListUiState,
+    onEvent: (PodcastListEvent) -> Unit,
+) {
+    Column(modifier = Modifier.padding(chromeGutterPadding())) {
+        // Not while the checklist is up: on first run both would say "choose a folder", and the
+        // checklist says it better — with the step it belongs to. Seen on the first device run,
+        // where the two stacked.
+        if (state.setup == null) {
+            (state.queueStatus as? QueueStatus.Paused)?.let { PodcastPausedBanner(it, onEvent) }
+        }
+        if (state.isOffline) PodcastOfflineBanner()
+        state.setup?.let { SetupCard(it, onEvent) }
     }
 }
 
@@ -204,7 +223,11 @@ private fun FeedRows(
         )
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    // Same gutter as S2, for the same reason and for consistency between the two lists (issue #92).
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = listGutterPadding(),
+    ) {
         items(feeds, key = { it.url }) { feed ->
             PodcastRow(feed, now, onEvent)
             HorizontalDivider()
@@ -214,7 +237,8 @@ private fun FeedRows(
                 text = summaryLine(totalUndecided, feeds.size, filter),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(RowPadding),
+                // Inside the gutter already — vertical only (issue #92).
+                modifier = Modifier.fillMaxWidth().padding(vertical = RowPadding),
             )
         }
     }
@@ -241,7 +265,7 @@ private fun PodcastRow(
                 .fillMaxWidth()
                 .heightIn(min = ArtworkSize + RowPadding)
                 .clickable { onEvent(PodcastListEvent.FeedClicked(feed.url)) }
-                .padding(RowPadding),
+                .padding(vertical = RowPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(RowPadding),
     ) {

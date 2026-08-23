@@ -5432,3 +5432,39 @@ A pre-existing dangling anchor turned up on the way (`architecture.md`'s ToC poi
 
 No code changed in this session; `./gradlew ktlintCheck detekt test` was run green (exit 0) and
 everything after it was markdown.
+
+---
+
+## 2026-08-23 (#92) — the row that was taking the system's gesture
+
+**Attempted:** issue #92 — "trying to switch the application by swiping is easily interpreted as
+mark as played. Add a margin around the podcast and episode list."
+
+The report names the remedy, and the remedy is right, but the reason is worth writing down because
+it decides the number: the rows on S1 and S2 were `fillMaxWidth`, so the node carrying the click —
+and, on S2, the `SwipeToDismissBox` — started at x = 0. Every horizontal gesture the system reserves
+for itself at the screen edges was therefore also live app surface. Losing that race costs a `PLAY`
+action on a shared server, not a mis-tap.
+
+**Built:** `ListGutter` (16 dp) and `gutterFor()` in `:core:ui`, and `listGutterPadding()`, which
+insets a list by `max(the device's own systemGestures inset, 16 dp)`. A fixed 16 would have been the
+obvious read of the issue and is not enough — plenty of devices reserve 24, and the leftover 8 dp
+strip is exactly where the collision happens. Both `LazyColumn`s take it as `contentPadding`, and the
+rows give up their own horizontal padding in exchange, so on a 16 dp device the content grid does not
+move at all: the row shrinks to meet the gutter rather than the content shifting inward.
+
+The part that is easy to get wrong is what is *inside* the list: the S2 month headers and S1's
+summary line had `padding(horizontal = RowPadding)` of their own, which after the change would sit a
+gutter's width deeper than the rows they belong to. Both are vertical-only now, and `docs/UI.md` §17
+says so, because that is precisely the drift that section exists to catch.
+
+**Tests.** `ListGutterTest` covers the arithmetic (a device reserving 0, 8, 16, 24). The one that
+matters is `ListGestureGutterTest`: it renders each screen at `w360dp` and asserts the row's own
+bounds start and end at least a gutter from the edges. Confirmed to fail before the fix — both cases,
+with the row at x = 0 — which is what makes it a regression test rather than a description.
+
+`./gradlew ktlintCheck detekt test` green: **803 tests, 0 failures, 3 skipped.**
+
+**Not done, deliberately:** S7's activity list gets no gutter. Its rows are not swipeable, so they
+are not in the race, and widening the change to "every list" would have been scope the issue did not
+ask for.
