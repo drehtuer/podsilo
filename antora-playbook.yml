@@ -29,6 +29,12 @@ ui:
   bundle:
     url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
     snapshot: true
+  # Files here replace their counterparts in the bundle, one for one — this is the
+  # supported way to change the stock UI without vendoring the whole zip. Currently
+  # one file: the header, which upstream ships carrying a demo navbar of "Products"
+  # and "Services" dropdowns full of dead links. The override's own comment says what
+  # must be kept when the rolling bundle moves under it.
+  supplemental_files: ./supplemental-ui
 
 output:
   dir: ./build/site

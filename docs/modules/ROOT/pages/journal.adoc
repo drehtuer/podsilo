@@ -6103,3 +6103,29 @@ localhost only the builder can reach.
 
 So the documents are now readable somewhere the `xref:` macros resolve, which is what the Antora move
 cost three commits to buy. Nothing in §1 is left unverified for this pipeline.
+
+'''
+
+== 2026-08-23 (navbar) — deleting someone else's demo content
+
+*Attempted:* remove the "Products" and "Services" dropdowns the published site had been carrying.
+
+They came from the stock Antora UI bundle, which ships a navbar advertising Product A/B/C and Service
+A/B/C, each one an `href="#"`. Nobody wrote them here and nobody had looked at the header closely
+enough to notice — the site went live and the demo content went with it, which is the ordinary way a
+default becomes a decision.
+
+The fix is `ui.supplemental_files`: one file, `supplemental-ui/partials/header-content.hbs`, replacing
+the bundle's copy. Worth recording because supplemental files *replace* rather than patch, so the
+override has to carry the parts of upstream's header that are still wanted — the search field is in
+there doing nothing, kept so that setting `SITE_SEARCH_PROVIDER` later still works. And since the
+bundle is the rolling HEAD artifact, an override can silently drift from the file it overrides with no
+warning at all. The comment at the top of the file says both.
+
+The path filter in `docs.yml` needed `supplemental-ui/**` adding, or a change to the site's appearance
+would not have rebuilt the site.
+
+*Left as-is, deliberately:* the same navbar still has a "Home" link and a "Download" button, both also
+`href="#"`. They were not what was asked for, and where they should point (the site root? the releases
+page? nowhere?) is the author's call, not mine.
+
