@@ -42,6 +42,7 @@ import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.PodsiloMark
 import net.drehtuer.podsilo.core.ui.RowPadding
+import net.drehtuer.podsilo.core.ui.listGutterPadding
 import java.time.Duration
 import java.time.Instant
 
@@ -204,7 +205,11 @@ private fun FeedRows(
         )
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    // Same gutter as S2, for the same reason and for consistency between the two lists (issue #92).
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = listGutterPadding(),
+    ) {
         items(feeds, key = { it.url }) { feed ->
             PodcastRow(feed, now, onEvent)
             HorizontalDivider()
@@ -214,7 +219,8 @@ private fun FeedRows(
                 text = summaryLine(totalUndecided, feeds.size, filter),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(RowPadding),
+                // Inside the gutter already — vertical only (issue #92).
+                modifier = Modifier.fillMaxWidth().padding(vertical = RowPadding),
             )
         }
     }
@@ -241,7 +247,7 @@ private fun PodcastRow(
                 .fillMaxWidth()
                 .heightIn(min = ArtworkSize + RowPadding)
                 .clickable { onEvent(PodcastListEvent.FeedClicked(feed.url)) }
-                .padding(RowPadding),
+                .padding(vertical = RowPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(RowPadding),
     ) {

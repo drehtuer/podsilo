@@ -38,6 +38,7 @@ import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 import net.drehtuer.podsilo.core.ui.RowPadding
+import net.drehtuer.podsilo.core.ui.listGutterPadding
 import java.time.ZoneId
 
 internal const val SNIPPET_LINES = 2
@@ -297,7 +298,13 @@ private fun EpisodeRows(
 ) {
     // Keyed by episodeKey: the sticky headers and any item animation both need stable keys, and a
     // 500-episode feed under "All" is the case that punishes their absence (`docs/UI.md` §B14.3).
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    // The gutter is what keeps a swipe-to-triage row off the system's own gesture strips
+    // (issue #92) — the rows hand over their horizontal padding for it, so the content grid is
+    // unchanged on a device whose inset is the usual 16 dp.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = listGutterPadding(),
+    ) {
         items(items, key = { it.episodeKey }) { episode ->
             val header = state.sections.firstOrNull { it.firstIndex == items.indexOf(episode) }
             if (header != null) MonthHeader(header)
@@ -333,7 +340,9 @@ private fun MonthHeader(section: MonthSection) {
             Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = RowPadding, vertical = 8.dp)
+                // Horizontal inset comes from the list's gutter (issue #92); adding it again here
+                // would push the month label a gutter's width further in than the rows it labels.
+                .padding(vertical = 8.dp)
                 .semantics { contentDescription = "Published $label" },
     )
 }

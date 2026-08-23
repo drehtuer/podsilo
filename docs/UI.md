@@ -848,6 +848,11 @@ holds its decision for a ~5 s **undo window** before anything is written (§12.3
 swipe on the wrong row. Non-gesture equivalents are mandatory: the row overflow `⋮`
 and the S3 action bar.
 
+**The swipe surface stops short of both screen edges** (§17, issue #92). A row that reaches the edge
+competes with the system's own horizontal gestures — back from either side, the app-switch drag along
+the bottom — and the user loses: an attempt to leave the app is read as a triage decision on whatever
+row the finger crossed, which in this app is posted to a shared server.
+
 Swiping an episode that already has a terminal state performs the same action idempotently:
 swipe-right on a `DOWNLOADED` episode means **Download again** (§12.3); swipe-left on an already
 `SKIPPED` one is a no-op.
@@ -1183,8 +1188,15 @@ being drawn.
   asymmetry — S1 inset at 16 dp because its leading element was the title itself. S1 now leads with
   the 24 dp brand mark (§C4.1), so its leading element is an icon like every other
   screen's and the exception is gone. A simplification, not a new special case.
-- **Rows** — 16 dp horizontal padding, ≥ 72 dp tall, 1 dp hairline between rows, 2 px rule between
+- **Rows** — 16 dp horizontal inset, ≥ 72 dp tall, 1 dp hairline between rows, 2 px rule between
   *groups*. Artwork is 56 dp on S1, 52 dp on S2, 76 dp on S3.
+  - **Amended 2026-08-23 (issue #92):** on S1 and S2 that inset is the **list's gutter**, not the
+    row's own padding. The rows carry vertical padding only, and the `LazyColumn` insets them by
+    `max(the device's own horizontal gesture inset, 16 dp)`. The optical grid is unchanged on a
+    device that reserves the usual 16 dp; the point is that the row — the node carrying the click and
+    the swipe — no longer reaches the screen edge, where it was taking the drag the user meant for
+    the system. Anything drawn *inside* those lists (month headers, the S1 summary line) must
+    therefore not re-apply a horizontal inset of its own.
 - **Group labels** — `15dp / 16dp / 7dp` padding, 11 sp at the heading weight, `.12em` tracking, accent
   role, preceded by a 2 px rule. Identical on S4 and S7.
 - **Tap targets** — ≥ 48 dp on everything interactive, chips and segmented options included (§12.12).

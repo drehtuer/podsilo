@@ -93,7 +93,9 @@ internal fun EpisodeRow(
                     if (inSelectionMode) this.selected = selected
                 }.background(
                     if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                ).padding(RowPadding),
+                    // Vertical only: the horizontal inset is the list's gutter now, so the swipe
+                    // surface stops short of the screen edge instead of reaching it (issue #92).
+                ).padding(vertical = RowPadding),
         horizontalArrangement = Arrangement.spacedBy(RowPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -2,6 +2,15 @@
 
 package net.drehtuer.podsilo.core.ui
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // The spacing invariants from `docs/UI.md` §17 and §19, in one place. They were duplicated in
@@ -32,3 +41,47 @@ val ArtworkSize = 56.dp
 
 /** §19: rows stop reading as one thing when they stretch, so cap and centre the column. */
 val MaxContentWidth = 600.dp
+
+/**
+ * The gutter that keeps a swipeable list's gesture surface off the screen's edges (issue #92).
+ *
+ * A row that reaches the physical edge competes with the system's own horizontal gestures — back
+ * from either side, and the app-switch drag along the bottom — and the loser is the user, whose
+ * attempt to leave the app is read as *Mark as played* on whatever row their finger crossed. In an
+ * app whose triage decisions are posted to a shared server, that is not a cosmetic collision.
+ *
+ * 16 dp is the floor, not the answer: [gutterFor] takes whatever the device reports as its own
+ * gesture inset when that is larger. The rows give up their own horizontal padding in exchange, so
+ * the content grid lands where it always did on a device whose inset is the usual 16 dp.
+ */
+val ListGutter = 16.dp
+
+/**
+ * The gutter to inset a gesture-bearing list by, given what the device reserves for itself.
+ *
+ * Separate from the composable that reads the insets so it can be tested as arithmetic — the whole
+ * rule is "never narrower than the design grid, never narrower than the system's own strip".
+ */
+fun gutterFor(
+    systemGestureInset: Dp,
+    minimum: Dp = ListGutter,
+): Dp = maxOf(systemGestureInset, minimum)
+
+/**
+ * [gutterFor] applied to the current window's gesture insets, as a [PaddingValues] for a
+ * `LazyColumn`'s `contentPadding`.
+ *
+ * `systemGestures`, not `safeGestures` or `navigationBars`: it is the one inset that describes where
+ * the system will take a horizontal drag out of the app's hands, which is exactly the collision
+ * issue #92 reported. Each side is read separately because a device held in landscape reserves them
+ * asymmetrically.
+ */
+@Composable
+fun listGutterPadding(): PaddingValues {
+    val insets = WindowInsets.systemGestures.asPaddingValues()
+    val direction = LocalLayoutDirection.current
+    return PaddingValues(
+        start = gutterFor(insets.calculateStartPadding(direction)),
+        end = gutterFor(insets.calculateEndPadding(direction)),
+    )
+}
