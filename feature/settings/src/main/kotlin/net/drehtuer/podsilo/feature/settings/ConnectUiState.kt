@@ -56,6 +56,15 @@ data class ConnectUiState(
 
 /** Each maps to one plain-language sentence — never a stack trace (`docs/UI.md` §8). */
 enum class ConnectError {
+    /**
+     * The address contains a space — its own case because it is the one typo a phone keyboard makes
+     * for you, and because *"can't reach that address"* sends the reader to look at their network
+     * for a fault that is three characters into the field (issue found on the device, 2026-08-23).
+     */
+    ADDRESS_HAS_SPACE,
+
+    /** The address is not one at all — empty, or nothing a host can be parsed out of. */
+    ADDRESS_INVALID,
     UNREACHABLE,
     TIMED_OUT,
     CLEARTEXT_BLOCKED,
