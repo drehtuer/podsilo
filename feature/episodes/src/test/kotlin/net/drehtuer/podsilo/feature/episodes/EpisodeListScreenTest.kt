@@ -708,6 +708,33 @@ class EpisodeListScreenTest {
         compose.onNodeWithText("Download all (12)").assertIsNotEnabled()
         compose.onNodeWithText("folder unavailable").assertIsDisplayed()
     }
+
+    /**
+     * Guards the month-header lookup after issue #91 replaced `items.indexOf(episode)` — a linear
+     * scan run inside every visible row's composition — with a map keyed by the section's first
+     * index. The headers must still land against the rows they label, and land once.
+     */
+    @Test
+    fun `month headers land against the rows they label`() {
+        val july = row(key = "e1", title = "Julifolge")
+        val june = row(key = "e2", title = "Junifolge", publishedAt = Instant.parse("2026-06-02T09:00:00Z"))
+        render(
+            EpisodeListUiState(
+                feedUrl = FEED_URL,
+                feedTitle = "Der Podcast",
+                // `listOf` is shadowed in this class by a helper that builds a whole ui state.
+                content = EpisodeListUiState.Content.Episodes(kotlin.collections.listOf(july, june)),
+                sections =
+                    kotlin.collections.listOf(
+                        MonthSection(label = YearMonth(2026, 7), firstIndex = 0, count = 1),
+                        MonthSection(label = YearMonth(2026, 6), firstIndex = 1, count = 1),
+                    ),
+            ),
+        )
+
+        compose.onNodeWithText("2026-07").assertIsDisplayed()
+        compose.onNodeWithText("2026-06").assertIsDisplayed()
+    }
 }
 
 /**

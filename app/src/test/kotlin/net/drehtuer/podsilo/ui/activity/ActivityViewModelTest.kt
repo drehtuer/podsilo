@@ -101,6 +101,9 @@ class ActivityViewModelTest {
                 triageWriter = TriageWriter(FakeActivityLedger(), clock, {}),
                 syncNow = { },
                 clock = clock,
+                // Issue #91: the projection is dispatched off the main thread in production; a test
+                // has to name a dispatcher it controls, or its emissions race the test scheduler.
+                projectionContext = UnconfinedTestDispatcher(),
             )
         backgroundScope.launch { vm.state.collect { } }
         return vm

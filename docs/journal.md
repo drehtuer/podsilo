@@ -5468,3 +5468,52 @@ with the row at x = 0 — which is what makes it a regression test rather than a
 **Not done, deliberately:** S7's activity list gets no gutter. Its rows are not swipeable, so they
 are not in the race, and widening the change to "every list" would have been scope the issue did not
 ask for.
+
+---
+
+## 2026-08-23 (#91) — the download was not the problem
+
+**Attempted:** issue #91 — "once a download is started, the UI becomes unresponsive. It is also
+briefly unresponsive when swiping to mark as played."
+
+Two symptoms, one cause, and the cause is not in `:core:download` at all. Every list view model ends
+`.stateIn(viewModelScope, …)`, and `viewModelScope` collects on `Dispatchers.Main.immediate`. With no
+`flowOn` anywhere in the project, **every mapping above that `stateIn` was main-thread work** — each
+row projected into an `EpisodeUi`, then the whole list grouped into month sections — re-run on every
+emission of every source being combined.
+
+That is why the two symptoms are one bug. Live byte progress is one of the combined sources and ticks
+once a second for the entire download; a ledger write is another, and that is the swipe. ADR 0027
+measured 9,500 episodes reaching the screen in 82–132 ms; the mistake in reading that number as
+"fast enough" was assuming it happens once, at screen open. It was happening every second.
+
+**A second cost, independent and possibly larger.** S2's item body did:
+
+```kotlin
+val header = state.sections.firstOrNull { it.firstIndex == items.indexOf(episode) }
+```
+
+`items.indexOf(episode)` is a linear scan comparing a data class field by field — for every *visible*
+row, on every recomposition. Twenty rows against a few thousand episodes is tens of thousands of
+string comparisons per frame, to decide whether to draw a month label. It is now a map built once per
+`sections` change and keyed by the section's first index.
+
+**Built:** an injected `projectionContext` (default `Dispatchers.Default`) and `.flowOn` on the three
+view models that project lists and re-emit during a download — S2, S1 and S7. The other three
+(`EpisodeDetail`, `ErrorLog`, `Settings`) project one item or a short list and are not in the download
+path; widening the change to them would have been scope this issue did not ask for, and `docs/UI.md`
+§B0.8 now states the rule so the next list screen gets it right.
+
+**The test that did not work, which is the interesting part.** The first version asserted that the
+state stays at its initial value until the projection dispatcher is advanced. It passed — and passed
+just as well with `flowOn` deleted, because the fake sources are asynchronous anyway, so the state is
+empty at that moment either way. A test that cannot fail is not evidence. The version that ships
+counts dispatches to the injected context with a `CountingDispatcher`: without `flowOn` the context is
+never used at all, so the count is zero. Verified failing before the fix, passing after.
+
+`./gradlew ktlintCheck detekt test` green: **805 tests, 0 failures, 3 skipped.**
+
+**Honest limits.** This is a structural fix verified by structural tests, on the JVM. Nobody has
+watched the app during a real download since the change — the claim "the UI no longer freezes" is
+reasoning plus a dispatch assertion, not an observation. The device set (`docs/dev-environment.md` §6)
+is where that would be settled, and it has not been run for this.

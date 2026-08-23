@@ -64,6 +64,9 @@ class PodcastListViewModelTest {
             scheduler = scheduler,
             folderStatus = folder,
             namingPreview = { "Der Podcast/20260714_Warum.mp3" },
+            // Issue #91: the projection is dispatched off the main thread in production; a test has
+            // to name a dispatcher it controls, or its emissions race the test scheduler.
+            projectionContext = UnconfinedTestDispatcher(),
         )
 
     @Test

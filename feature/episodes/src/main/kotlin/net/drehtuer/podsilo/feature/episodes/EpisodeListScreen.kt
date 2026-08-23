@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -309,13 +310,17 @@ private fun EpisodeRows(
     // The gutter is what keeps a swipe-to-triage row off the system's own gesture strips
     // (issue #92) — the rows hand over their horizontal padding for it, so the content grid is
     // unchanged on a device whose inset is the usual 16 dp.
+    // Keyed by first index rather than scanned per row (issue #91). `items.indexOf(episode)` inside
+    // the item body is a linear scan with a data-class `equals` — for every visible row, on every
+    // recomposition. At one progress tick a second and a few thousand episodes that is the main
+    // thread's whole budget spent deciding whether to draw a month label.
+    val headers = remember(state.sections) { state.sections.associateBy { it.firstIndex } }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = listGutterPadding(),
     ) {
-        items(items, key = { it.episodeKey }) { episode ->
-            val header = state.sections.firstOrNull { it.firstIndex == items.indexOf(episode) }
-            if (header != null) MonthHeader(header)
+        itemsIndexed(items, key = { _, episode -> episode.episodeKey }) { index, episode ->
+            headers[index]?.let { MonthHeader(it) }
             SwipeableEpisodeRow(
                 episode = episode,
                 mapping = state.swipeMapping,

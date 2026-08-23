@@ -1362,6 +1362,18 @@ Package root for everything below: `net.drehtuer.podsilo`.
    a typed cause.
 7. **Snapshots for one-shot effects.** Snackbars, navigation and system-picker launches are
    `Channel<UiEffect>`/`Flow<UiEffect>`, never state fields — they must not replay on rotation.
+8. **The projection runs off the main thread** (issue #91, added 2026-08-23). `stateIn(viewModelScope)`
+   collects on `Dispatchers.Main.immediate`, so every `map`/`combine` above it is main-thread work by
+   default. A list screen's projection is O(rows) — each row projected, then the whole list grouped
+   into month sections — and it re-runs on **every** emission of **every** source it combines, which
+   during a download is once a second and on a triage decision is immediately. Each list view model
+   therefore takes a `projectionContext` (defaulting to `Dispatchers.Default`) and ends its chain
+   `.flowOn(projectionContext).stateIn(...)`. Tests inject their own, or their emissions race the
+   test scheduler.
+   - The same rule's other half is in the Composable: nothing inside an item body may be O(list).
+     S2's month header was looked up with `items.indexOf(episode)` — a linear scan with a data-class
+     `equals`, per visible row, per recomposition — and is now a map keyed by the section's first
+     index.
 
 ---
 
