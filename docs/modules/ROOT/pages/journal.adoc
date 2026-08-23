@@ -6146,3 +6146,41 @@ site), from `index.adoc`'s list of documents with a note saying *why* it is the 
 hosted here, and from `dev-environment.adoc`'s *See also* — the build and release path is in its
 scope, and it is where the "device tests are not run in CI" claim is stated to an outside reader.
 
+'''
+
+== 2026-08-23 (brief) — CLAUDE.md becomes CLAUDE.adoc
+
+The standing brief was the last Markdown document of any size in the repository, and the only one
+outside the reach of the `asciidoctor --failure-level=WARN` check CI runs over every `.adoc`. Converted
+with kramdoc, the same tool the documentation conversion used.
+
+Claude Code loads a file named `CLAUDE.md` and nothing else, so `.claude/CLAUDE.md` stays as a stub
+that imports the real file with `@CLAUDE.adoc`. Three details from the documentation decided how that
+stub is written: a relative import resolves against *the importing file's* directory, not the working
+directory; import parsing skips code spans, so a backticked `@path` is deliberately inert and the
+import must be bare; and HTML comments in a `CLAUDE.md` are stripped before it reaches context, which
+is where the maintainer note explaining all this lives, costing no tokens.
+
+=== Checking a conversion rather than trusting it
+
+kramdoc is good but not lossless, and this file is the one document whose exact wording is load-bearing
+— it is read by an agent as instructions, not by a person as prose. So the check was mechanical: pull
+every alphanumeric token out of both files in order and diff the two streams. That reduces the
+comparison to *content*, ignoring every markup difference, and it found the one real loss immediately.
+
+*Ordered lists lost their numbers.* Markdown writes `1.`, `2.`, `3.`; AsciiDoc's `.` marker
+auto-numbers, so the rendered output is identical and the *source* is not. That matters here in a way
+it would not for a page on the site: this file is consumed as raw text, so "§1 requirement 2" stops
+being findable when the source says only `.`. Explicit numbers were restored to all 43 items, and the
+proof that it changed nothing is that Asciidoctor renders both forms to byte-identical HTML — apart
+from one improvement, the nested list under §7, which AsciiDoc styles a., b., c. by default and which
+the Markdown had as 1–10.
+
+After that, the token diff between the original and the finished `.adoc` is: the SPDX line, `md` →
+`adoc` in the title, two document attributes, the paragraph explaining the split, and three
+`line-through` tokens where GFM strikethrough became AsciiDoc's spelling. Nothing else moved.
+
+*Unverified:* whether the import actually expands is not observable from inside this session — the
+brief was already in context when it started. It needs a fresh session and `/context`, which is in the
+stub's maintainer note.
+

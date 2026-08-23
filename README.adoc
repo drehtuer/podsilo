@@ -159,12 +159,18 @@ https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo] on every push to 
 the documentation, and it is the better place to read any of this: the links resolve and the 26
 Mermaid diagrams are rendered.
 
-Two further markdown files sit outside `docs/` because they are addressed to the agent rather than
-to a reader: link:.claude/CLAUDE.md[`.claude/CLAUDE.md`] is the standing brief every session starts
+Two further files sit outside `docs/` because they are addressed to the agent rather than to a
+reader: link:.claude/CLAUDE.adoc[`.claude/CLAUDE.adoc`] is the standing brief every session starts
 from -- scope, the non-goals, the mandated libraries, the definition of done -- and
 link:.claude/skills/run-podsilo/SKILL.md[`.claude/skills/run-podsilo/SKILL.md`] documents the driver
 that boots the headless emulator, builds and installs the app, seeds it with podcasts, and taps
 through it by on-screen text.
+
+The brief is AsciiDoc like everything else, which puts it under the same `asciidoctor
+--failure-level=WARN` check CI runs over every `.adoc`. Claude Code only loads a file named
+`CLAUDE.md`, so link:.claude/CLAUDE.md[`.claude/CLAUDE.md`] remains as a stub that imports it with
+`@CLAUDE.adoc`. Section references written as "CLAUDE.md §4" -- in the documents and in code
+comments -- mean §4 of the AsciiDoc file.
 
 == Licence
 
