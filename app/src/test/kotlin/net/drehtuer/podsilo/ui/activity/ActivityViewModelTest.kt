@@ -42,6 +42,8 @@ import net.drehtuer.podsilo.feature.episodes.FolderState
 import net.drehtuer.podsilo.feature.episodes.TriageWriter
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -82,6 +84,9 @@ class ActivityViewModelTest {
     private val scheduler = RecordingActivityScheduler()
     private val clock = Clock.fixed(Instant.parse("2026-08-09T12:00:00Z"), ZoneOffset.UTC)
 
+    /** Held rather than built inline, so a decision withdrawn on this screen is observable (#90). */
+    private val triageLedger = FakeActivityLedger()
+
     private fun TestScope.viewModel(): ActivityViewModel {
         feeds.seed(Feed(FEED_URL, "Der Podcast", null, 0, null, null, null))
         val vm =
@@ -98,7 +103,7 @@ class ActivityViewModelTest {
                 workMonitor = { work },
                 syncStatus = { MutableStateFlow(null) },
                 scheduler = scheduler,
-                triageWriter = TriageWriter(FakeActivityLedger(), clock, {}),
+                triageWriter = TriageWriter(triageLedger, clock, {}),
                 syncNow = { },
                 clock = clock,
                 // Issue #91: the projection is dispatched off the main thread in production; a test
@@ -250,6 +255,74 @@ class ActivityViewModelTest {
         }
 
     /**
+     * Issue #90: the undo window closes after five seconds and the decision is then invisible, so a
+     * mis-swipe cannot be found again. The group is the finding, and the button is the taking back.
+     */
+    @Test
+    fun `recent actions render newest first, in the user's words, and are bounded in SQL`() =
+        runTest {
+            episodes.seed(episode("played"))
+            episodes.seed(episode("downloaded"))
+            list.history.value =
+                listOf(
+                    EpisodeListItem(episode("played"), row("played", LedgerState.SKIPPED, actionedAt = 400)),
+                    EpisodeListItem(
+                        episode("downloaded"),
+                        row("downloaded", LedgerState.DOWNLOADED, writtenFileName = "d.mp3", actionedAt = 300),
+                    ),
+                )
+            val vm = viewModel()
+            runCurrent()
+
+            val history = vm.state.value.history
+            assertEquals(listOf("played", "downloaded"), history.map { it.episodeKey })
+            assertEquals(listOf(LedgerState.SKIPPED, LedgerState.DOWNLOADED), history.map { it.state })
+            assertEquals("Der Podcast", history.first().feedTitle)
+            // The limit is the query's job, not a take() after the fact (issue #47's lesson).
+            assertEquals(50, list.historyLimit)
+        }
+
+    /** A decision already withdrawn offers no button — an affordance that does nothing is worse. */
+    @Test
+    fun `an already unplayed row offers no mark-as-unplayed action`() =
+        runTest {
+            episodes.seed(episode("e1"))
+            list.history.value =
+                listOf(EpisodeListItem(episode("e1"), row("e1", LedgerState.UNPLAYED, actionedAt = 1)))
+            val vm = viewModel()
+            runCurrent()
+
+            assertFalse(
+                vm.state.value.history
+                    .single()
+                    .canMarkAsUnplayed,
+            )
+        }
+
+    /**
+     * The recovery itself. A new `UNPLAYED` row, never a deleted one (`docs/decisions/0024`): the
+     * ledger row is the dedup authority and has to outlive the decision it records.
+     */
+    @Test
+    fun `marking as unplayed from the history writes a new row and keeps the old one's file name`() =
+        runTest {
+            episodes.seed(episode("e1"))
+            triageLedger.upsert(row("e1", LedgerState.DOWNLOADED, writtenFileName = "e1.mp3", actionedAt = 1))
+            val vm = viewModel()
+            runCurrent()
+
+            vm.onEvent(ActivityEvent.MarkAsUnplayedClicked("e1"))
+            runCurrent()
+
+            val written = triageLedger.get("e1")
+            assertEquals(LedgerState.UNPLAYED, written?.state)
+            assertNotNull("the row must survive the withdrawal", written)
+            // Kept, or a later re-download would write a second copy of a file already in the folder.
+            assertEquals("e1.mp3", written?.writtenFileName)
+            assertFalse("the withdrawal has to reach the server", written?.syncedToServer ?: true)
+        }
+
+    /**
      * *Clear list* is a display cursor, not a deletion — those rows are what stop an episode being
      * downloaded twice (CLAUDE.md §11). Here that means it re-runs the query with a new `since`.
      */
@@ -295,6 +368,13 @@ private class FakeActivityListRepository : EpisodeListRepository {
     val delivered = MutableStateFlow<List<EpisodeLedgerRow>>(emptyList())
     val unsyncedCount = MutableStateFlow(0)
 
+    /** S7's *recent actions* group (issue #90), settable on its own like the rest. */
+    val history = MutableStateFlow<List<EpisodeListItem>>(emptyList())
+
+    /** The limit the view model asked for, so "bounded in SQL" is observable rather than assumed. */
+    var historyLimit: Int = -1
+        private set
+
     /** The `since` the view model asked for, so the clear cursor is observable. */
     var deliveredSince: Long = -1
         private set
@@ -302,6 +382,11 @@ private class FakeActivityListRepository : EpisodeListRepository {
     override fun observeEpisodes(filter: LedgerFilter): Flow<List<EpisodeListItem>> = MutableStateFlow(emptyList())
 
     override fun observeInFlight(): Flow<List<EpisodeListItem>> = inFlight
+
+    override fun observeRecentActions(limit: Int): Flow<List<EpisodeListItem>> {
+        historyLimit = limit
+        return history
+    }
 
     override fun observeRecentlyDelivered(
         since: Long,
@@ -322,6 +407,11 @@ private class FakeActivityListRepository : EpisodeListRepository {
 
 private class FakeActivityEpisodeRepository : EpisodeRepository {
     private val episodes = mutableMapOf<String, Episode>()
+
+    /** The history group joins to the episode, so a test that renders one has to have one (#90). */
+    fun seed(episode: Episode) {
+        episodes[episode.episodeKey] = episode
+    }
 
     override suspend fun replaceForFeed(
         feedUrl: String,

@@ -759,7 +759,7 @@ block-beta
   d4["✓ 20260630_Hafen-Kran-Kaffee.mp3\nSD card / Podcasts / Der Podcast"]
 ```
 
-Groups: a **paused** banner when the queue is held (§12.11), sync status (last sync, outbox depth,
+Groups, in the order they appear: a **paused** banner when the queue is held (§12.11), sync status (last sync, outbox depth,
 **Sync now** — disabled and labelled "No network connection" when offline), downloading (determinate
 progress + bytes), queued (with the reason it is waiting — Wi-Fi, folder missing, resuming after
 restart), failed (`lastError` as a human sentence + `attempts`, with **Retry**, **Mark as played**,
@@ -768,6 +768,20 @@ and **details** → S8), and the last ~20 completed downloads showing `writtenFi
 
 It is explicitly *not* a file manager: no delete, no open-file, no existence check — matching README
 ("Podsilo does not delete it, track it, or care whether it still exists").
+
+**Recent actions** (added 2026-08-23, issue #90) is the last group, and the only one that is not
+about work in progress. It lists the last ~50 **decisions** — newest first, each naming the episode,
+what was decided in the user's words (*Played*, *Downloaded*, *Marked unplayed*, *Handled
+elsewhere* — never the ledger constant) and when — with **Mark as unplayed** beside each one that
+can still be withdrawn.
+
+It exists because triage is otherwise unrecoverable in practice: a swipe holds its decision for five
+seconds (§12.3) and is then silent, so a mis-swipe cannot be *found* again, even though its state can
+be changed back from S2 by anyone who knows which episode it was. The group is the finding. It shows
+every decided state rather than only *played*, because "what did I just do?" does not distinguish a
+wrong *Download* from a wrong *Mark as played*; the in-flight states are excluded because they are
+already the three groups above. A row already `UNPLAYED` offers no button — an affordance that does
+nothing is worse than none.
 
 Tapping any row jumps to that episode in S2. App-bar action opens S8.
 
@@ -1823,11 +1837,18 @@ data class ActivityUiState(
     val queued: List<QueuedUi>,
     val failed: List<EpisodeUi>,
     val recent: List<DeliveredUi>,          // last ~20, filenames only
+    val history: List<ActionUi>,            // last ~50 decisions, newest first (issue #90)
 )
 
 data class SyncUi(val lastSyncAt: Instant?, val outboxDepth: Int, val canSyncNow: Boolean, val blockedReason: BlockedReason?)
 data class QueuedUi(val episode: EpisodeUi, val reason: WaitReason)  // WIFI, NETWORK, FOLDER, RESUMING
 data class DeliveredUi(val fileName: String, val folderLabel: String, val episodeKey: String)
+data class ActionUi(                                    // one decision, and its way back
+    val episodeKey: String, val feedUrl: String,
+    val episodeTitle: String, val feedTitle: String,
+    val state: LedgerState, val actionedAt: Instant,
+    val canMarkAsUnplayed: Boolean,                     // false once it is already UNPLAYED
+)
 
 sealed interface ActivityEvent {
     data object SyncNowClicked : ActivityEvent
@@ -1836,6 +1857,7 @@ sealed interface ActivityEvent {
     data class MarkAsPlayedClicked(val episodeKey: String) : ActivityEvent
     data class DetailsClicked(val episodeKey: String) : ActivityEvent
     data class RowClicked(val episodeKey: String) : ActivityEvent     // opens S3 for that episode
+    data class MarkAsUnplayedClicked(val episodeKey: String) : ActivityEvent   // issue #90
     data object PausedBannerActionClicked : ActivityEvent
     data object ErrorLogClicked : ActivityEvent
 }
@@ -1849,6 +1871,15 @@ open-file, and no existence check — Podsilo is not a file manager (README).
 
 A `FOLDER_UNAVAILABLE` failure carries `retryable = false`, so its row renders **Choose folder** and
 not **Retry** (§12.11, architecture §11).
+
+`history` is the *recent actions* group (§10, issue #90) and is **not** cursor-filtered: *Clear list*
+means "stop showing me delivered files", and a decision the user may need to take back is not
+something they asked to hide. It comes from `EpisodeListRepository.observeRecentActions(limit)` —
+every decided state, in-flight ones excluded because they are already the groups above it, bounded
+in SQL rather than by a `take()` (issue #47's lesson). `MarkAsUnplayedClicked` goes through the same
+`TriageWriter.markAsUnplayed` S2 and S3 use, so a decision withdrawn here is indistinguishable from
+one withdrawn there: a new `UNPLAYED` row that re-posts, never a deleted one
+(`docs/decisions/0024`).
 
 ---
 

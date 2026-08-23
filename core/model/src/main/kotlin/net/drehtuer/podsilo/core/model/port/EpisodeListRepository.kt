@@ -37,12 +37,30 @@ interface EpisodeListRepository {
     fun observeInFlight(): Flow<List<EpisodeListItem>>
 
     /**
+     * The last [limit] **decisions**, newest first — S7's *recent actions* group (issue #90).
+     *
+     * The affordance this backs is recovery, not history for its own sake: *Mark as played* holds
+     * its decision for five seconds and is then silent, so a mis-swipe cannot be found again. Every
+     * decided state is included, because "what did I just do?" does not distinguish a wrong
+     * *Download* from a wrong *Mark as played*; the in-flight states are not, because they are
+     * already S7's other groups.
+     *
+     * Joined to the episode rather than read off the ledger alone: a row that names only an
+     * enclosure URL cannot be recognised, and recognising the episode is the whole point. An episode
+     * whose cached row was pruned by an unsubscribe therefore drops out of this list — its ledger
+     * row survives, which is what matters (CLAUDE.md §11), but it is not something the user can act
+     * on here.
+     */
+    fun observeRecentActions(limit: Int): Flow<List<EpisodeListItem>>
+
+    /**
      * The last [limit] successfully delivered files, newest first, excluding anything at or before
      * [since] — S7's *recently downloaded* group and the only place the app answers "did it land?".
      *
      * [since] is a **display cursor**, not a deletion: hiding a row here must never remove the
      * ledger record that stops the episode being downloaded again (CLAUDE.md §11).
      */
+
     fun observeRecentlyDelivered(
         since: Long,
         limit: Int,

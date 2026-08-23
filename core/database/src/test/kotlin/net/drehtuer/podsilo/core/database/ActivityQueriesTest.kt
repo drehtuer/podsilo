@@ -70,6 +70,45 @@ class ActivityQueriesTest : RoomTestBase() {
             assertEquals(listOf("live"), list.observeInFlight().first().map { it.episode.episodeKey })
         }
 
+    /**
+     * Issue #90: *Mark as played* is silent once its five-second undo window closes, so a mis-swipe
+     * cannot be found again. This query is the finding.
+     */
+    @Test
+    fun `observeRecentActions returns every decided state, newest first, bounded by limit`() =
+        runTest {
+            seedFeedWithEpisodes("played", "downloaded", "unplayed", "remote", "queued")
+            ledger.upsert(ledgerRow("played", "f", LedgerState.SKIPPED).copy(actionedAt = 400))
+            ledger.upsert(ledgerRow("downloaded", "f", LedgerState.DOWNLOADED).copy(actionedAt = 300))
+            ledger.upsert(ledgerRow("unplayed", "f", LedgerState.UNPLAYED).copy(actionedAt = 200))
+            ledger.upsert(ledgerRow("remote", "f", LedgerState.HANDLED_REMOTELY).copy(actionedAt = 100))
+            // In flight, and therefore already one of the groups above this one on S7 — listing it
+            // here would put the same episode on the screen twice.
+            ledger.upsert(ledgerRow("queued", "f", LedgerState.QUEUED).copy(actionedAt = 500))
+
+            assertEquals(
+                listOf("played", "downloaded", "unplayed", "remote"),
+                list.observeRecentActions(limit = 50).first().map { it.episode.episodeKey },
+            )
+            assertEquals(
+                listOf("played", "downloaded"),
+                list.observeRecentActions(limit = 2).first().map { it.episode.episodeKey },
+            )
+        }
+
+    /** The row has to name an episode the user can recognise, which is why it is a join. */
+    @Test
+    fun `observeRecentActions carries the episode title and its ledger row`() =
+        runTest {
+            seedFeedWithEpisodes("e1")
+            ledger.upsert(ledgerRow("e1", "f", LedgerState.SKIPPED).copy(actionedAt = 700))
+
+            val item = list.observeRecentActions(limit = 50).first().single()
+            assertEquals("e1", item.episode.episodeKey)
+            assertEquals(LedgerState.SKIPPED, item.ledger?.state)
+            assertEquals(700L, item.ledger?.actionedAt)
+        }
+
     @Test
     fun `observeRecentlyDelivered limits, orders newest first and respects the clear cursor`() =
         runTest {

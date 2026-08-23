@@ -230,4 +230,59 @@ class ActivityScreenTest {
 
         compose.onAllNodes(hasText("Clear list")).assertCountEquals(0)
     }
+
+    /**
+     * Issue #90. The group names the episode and what was done to it in the user's words — "Played",
+     * not `SKIPPED` — because it is read by someone trying to recognise a row they swiped by mistake.
+     */
+    @Test
+    fun `a recent action names the episode, the decision and its way back`() {
+        render(
+            ActivityUiState(
+                history =
+                    listOf(
+                        ActionUi(
+                            episodeKey = "e1",
+                            feedUrl = "https://example.org/feed.xml",
+                            episodeTitle = "Warum Hamburg immer regnet",
+                            feedTitle = "Der Podcast",
+                            state = LedgerState.SKIPPED,
+                            actionedAt = now.minusSeconds(120),
+                            canMarkAsUnplayed = true,
+                        ),
+                    ),
+            ),
+        )
+
+        compose.onNodeWithText("RECENT ACTIONS").assertIsDisplayed()
+        compose.onNodeWithText("Warum Hamburg immer regnet").assertIsDisplayed()
+        compose.onNode(hasText("Played", substring = true)).assertIsDisplayed()
+
+        compose.onNodeWithText("Mark as unplayed").performClick()
+
+        assertEquals(listOf(ActivityEvent.MarkAsUnplayedClicked("e1")), events)
+    }
+
+    /** `HANDLED_REMOTELY` was not this device's decision, so the row must not claim it was. */
+    @Test
+    fun `an action handled elsewhere says so rather than claiming the user played it`() {
+        render(
+            ActivityUiState(
+                history =
+                    listOf(
+                        ActionUi(
+                            episodeKey = "e2",
+                            feedUrl = "https://example.org/feed.xml",
+                            episodeTitle = "Regenradar",
+                            feedTitle = "Der Podcast",
+                            state = LedgerState.HANDLED_REMOTELY,
+                            actionedAt = now.minusSeconds(60),
+                            canMarkAsUnplayed = true,
+                        ),
+                    ),
+            ),
+        )
+
+        compose.onNode(hasText("Handled elsewhere", substring = true)).assertIsDisplayed()
+    }
 }

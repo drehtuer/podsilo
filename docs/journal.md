@@ -5517,3 +5517,201 @@ never used at all, so the count is zero. Verified failing before the fix, passin
 watched the app during a real download since the change — the claim "the UI no longer freezes" is
 reasoning plus a dispatch assertion, not an observation. The device set (`docs/dev-environment.md` §6)
 is where that would be settled, and it has not been run for this.
+
+---
+
+## 2026-08-23 (#90) — a decision you can find again
+
+**Attempted:** issue #90 — a history of actions, "if an episode is marked by mistake and the undo
+notification is missed, it is impossible to track which should be reverted."
+
+The word doing the work is **track**. Nothing was ever unrecoverable: *Mark as unplayed* has existed
+since `docs/decisions/0024`, and S2's filters can reach any episode. What was missing is knowing
+*which* episode — a swipe holds its decision for five seconds (§12.3) and is then silent, and an
+episode that leaves the *To decide* filter leaves the screen. The feature is therefore a list, not a
+new capability.
+
+**Asked before building**, because it decides how much of the app moves: a group inside S7, a ninth
+screen, or widening S7's existing *recently downloaded* group. The author chose the group in S7,
+which is what the issue itself pointed at ("similar to the download history"). It costs no new route,
+no new ViewModel, and no schema change — `EpisodeLedgerRow` already carries `state` and `actionedAt`.
+
+**Built:** `EpisodeListDao.observeRecentActions(limit)` — the `episodes ⨝ episode_ledger` join,
+every decided state, newest first, `LIMIT` in SQL. Three decisions worth recording:
+
+- **Every decided state, not just `SKIPPED`.** "What did I just do?" does not distinguish a wrong
+  *Download* from a wrong *Mark as played*.
+- **In-flight states excluded.** `QUEUED`/`DOWNLOADING`/`ERROR` are already the three groups above
+  this one; including them would put the same episode on one screen twice.
+- **A join, not the ledger alone.** S7's delivered group reads ledger rows because it renders a
+  filename, and that keeps it correct for an unsubscribed feed. This group has to name an episode the
+  user can *recognise*, so it joins — and an episode whose cache was pruned by an unsubscribe drops
+  out of it. The ledger row survives, which is the part that matters (CLAUDE.md §11).
+
+The row says **Played**, not `SKIPPED` — the vocabulary rule §1 sets — and `HANDLED_REMOTELY` renders
+as *Handled elsewhere*, because presenting another client's decision as "you played this" would have
+the app asserting something it does not know. A row already `UNPLAYED` gets no button.
+
+**The cost nobody plans for:** six test fakes implement `EpisodeListRepository` across five modules,
+so one port method meant six overrides. Four are `flowOf(emptyList())` with a comment saying why
+that is honest rather than lazy; the two that back tests of this feature return real data.
+
+`./gradlew ktlintCheck detekt test` green: **812 tests, 0 failures, 3 skipped.**
+
+**Honest limits.** Verified on the JVM only — the group renders correctly under Robolectric and the
+write goes through the same `TriageWriter` as S2's, but nobody has swiped an episode on a phone,
+opened S7 and taken it back. Fifty entries is a guess at "enough to find a mis-swipe in": there is no
+paging and no *load more*, so a decision older than the last fifty is not reachable here.
+
+---
+
+## 2026-08-23 (emulator) — the fix that only broke where the tests could not look
+
+**Attempted:** run the three issue fixes (#90, #91, #92) on the in-container emulator, since all
+three had shipped with "verified on the JVM, nobody has looked at it" attached.
+
+### What the run proved
+
+- **#90 end to end, which is what the emulator is good for.** Marked *Folge 2* as played from S2's
+  overflow, waited out the undo window, opened S7: the **RECENT ACTIONS** group listed it as
+  *Played · just now · Silo Stories*, newest first, above the two older decisions. Tapped *Mark as
+  unplayed*; `episode_ledger` went `SKIPPED → UNPLAYED` with `syncedToServer = 0`, the row intact.
+  The row then re-rendered as *Marked unplayed · just now* **with no button**, which is the one rule
+  a JVM test asserts abstractly and a screen can still get wrong.
+- **`driver.py smoke` green** on the full stack: seed → SAF grant → mark played → real 100 KB
+  download over HTTPS → ID3 rewrite → SAF delivery → both ledger rows.
+- **#92's gutter is 30 dp on this device, not 16.** `WindowInsets.systemGestures` reports 78 px at
+  density 420. Taking the max rather than hardcoding 16 dp was the right call, and this is the first
+  evidence for it: a fixed 16 would have left a 14 dp strip of live swipe surface under the system's
+  own gesture.
+
+### The defect, and why the tests were blind to it
+
+That same 30 dp is what broke the layout. The lists moved out to the gutter; the filter chips and
+banners, which sit *outside* the list and keep their own `RowPadding`, stayed on the 16 dp grid. The
+result is a visible step between the chip row and the first row under it — measured 42 px against
+78 px.
+
+**Robolectric reports a zero gesture inset**, so in every JVM test the gutter is exactly the 16 dp
+floor and the two grids coincide. The suite could not have caught this, and the PR I had already
+written said "the content grid does not move at all", which is true only on a device that reserves
+16 dp or less. The emulator was the first place the claim met a number that was not 16.
+
+Fixed with `chromeGutterFor(gutter)` — what a chrome row needs *added* to its own padding to reach
+the gutter, zero when they agree. First attempt put it on the container that also holds the list,
+which applied the gutter twice and pushed the rows out to 43 dp; caught by measuring rather than by
+looking, which is the argument for `dump` over screenshots. It belongs on the #92 branch, so the
+stack was rebased: `fix/92` → `fix/91` → `feat/90`, all three re-verified after.
+
+### Still not settled, and the phone is the only place it can be
+
+- **#91's actual smoothness.** The structural fix is in and the app works during a download, but
+  this emulator is software-rendered under nested virtualisation — frame timing here measures the
+  emulator, not the fix.
+- **#92's original symptom.** The headless AVD has no gesture navigation to compete with, so the
+  30 dp inset is a number, not a resolved collision.
+
+### A tooling papercut worth knowing
+
+`driver.py smoke` is not idempotent: it taps *Folge 1* by name, and its own previous run leaves that
+episode with a ledger row, which hides it under the default *To decide* filter. It needs a `reset`
+first, every time after the first. Not worth a rebase of four branches today — noted here, and the
+second run's file came out as `… (2).mp3`, which is the collision suffixing behaving correctly
+against the file the first run had already written.
+
+`./gradlew ktlintCheck detekt test` green: **814 tests, 0 failures, 3 skipped.**
+
+---
+
+## 2026-08-23 (device) — the phone answered the two questions the JVM could not
+
+**Attempted:** verify #90, #91 and #92 on the author's Pixel 10a (Android 17) over wireless
+debugging, against the real `cloud.drehtuer.net` account — the three fixes had all shipped with
+"verified on the JVM, nobody has looked at it" attached.
+
+### Getting on the phone
+
+`adb pair` failed with a protocol fault, and it did not matter: the adb key from the August sessions
+is still trusted, so `adb connect` alone worked. The **pairing port is not the connect port** —
+§9.4 says so and I still tried the pairing port first. The connect port came from the documented
+scan, since mDNS does not cross into the container.
+
+Two environmental failures cost a run each, and neither was a code problem:
+
+1. **The phone was dozing with the lockscreen up.** Every Compose test failed with *"No compose
+   hierarchies found in the app"*, which is what the test rule says when the activity cannot reach
+   the foreground. Worth knowing because it reads exactly like a broken app.
+2. **A 30-second screen timeout** would have re-created that mid-run, so it was raised to 30 minutes
+   for the session and put back afterwards.
+
+### The set
+
+61 tests, in two halves. 39 across `core/datastore`, `core/download`, `core/ui`,
+`feature/episodes` and `feature/settings` — all green. Then `:app`'s 22, which is where the
+interesting part is: **the 6 `SafDownloadTargetInstrumentedTest` cases and
+`DownloadPipelineInstrumentedTest` only run if a folder grant and refreshed episodes exist**, and
+`device-test.sh` destroys the first by reinstalling. Installing **only the test APK** over an
+already-granted app is what let them run: `am instrument` directly, no Gradle, no reinstall. All 7
+passed, and the pipeline test left the ledger byte-identical to the baseline — it cleans up after
+itself, which the JVM cannot show.
+
+One failure along the way was a **flake**: `everyFilterChipIsReachableAtTheDeviceWidth` died with
+"Activity has been destroyed already" and passed on re-run. That is the test most likely to be broken
+by #92's gutter, so its passing is a positive result rather than an absence of a negative.
+
+### #92, settled
+
+The gutter resolves to **30 dp on this phone** — the same as the emulator, and the reason taking
+`max(systemGestures, 16 dp)` rather than hardcoding 16 was right. Chrome and rows both land at
+x = 78 px, so the alignment fix holds on real hardware with real data.
+
+The gesture itself, which no emulator could answer: **a swipe starting at x = 10 px navigated back**
+— the system took it — with no triage and no snackbar. A swipe starting inside the content area still
+triages, and its undo still writes nothing. That is the whole issue, closed on the device that
+reported it. Caveat: these are injected events, not a finger.
+
+### #91, measured at last
+
+`dumpsys gfxinfo` during a **real download of a real episode**, scrolling the list throughout:
+**266 frames, 8 janky (3.01 %)**, 50th 6 ms, 90th 11 ms, 95th 15 ms. Against a 2,468-episode cache
+and 2,917 ledger rows. The claim in the PR was reasoning plus a dispatch assertion; this is the
+number.
+
+**What it is not: an A/B.** Nobody measured the pre-fix build on this phone, so the honest statement
+is "smooth now", not "n times smoother". The before-number would need the `fix/92` build installed
+and another real download.
+
+### What the account cost, and how it was returned
+
+The author asked for any *mark as played* to be reversed. The baseline was clean and unusually easy
+to diff: **2,917 rows, every one `HANDLED_REMOTELY`, nothing unsynced** — so anything else was mine.
+
+The download wrote one row (`DOWNLOADED`, then `syncedToServer = 1`, so `DOWNLOAD` and `PLAY` reached
+the server). It was reversed through **S7's own *Mark as unplayed*** — which is #90 being used for
+its actual purpose on real data, not a demo — leaving `UNPLAYED`, synced, which other clients read as
+unread (`docs/decisions/0022`). The row itself stays, because the row is the dedup authority and has
+to outlive the decision (`docs/decisions/0024`). "Reversed" therefore means *the episode reads as
+unread everywhere*, not *the record is gone*, and those are deliberately different things.
+
+The 63 MB file remains in the author's `Podcasts/PseudoPod/` folder. Podsilo does not delete files
+(CLAUDE.md §1), and an agent deleting one because it created it is a rule this project should not
+start bending; it is theirs to remove.
+
+### A network problem that was a typo
+
+Mid-session the author could not connect: *"cannot reach address"*. The container reached
+`cloud.drehtuer.net` in 76 ms, the phone pinged it in 35 ms, and the VPN tunnel's 1283-byte MTU
+looked like a promising culprit — which is where I started speculating instead of reading. The app's
+own error log had it in one line:
+
+```
+AUTH ×3 · Connecting to Nextcloud failed: UNREACHABLE
+host 'cloud drehtuer.net' rejected before contacting anything
+```
+
+A **space instead of a dot**. `docs/decisions/0019` paid for itself a second time, and the lesson is
+the same one as last time: read the error log before theorising about the network.
+
+It leaves a real observation, unfixed and unrecorded elsewhere: a **malformed host reports as
+`UNREACHABLE`**, the same word a genuine network failure gets. The `detail` line distinguishes it,
+the headline does not, and that is what sent two of us to look at a VPN. Same family as issue #40.

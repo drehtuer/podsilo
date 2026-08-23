@@ -75,7 +75,7 @@ fun ActivityScreen(
             Column(modifier = Modifier.widthIn(max = MaxContentWidth)) {
                 (state.queueStatus as? QueueStatus.Paused)?.let { PausedBanner(it, onEvent) }
                 SyncRow(state.sync, now, onEvent)
-                if (state.isIdle) NothingHappening() else Groups(state, onEvent)
+                if (state.isIdle) NothingHappening() else Groups(state, now, onEvent)
             }
         }
     }
@@ -185,6 +185,7 @@ private fun NothingHappening() {
 @Composable
 private fun Groups(
     state: ActivityUiState,
+    now: Instant,
     onEvent: (ActivityEvent) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -203,6 +204,10 @@ private fun Groups(
                 ) { Text("Clear list") }
             }
         }
+        // Last, because it is the group you go looking for rather than the one you are watching
+        // (issue #90). Every other group is about work in progress; this one is about a decision
+        // already taken and possibly regretted.
+        group("RECENT ACTIONS", state.history, { it.episodeKey }) { ActionRow(it, now, onEvent) }
     }
 }
 

@@ -2,6 +2,7 @@
 
 package net.drehtuer.podsilo.ui.activity
 
+import net.drehtuer.podsilo.core.model.LedgerState
 import net.drehtuer.podsilo.feature.episodes.EpisodeUi
 import net.drehtuer.podsilo.feature.episodes.QueueStatus
 import java.time.Instant
@@ -21,10 +22,36 @@ data class ActivityUiState(
     val queued: List<QueuedUi> = emptyList(),
     val failed: List<EpisodeUi> = emptyList(),
     val recent: List<DeliveredUi> = emptyList(),
+    /**
+     * The last few decisions, newest first (issue #90) — *what did I just do, and can I take it
+     * back?* Distinct from [recent], which answers "did the file land?" and renders a filename.
+     */
+    val history: List<ActionUi> = emptyList(),
 ) {
     val isIdle: Boolean
-        get() = downloading.isEmpty() && queued.isEmpty() && failed.isEmpty() && recent.isEmpty()
+        get() =
+            downloading.isEmpty() &&
+                queued.isEmpty() &&
+                failed.isEmpty() &&
+                recent.isEmpty() &&
+                history.isEmpty()
 }
+
+/**
+ * One decision in S7's *recent actions* group (issue #90).
+ *
+ * @property canMarkAsUnplayed a decision that can be withdrawn. `UNPLAYED` is already withdrawn, so
+ *   it renders as history without an action rather than offering a no-op.
+ */
+data class ActionUi(
+    val episodeKey: String,
+    val feedUrl: String,
+    val episodeTitle: String,
+    val feedTitle: String,
+    val state: LedgerState,
+    val actionedAt: Instant,
+    val canMarkAsUnplayed: Boolean,
+)
 
 /**
  * @property canSyncNow `false` with [blockedReason] set rather than a button that fails — an offline
@@ -90,6 +117,16 @@ sealed interface ActivityEvent {
 
     /** Empties the *delivered* list. A display cursor — no file and no ledger row is touched. */
     data object ClearDeliveredClicked : ActivityEvent
+
+    /**
+     * Withdraws a decision from the *recent actions* group (issue #90).
+     *
+     * A new `UNPLAYED` row, never a deleted one (`docs/decisions/0024`): the row is the dedup
+     * authority and has to outlive the decision it records.
+     */
+    data class MarkAsUnplayedClicked(
+        val episodeKey: String,
+    ) : ActivityEvent
 
     data object ErrorLogClicked : ActivityEvent
 }
