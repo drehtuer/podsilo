@@ -432,9 +432,26 @@ Three things follow from choosing Antora, and the first is a real cost:
   view, an `xref:architecture.adoc[]` renders as a link to `architecture.html`, which does not exist
   there. The site is the reading surface now; in-repo browsing still shows the prose and the diagrams
   but not working cross-references.
-* *Mermaid renders on GitHub and not on the site.* GitHub draws `[source,mermaid]` natively; Antora's
-  stock UI shows it as source. Fixing that needs either `asciidoctor-kroki` (a Kroki server, public or
-  self-hosted) or a supplemental UI that loads `mermaid.js` client-side. Neither is wired up.
+* *Mermaid renders in both places, by rewriting the block at build time.* GitHub draws
+  `[source,mermaid]` and nothing else; `asciidoctor-kroki` renders `[mermaid]` and nothing else.
+  Rather than pick one, `antora-extensions/mermaid-source-blocks.js` rewrites the declaration in the
+  aggregated content — after the files are read, before Asciidoctor sees them — so the files on disk
+  keep the spelling GitHub needs and Kroki gets the one it needs. Nothing on disk changes.
+
+  Kroki runs as a container beside opodsync (`cd .devcontainer && docker compose up -d kroki`).
+  Self-hosted rather than the public `kroki.io`, which would work and needs no service at all, but
+  would post every architecture and UI diagram to a third party on each build.
+
+  Two things that cost an afternoon and are not guessable:
+
+  ** *Set `kroki-http-method: post`.* The default encodes the diagram into a GET URL, and Kroki
+     rejects anything past a 4000-character limit with a bare `400`. Four of the 26 diagrams — the ER
+     schema, two sequence diagrams and the ledger state machine — were long enough to hit it, so
+     whether a diagram appeared depended on its size.
+  ** *Mermaid treats `;` as a statement separator.* An unquoted semicolon in a message truncates it
+     and the remainder fails to parse. Two diagrams here carried one, and both had almost certainly
+     never rendered on GitHub either — the grammar is the same. The Kroki build is what surfaced
+     them, because a failed render is a warning where a failed parse on GitHub is a blank box.
 * *The UI bundle is the rolling `HEAD` artifact*, because the branch-pinned URL 404s. `snapshot: true`
   is required for that reason. To freeze it, vendor the zip rather than pin a URL that does not exist.
 

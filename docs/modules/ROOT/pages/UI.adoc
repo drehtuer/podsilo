@@ -711,7 +711,7 @@ sequenceDiagram
         alt Connect
             D->>DS: store server URL + loginName + encrypted appPassword
             D->>W: enqueue expedited SyncWorker (pull all subscriptions)
-            D->>U: dialog closes, S4 shows the instance; S1 fills in
+            D->>U: dialog closes, S4 shows the instance, S1 fills in
         else Use a different account
             D->>B: open the server root so the session can be ended
             D->>U: back to the address field, with the browser-session hint

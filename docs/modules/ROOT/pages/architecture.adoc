@@ -856,7 +856,7 @@ sequenceDiagram
     NC-->>GC: 200 {add, remove, timestamp}
     GC-->>O: SubscriptionDelta
     O->>FR: replaceAll(add - remove)
-    Note over FR: wholesale replace; episodes of removed feeds deleted, ledger rows kept
+    Note over FR: wholesale replace -- episodes of removed feeds deleted, ledger rows kept
 
     O->>LR: getUnsynced()
     LR-->>O: rows where syncedToServer = false

@@ -60,5 +60,52 @@ services:
       timeout: 3s
       retries: 12
 
+  # --- Kroki: diagram rendering for the documentation site ------------------------
+  #
+  # Antora's stock UI shows a [source,mermaid] block as source. GitHub draws it
+  # natively, so the diagrams are readable there and not on the site — Kroki closes
+  # that gap by rendering them to SVG at build time.
+  #
+  # SELF-HOSTED ON PURPOSE. The public kroki.io would work and needs no compose
+  # service at all, but it means posting every architecture and UI diagram in this
+  # repository to a third party on each site build. These diagrams are not secret;
+  # sending them anyway, when a container costs one `docker compose up`, is a habit
+  # worth not forming.
+  #
+  #   cd .devcontainer && docker compose up -d kroki
+  #   antora --fetch antora-playbook.yml
+  #
+  # Reachable at http://localhost:8000 from the dev container, which runs with
+  # --network=host and so shares the host's network namespace (same reasoning as
+  # opodsync above).
+  kroki:
+    image: yuzutech/kroki:0.28.0
+    restart: unless-stopped
+    ports:
+      - "${KROKI_PORT:-8000}:8000"
+    environment:
+      # The core image renders PlantUML, GraphViz and friends in-process. Mermaid
+      # needs a headless browser, so it lives in its own companion container and the
+      # core delegates to it — omit this and every mermaid diagram fails at build.
+      KROKI_MERMAID_HOST: kroki-mermaid
+      # Nothing else is used here, and each one is a network service we would be
+      # running for no reason.
+      KROKI_SAFE_MODE: secure
+    depends_on:
+      - kroki-mermaid
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # The headless-Chrome half of Kroki. Not published: only the core container talks
+  # to it, over the compose network.
+  kroki-mermaid:
+    image: yuzutech/kroki-mermaid:0.28.0
+    restart: unless-stopped
+    expose:
+      - "8002"
+
 volumes:
   opodsync-data:

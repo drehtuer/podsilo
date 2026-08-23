@@ -6001,3 +6001,47 @@ choices about what the site depends on, not implementation details, so neither w
 *Nothing publishes the site.* The playbook writes `build/site/`; no workflow deploys it. GitHub Pages
 cannot build AsciiDoc itself, so publishing means an Actions job that runs Antora and uploads the
 artifact.
+
+
+'''
+
+== 2026-08-23 (kroki) — the diagrams that had never rendered anywhere
+
+*Attempted:* a Kroki server in the dev container, so the site draws the Mermaid diagrams Antora's
+stock UI was showing as source.
+
+=== Having it both ways
+
+GitHub renders Mermaid inside `.adoc` only from `[source,mermaid]`. `asciidoctor-kroki` renders only
+`[mermaid]`. Writing either one breaks the other, and these diagrams are read in both places.
+
+The way out is that Antora hands extensions the aggregated content before Asciidoctor sees it:
+`antora-extensions/mermaid-source-blocks.js` rewrites the declaration there, so the files on disk keep
+GitHub's spelling and Kroki gets its own. Twenty-odd lines, and nothing on disk changes.
+
+Kroki itself is self-hosted beside opodsync rather than the public `kroki.io` — which would have
+worked with no compose service at all, and would have posted every architecture and UI diagram in this
+repository to a third party on each build. They are not secret. Sending them anyway, when a container
+costs one `docker compose up`, is a habit worth not forming.
+
+=== Two failures, and a wrong turn between them
+
+Four of the 26 diagrams came back `400`. They were the four longest, which pointed at size, and I
+promptly tested the theory the wrong way: `curl -X POST` without a content type sends form-encoded
+data, and Kroki mangles that, so my "reproduction" failed for a reason that had nothing to do with
+the build. Adding `-H 'Content-Type: text/plain'` made the same diagram render, which looked like the
+answer and was not.
+
+The actual cause was in the build's own error, which I had skimmed: `GET
+http://localhost:8000/mermaid/svg/eNptU8Fu…`. The extension encodes the diagram into a *GET URL* by
+default, and Kroki rejects anything past 4000 characters. `kroki-http-method: post` fixes it, and the
+lesson is the ordinary one — the stack trace named the request; I went and invented a different one.
+
+Two diagrams still failed after that, and those were real: *Mermaid treats `;` as a statement
+separator*, so an unquoted semicolon truncates a message and the rest fails to parse. Both had
+carried one for months, and *both had almost certainly never rendered on GitHub either* — same
+grammar. Nobody noticed, because a diagram that fails to parse on GitHub is a quiet blank box,
+whereas a diagram that fails to render through Kroki is a build warning. The site build is what
+surfaced them.
+
+All 26 render now, and the build is warning-free.

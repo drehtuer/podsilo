@@ -8,6 +8,12 @@ site:
   url: https://drehtuer.github.io/podsilo
   start_page: podsilo::index.adoc
 
+# Build-time only: rewrites [source,mermaid] to [mermaid] so Kroki renders it, while
+# the files on disk keep the spelling GitHub renders. See the extension for why.
+antora:
+  extensions:
+    - require: ./antora-extensions/mermaid-source-blocks.js
+
 content:
   sources:
     - url: .
@@ -28,7 +34,23 @@ output:
   dir: ./build/site
 
 asciidoc:
+  extensions:
+    # Renders the [source,mermaid] blocks to SVG via the Kroki service in
+    # .devcontainer/docker-compose.yml. Without it Antora's stock UI shows them as
+    # source, which is the one thing GitHub does better than the site.
+    - asciidoctor-kroki
   attributes:
+    kroki-server-url: http://localhost:8000
+    # Fetch the rendered SVG at build time and publish it as a site asset, rather
+    # than leaving an <img> pointing at localhost — which would be broken for every
+    # reader who is not the person who built the site.
+    kroki-fetch-diagram: true
+    # POST, not the default adaptive GET. Kroki encodes a GET diagram into the URL
+    # and rejects anything past its 4000-character limit with a bare 400 — which is
+    # what the four longest diagrams here (the ER schema, two sequence diagrams and
+    # the ledger state machine) did, while every shorter one rendered. The size of a
+    # diagram should not decide whether it appears.
+    kroki-http-method: post
     # Same two attributes every page carries, so ids are generated the same way here
     # as they are when GitHub renders the file directly.
     idprefix: ''
