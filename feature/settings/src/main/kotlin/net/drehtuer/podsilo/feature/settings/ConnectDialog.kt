@@ -131,6 +131,13 @@ internal val ConnectUiState.busyLabel: String?
 internal val ConnectError.message: String
     get() =
         when (this) {
+            // Names the character, and shows the shape it should have. A generic "invalid address"
+            // would be true and useless: the whole point is that a space is invisible in a URL.
+            ConnectError.ADDRESS_HAS_SPACE ->
+                "Addresses can't contain spaces — check for a stray one " +
+                    "(cloud.example.org, not cloud example.org)."
+            ConnectError.ADDRESS_INVALID ->
+                "That doesn't look like a server address. It should read like cloud.example.org."
             ConnectError.UNREACHABLE -> "Can't reach that address. Check the spelling and your network."
             // Names the likeliest cause, because it is one the user can act on by waiting. Nextcloud
             // slows repeated authorization attempts down deliberately, and the old wording sent

@@ -116,12 +116,72 @@ class ConnectViewModelTest {
             assertEquals(listOf("http://nextcloud.lan"), client.startedWith)
         }
 
+    /**
+     * "Immediately visible" is the requirement, and it is a behavioural one: the fault has to show
+     * while the field is being typed into, not after a Connect that never leaves the device.
+     */
     @Test
-    fun `an empty or spaced host is rejected before anything is contacted`() {
-        assertEquals(ConnectError.UNREACHABLE, hostProblem(""))
-        assertEquals(ConnectError.UNREACHABLE, hostProblem("cloud example org"))
+    fun `a bad address reports itself while it is being typed, before any Connect`() {
+        val viewModel = viewModel()
+
+        viewModel.onEvent(ConnectEvent.HostChanged("cloud drehtuer.net"))
+
+        assertEquals(ConnectError.ADDRESS_HAS_SPACE, viewModel.state.value.inlineError)
+        assertTrue("nothing may be contacted on a keystroke", client.startedWith.isEmpty())
+    }
+
+    /** An untouched field is not a mistake, and must not be shouted at as one. */
+    @Test
+    fun `an empty field stays silent`() {
+        val viewModel = viewModel()
+
+        viewModel.onEvent(ConnectEvent.HostChanged(""))
+
+        assertNull(viewModel.state.value.inlineError)
+    }
+
+    /** And it clears itself the moment the address becomes typeable again. */
+    @Test
+    fun `fixing the address clears the message`() {
+        val viewModel = viewModel()
+
+        viewModel.onEvent(ConnectEvent.HostChanged("cloud drehtuer.net"))
+        viewModel.onEvent(ConnectEvent.HostChanged("cloud.drehtuer.net"))
+
+        assertNull(viewModel.state.value.inlineError)
+    }
+
+    /**
+     * The address a phone keyboard actually produces, and the one this check exists for: a space
+     * after "cloud" cost a session of looking at a VPN's MTU before the error log was read
+     * (`docs/journal.md`, 2026-08-23). It used to report as `UNREACHABLE` — the same word a real
+     * network failure gets — which is what sent the reader to the network in the first place.
+     */
+    @Test
+    fun `a space in the address says so, rather than saying the address is unreachable`() {
+        assertEquals(ConnectError.ADDRESS_HAS_SPACE, hostProblem("cloud drehtuer.net"))
+        assertEquals(ConnectError.ADDRESS_HAS_SPACE, hostProblem("cloud example org"))
+    }
+
+    @Test
+    fun `an address with nothing a host can be read out of is invalid, not unreachable`() {
+        assertEquals(ConnectError.ADDRESS_INVALID, hostProblem(""))
+        assertEquals(ConnectError.ADDRESS_INVALID, hostProblem("https://"))
+        assertEquals(ConnectError.ADDRESS_INVALID, hostProblem("://"))
+    }
+
+    /**
+     * The permissive half, and the more important one to pin: this check exists to make a typo
+     * visible, not to have opinions about the author's network. A single-label LAN name, a port, an
+     * IPv4 literal and a subdirectory install are all real Nextcloud setups.
+     */
+    @Test
+    fun `real addresses are left alone`() {
         assertNull(hostProblem("cloud.example.org"))
         assertNull("a subdirectory install is legal", hostProblem("example.org/nextcloud"))
+        assertNull("a single-label LAN name is legal", hostProblem("nextcloud"))
+        assertNull("a port is legal", hostProblem("192.168.1.5:8080"))
+        assertNull("a typed scheme is stripped, not rejected", hostProblem("https://cloud.example.org"))
     }
 
     @Test

@@ -100,7 +100,19 @@ class ConnectViewModel(
                 // accepting a change would leave the poll running against a different host than the
                 // one on screen.
                 if (_state.value.phase == ConnectUiState.Phase.Editing) {
-                    _state.value = _state.value.copy(host = event.value, inlineError = null)
+                    _state.value =
+                        _state.value.copy(
+                            host = event.value,
+                            // Checked on every keystroke, which is the whole point: a space in an
+                            // address is invisible, and reporting it only after a request that never
+                            // leaves the device sends the reader to look at their network. An empty
+                            // field is not a mistake yet, so it stays silent.
+                            inlineError =
+                                event.value
+                                    .trim()
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.let(::hostProblem),
+                        )
                 }
             ConnectEvent.Submit -> submit()
             ConnectEvent.Cancel -> cancel()
@@ -337,10 +349,29 @@ class ConnectViewModel(
  */
 internal fun hostProblem(host: String): ConnectError? =
     when {
-        host.isBlank() -> ConnectError.UNREACHABLE
-        host.any { it.isWhitespace() } -> ConnectError.UNREACHABLE
+        host.isBlank() -> ConnectError.ADDRESS_INVALID
+        host.any { it.isWhitespace() } -> ConnectError.ADDRESS_HAS_SPACE
+        // Before parsing, because a scheme with nothing after it survives [normaliseHost] as a
+        // *host*: "https://" loses its slashes to `trimEnd('/')`, no longer matches the prefix
+        // test, and is re-prefixed into "https://https:" — which parses, with host "https".
+        host.withoutScheme().isBlank() -> ConnectError.ADDRESS_INVALID
+        !parsesAsAHost(host) -> ConnectError.ADDRESS_INVALID
         else -> null
     }
+
+/**
+ * Whether a host can be parsed out of what was typed.
+ *
+ * `java.net.URI` rather than a regex of our own: hostnames, IPv4 literals, bracketed IPv6, ports and
+ * a subdirectory install are all legal here, and the set of things that are *not* is far harder to
+ * write down than to delegate. A `null` authority is the answer to "there is no host in this".
+ *
+ * Deliberately permissive about what it accepts — a single-label LAN name like `nextcloud` is a real
+ * setup, so this rejects only what cannot be an address at all. The check exists to make a typo
+ * visible immediately, not to have opinions about the author's network.
+ */
+private fun parsesAsAHost(host: String): Boolean =
+    runCatching { java.net.URI(normaliseHost(host)).host != null }.getOrDefault(false)
 
 /**
  * A typed scheme is **stripped, not rejected** (`docs/UI.md` §8), and https is then assumed: the

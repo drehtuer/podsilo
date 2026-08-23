@@ -670,11 +670,28 @@ block-beta
   the user sees no difference. A failure is one line in S8 (`AUTH`) and nothing else — it is not
   something they can act on mid-flow.
 
+**The address is checked as it is typed** (added 2026-08-23). The first two rows below are decided
+locally, on every keystroke, before anything is contacted; the rest can only be known by asking the
+server, so they appear after *Connect*.
+
+That split exists because of a real session: a keyboard put a space after "cloud", the app reported
+it as `UNREACHABLE` — the same word a genuine network failure gets — and the author and the agent
+spent a session inspecting a VPN's MTU for a fault that was three characters into the field. A typo
+must not borrow the vocabulary of a network failure, and it must not wait for a request that never
+leaves the device. An **empty** field is not a mistake and stays silent.
+
+The check is deliberately permissive about what it accepts — a single-label LAN name (`nextcloud`),
+a port, an IPv4 literal and a subdirectory install are all real Nextcloud setups. It rejects only
+what cannot be an address at all, because its job is to make a typo visible, not to have opinions
+about the user's network.
+
 **Inline error messages** (under the field, plain language, never a stack trace; each also written to
 S8):
 
 | Cause | Message |
 |---|---|
+| **Space in the address** | "Addresses can't contain spaces — check for a stray one (cloud.example.org, not cloud example.org)." |
+| **Not an address at all** | "That doesn't look like a server address. It should read like cloud.example.org." |
 | DNS / unreachable | "Can't reach that address. Check the spelling and your network." |
 | Timed out | "The server didn't answer in time. Nextcloud slows down repeated login attempts — wait a minute and try again." |
 | Cleartext refused | "This Nextcloud reports its own address as unencrypted http://, which Android blocks. Set 'overwriteprotocol' => 'https' in the server's config.php." |

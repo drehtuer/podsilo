@@ -5715,3 +5715,42 @@ the same one as last time: read the error log before theorising about the networ
 It leaves a real observation, unfixed and unrecorded elsewhere: a **malformed host reports as
 `UNREACHABLE`**, the same word a genuine network failure gets. The `detail` line distinguishes it,
 the headline does not, and that is what sent two of us to look at a VPN. Same family as issue #40.
+
+---
+
+## 2026-08-23 (address check) — the typo that borrowed a network failure's words
+
+**Attempted:** the author's request after the device session — *"add a check if the url is valid,
+that would make the problem immediately visible"*. The problem being a space in
+`cloud drehtuer.net`, which cost a session of looking at a VPN's MTU.
+
+**What was already there, and why it did not help.** `hostProblem()` has always rejected a blank or
+whitespace-containing address before contacting anything. The fault was not the missing check — it
+was that both cases returned `ConnectError.UNREACHABLE`, whose message is *"Can't reach that address.
+Check the spelling and your network."* The app therefore said the one thing guaranteed to send a
+reader to their network, about a string that never left the device. The error log's `detail` line
+did say *"rejected before contacting anything"*, but the headline is what people read.
+
+**Built:** two typed errors that name the fault — `ADDRESS_HAS_SPACE` and `ADDRESS_INVALID` — and
+validation on **every keystroke** rather than only on submit, which is what "immediately visible"
+asks for. The space message names the character and shows the shape the address should have; a
+generic "invalid address" would be true and useless, since the whole difficulty is that a space is
+invisible in a URL. An empty field stays silent: not started is not a mistake.
+
+Parsing is `java.net.URI`, not a regex: hostnames, IPv4 literals, bracketed IPv6, ports and a
+subdirectory install are all legal, and the set of things that are *not* is much harder to write down
+than to delegate. The check stays permissive — a single-label LAN name like `nextcloud` is a real
+setup — because its job is to make a typo visible, not to have opinions about the author's network.
+
+**A pre-existing bug fell out of writing the tests.** `hostProblem("https://")` returned *valid*.
+`normaliseHost` strips trailing slashes first, so `https://` becomes `https:`, which no longer matches
+the scheme test and gets re-prefixed into `https://https:` — an address whose host is `https`. The
+test asserting it was invalid failed, I assumed the test was wrong, and checking the actual
+`java.net.URI` behaviour in a scratch file showed it was the code. The validator now rejects a
+scheme with nothing after it before parsing.
+
+`./gradlew ktlintCheck detekt test` green: **819 tests, 0 failures, 3 skipped.**
+
+**Not verified on the device.** The logic is JVM-tested, and the message rendering is compile-checked
+by an exhaustive `when` over the enum, but nobody has typed a space into the field on the phone since
+the change.
