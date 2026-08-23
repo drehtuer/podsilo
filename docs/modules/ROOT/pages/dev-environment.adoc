@@ -423,8 +423,19 @@ directory inside a module.
 
 [source,bash]
 ----
-antora --fetch antora-playbook.yml     # -> build/site/index.html
+cd .devcontainer && docker compose up -d kroki && cd ..   # the diagrams need it
+antora --fetch --log-failure-level=warn antora-playbook.yml   # -> build/site/index.html
 ----
+
+`--log-failure-level=warn` is not optional decoration: Antora reports an unresolved `xref:`, a page
+missing from the nav or a diagram Kroki refused as a *warning* and still exits 0. Without the flag a
+site with holes in it builds green. It is the same argument as `--failure-level=WARN` below, one
+level up -- Asciidoctor checks a file, Antora checks the site.
+
+*`asciidoctor-kroki` is pinned to 0.18.x in the image, and a bump past 1.0 must not be taken.* 1.x
+targets Asciidoctor.js 3 while Antora 3.1 bundles 2.x; the two install and load without complaint and
+then fail at render time with `block.$!= is not a function`, which names neither the extension nor the
+version. The pin moves when Antora's bundled Asciidoctor does, and not before.
 
 Three things follow from choosing Antora, and the first is a real cost:
 
@@ -1468,6 +1479,30 @@ Verified inside the container on 2026-07-31.
 | opodsync
 | *0.5.3*
 | Upstream's version line is `0.x` -- there has never been a `1.x`
+
+| Asciidoctor
+| *2.0.20* (Ubuntu)
+| Renderer and per-file linter for the `.adoc` files. Also a CI step
+
+| kramdoc
+| *2.1.1* (gem)
+| Markdown -> AsciiDoc converter; used once, kept for the next conversion
+
+| Node.js
+| *18.19.1* (Ubuntu)
+| Present only for Antora. CI runs the same packages on Node 20
+
+| Antora
+| *3.1.10* (npm, global)
+| Builds the documentation site. Bundles Asciidoctor.js 2.x, which is what pins the next row
+
+| asciidoctor-kroki
+| *0.18.1* (npm, global)
+| *Do not bump past 0.18.x.* 1.x needs Asciidoctor.js 3 and dies with `block.$!= is not a function`
+
+| Kroki
+| *0.28.0* (compose)
+| `kroki` + `kroki-mermaid`, self-hosted. Renders the 26 Mermaid diagrams at build time
 |===
 
 Persisted as named Docker volumes so rebuilds don't re-download gigabytes or re-authenticate: the

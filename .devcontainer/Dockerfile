@@ -115,7 +115,18 @@ RUN gem install --no-document kramdown-asciidoc:2.1.1
 # a Node application, which is the only reason nodejs and npm are in the image at all
 # — nothing in the app, Gradle or the test tiers touches them. Pinned like everything
 # else; `antora` is the CLI plus the default site generator.
-RUN npm install -g --no-fund --no-audit antora@3.1.10
+#
+# asciidoctor-kroki renders the Mermaid diagrams against the Kroki container in
+# docker-compose.yml. It belongs in the image and not in an ad-hoc `npm install`:
+# without it `antora antora-playbook.yml` does not degrade to unrendered diagrams,
+# it dies with "Cannot find module 'asciidoctor-kroki'" — the playbook names it.
+#
+# PINNED TO 0.18.x ON PURPOSE, and do not let a bump past 1.0 through. 1.x targets
+# Asciidoctor.js 3, while Antora 3.1 bundles 2.x, so the two load fine and then fail
+# at render time with `block.$!= is not a function` — an error that names neither the
+# extension nor the version. The pin moves when Antora's bundled Asciidoctor does.
+# Keep it in step with .github/workflows/docs.yml, which installs the same two.
+RUN npm install -g --no-fund --no-audit antora@3.1.10 asciidoctor-kroki@0.18.1
 
 # --- Android emulator runtime libraries ---------------------------------------
 # Only needed for Tier 2 (headless emulator inside the container). Safe to drop
