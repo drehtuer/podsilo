@@ -16,7 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
 /**
- * The one thing `docs/decisions/0026` has to be true for: **nothing syncs on a timer.**
+ * The one thing `decisions/0026` has to be true for: **nothing syncs on a timer.**
  *
  * Worth a test of its own because the failure is invisible in the code. Periodic work lives in
  * WorkManager's database, not in the APK, so an install that already carries the four-hour job

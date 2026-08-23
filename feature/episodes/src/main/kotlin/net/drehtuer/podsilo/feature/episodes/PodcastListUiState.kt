@@ -5,11 +5,11 @@ package net.drehtuer.podsilo.feature.episodes
 import java.time.Instant
 
 /**
- * S1 — the podcast list, and the app's launcher screen (`docs/UI.md` §B2).
+ * S1 — the podcast list, and the app's launcher screen (`UI.adoc` §B2).
  *
  * @property setup `null` once the app can actually complete a download. The checklist is not
  *   onboarding decoration: without it, the first time the author learns no folder is chosen is when
- *   a download fails (`docs/UI.md` §4).
+ *   a download fails (`UI.adoc` §4).
  * @property activityBadge a dot, not a count — S7 owns the detail. True when anything is running,
  *   failed, or still unsynced.
  */
@@ -44,7 +44,7 @@ data class PodcastListUiState(
  * @property title `null` renders the [url] instead. A feed has no title until the first successful
  *   fetch, and "Unknown podcast" would be a worse answer than the URL the user recognises
  *   (architecture §4).
- * @property undecidedCount `null` renders "–". **Never fetched is not zero** (`docs/UI.md` §12.5):
+ * @property undecidedCount `null` renders "–". **Never fetched is not zero** (`UI.adoc` §12.5):
  *   a feed that has not been read yet has an unknown number of new episodes, not none.
  */
 data class FeedUi(
@@ -59,7 +59,7 @@ data class FeedUi(
 }
 
 /**
- * The first-run steps, shown until the app can complete a download (`docs/UI.md` §4).
+ * The first-run steps, shown until the app can complete a download (`UI.adoc` §4).
  *
  * Step 3 (naming) is explicitly optional — a default template exists — so it never holds the card
  * open; only steps 1 and 2 do.
@@ -73,7 +73,7 @@ data class SetupChecklist(
     val isComplete: Boolean get() = nextcloudConnected && folderState == FolderState.GRANTED
 }
 
-/** Session-scoped, not persisted: the default makes the home screen a worklist (`docs/UI.md` §4). */
+/** Session-scoped, not persisted: the default makes the home screen a worklist (`UI.adoc` §4). */
 enum class PodcastFilter { WITH_NEW, ALL }
 
 sealed interface PodcastListEvent {

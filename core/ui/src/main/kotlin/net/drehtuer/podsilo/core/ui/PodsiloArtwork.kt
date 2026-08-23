@@ -21,7 +21,7 @@ import coil3.compose.AsyncImage
  * The artwork slot used by S1's podcast rows, S2's episode rows and S3's header.
  *
  * Shared here rather than written twice because the two rules below have to hold identically in
- * every place artwork appears, and the first one was already stated in `docs/UI.md` §18 for a slot
+ * every place artwork appears, and the first one was already stated in `UI.adoc` §18 for a slot
  * that did not exist yet:
  *
  * 1. **The monogram fallback is artwork, not an error state.** When [url] is null — a feed that has
@@ -30,7 +30,7 @@ import coil3.compose.AsyncImage
  * 2. **Both cases carry the same content description**, "cover art for X", never "no image": a
  *    screen-reader user is being told what the slot represents, not how the fetch went.
  *
- * Zero corner radius, like every other shape in this app (`docs/UI.md` §B10).
+ * Zero corner radius, like every other shape in this app (`UI.adoc` §B10).
  *
  * @param title the podcast (or episode) name, used for the monogram letter and the description.
  */

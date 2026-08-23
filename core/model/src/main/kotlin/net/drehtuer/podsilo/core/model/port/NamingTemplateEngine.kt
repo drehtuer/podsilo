@@ -8,7 +8,7 @@ import net.drehtuer.podsilo.core.model.Feed
 /**
  * Port for template resolution, sanitisation, truncation, and collision suffixing (CLAUDE.md §6).
  * Implemented in `:core:naming` (pure JVM). `:core:download` calls [resolve] and otherwise
- * contains zero string-sanitisation logic of its own (`docs/architecture.md` §11).
+ * contains zero string-sanitisation logic of its own (`architecture.adoc` §11).
  */
 interface NamingTemplateEngine {
     /**

@@ -161,7 +161,7 @@ class ActivityQueriesTest : RoomTestBase() {
      *
      * Not one of the list queries projected `lastErrorCause` or `lastErrorRetryable` — the columns
      * exist (schema v3), the entity has them, and every `SELECT` simply left them out, so Room saw
-     * `NULL` and the fields fell back to their defaults. The visible consequence is `docs/UI.md`
+     * `NULL` and the fields fell back to their defaults. The visible consequence is `UI.adoc`
      * §12.11 and architecture §11 quietly not working: a `FOLDER_UNAVAILABLE` failure could never render
      * *Choose folder* rather than a *Retry* button that cannot possibly succeed, because the screen
      * had no way to tell one failure from another.

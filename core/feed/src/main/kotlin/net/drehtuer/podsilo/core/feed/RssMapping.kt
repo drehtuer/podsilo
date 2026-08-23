@@ -39,7 +39,7 @@ private val RFC_822_DATE: DateTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TI
  * **Only artwork.** [Episode.enclosureUrl] is deliberately not touched anywhere: it is
  * `episodeKey`'s fallback when a feed omits `<guid>`, and it is the `episode` field of every action
  * posted to the shared GPodder log, so an upgraded one is a *different episode* to every other
- * client (`docs/architecture.md` §4/§6). A cleartext enclosure is reported instead, as
+ * client (`architecture.adoc` §4/§6). A cleartext enclosure is reported instead, as
  * `ErrorCause.CLEARTEXT_BLOCKED`.
  */
 internal fun String.artworkOverTls(): String =
@@ -75,7 +75,7 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
         description = content?.takeIf(String::isNotBlank) ?: description,
         pubDate = parseRfc822Date(pubDate),
         durationMs = parseItunesDuration(itunesItemData?.duration),
-        // The item's own page, for "Open in browser" (docs/UI.md section 6). Never synthesised from
+        // The item's own page, for "Open in browser" (UI.adoc section 6). Never synthesised from
         // the enclosure, which points at an audio file — a feed that omits it simply has no link.
         link = link?.trim()?.takeIf(String::isNotEmpty),
         // itunes:image first: it is the per-episode cover feeds actually use. A bare <image> on an
@@ -89,7 +89,7 @@ private fun RssItem.toEpisodeOrNull(feedUrl: String): Episode? {
 
 /**
  * Malformed or missing `pubDate` degrades to `null` -- `:core:naming`'s sortable placeholder
- * (`docs/architecture.md` §11) handles the rest. This covers the common RFC-822 form feeds use; it does
+ * (`architecture.adoc` §11) handles the rest. This covers the common RFC-822 form feeds use; it does
  * not attempt every date variant real-world feeds are known to produce.
  */
 private fun parseRfc822Date(raw: String?): Long? {

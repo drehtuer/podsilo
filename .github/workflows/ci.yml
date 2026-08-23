@@ -4,14 +4,14 @@
 # without an emulator (see CLAUDE.md §4/§7). Instrumented tests (Tier 2) are
 # deliberately not run here; §4 asks for Tier 1 + Tier 3 as the supported path.
 #
-# Seven checks in one job, in this order: yamllint, shellcheck, ktlint, detekt,
-# Android lint, the Tier 1 unit tests, then both APK builds. The two cheapest come
-# first and need no JDK. One job rather than seven means the badge answers one
+# Eight checks in one job, in this order: yamllint, shellcheck, asciidoctor,
+# ktlint, detekt, Android lint, the Tier 1 unit tests, then both APK builds. The
+# three cheapest come first and need no JDK. One job rather than seven means the badge answers one
 # question — "is main healthy" — and the step that failed is one click away.
 #
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
-# docs/dev-environment.md §6), and it exists precisely to check the things a
+# dev-environment.adoc §6), and it exists precisely to check the things a
 # hosted runner cannot: ICU regex strictness, the device's SQLite, the installed
 # manifest, the cleartext policy, a real Compose runtime. A runner has no device,
 # so such a job could only be skipped, fail, or boot an emulator — and an
@@ -24,7 +24,7 @@
 # (AGP signs it with the debug keystore) and is the sideload build.
 # `podsilo-<version>.apk` is the real release: R8-minified and resource-shrunk,
 # roughly a twelfth the size, and **signed only when the keystore secrets are
-# configured** — see docs/dev-environment.md §9. Without them it still builds,
+# configured** — see dev-environment.adoc §9. Without them it still builds,
 # but unsigned, and an unsigned APK cannot be installed. That is why the release
 # job below refuses to attach one rather than shipping a file that looks like a
 # download and isn't.
@@ -38,7 +38,7 @@
 # to the draft. You then write the notes and publish. Publishing first cannot be
 # undone — immutable releases refuse assets after publication, and GitHub keeps
 # the tag name reserved even if the release is deleted, so the version number is
-# spent. docs/dev-environment.md §10 has the procedure.
+# spent. dev-environment.adoc §10 has the procedure.
 name: CI
 
 on:
@@ -93,10 +93,10 @@ jobs:
       # tools. Installed from Ubuntu's archive rather than trusting the runner
       # image's preinstalled set, which also keeps the version close to noble's —
       # a linter that disagrees with the container is worse than no linter.
-      - name: Install YAML and shell linters
+      - name: Install YAML, shell and AsciiDoc linters
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq yamllint shellcheck
+          sudo apt-get install -y -qq yamllint shellcheck asciidoctor
 
       - name: yamllint
         run: yamllint .
@@ -106,6 +106,13 @@ jobs:
       # whitespace; -r so an empty list is not an invocation with no arguments.
       - name: shellcheck
         run: git ls-files -z '*.sh' | xargs -0 -r shellcheck
+
+      # The documentation is AsciiDoc, and Asciidoctor is the only thing that can say
+      # whether it still parses. --failure-level=WARN is what makes it a check rather
+      # than a render: a heading out of sequence or an unclosed block is a warning, and
+      # a warning that does not fail is a warning nobody reads.
+      - name: asciidoctor
+        run: git ls-files -z '*.adoc' | xargs -0 -r asciidoctor --failure-level=WARN -o /dev/null
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -216,7 +223,7 @@ jobs:
           # release even after the release is deleted. Fail loudly rather than warn:
           # a silent skip is what left v0.5.0 with no APKs while every check passed.
           if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
-              echo "::error::$TAG is already published — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: docs/dev-environment.md §10."
+              echo "::error::$TAG is already published — immutable releases refuse assets, and the tag is now spent. Draft first, then publish: dev-environment.adoc §10."
               exit 1
           fi
 
@@ -235,5 +242,5 @@ jobs:
               mv app/build/outputs/mapping/release/mapping.txt.gz "mapping-$TAG.txt.gz"
               gh release upload "$TAG" "mapping-$TAG.txt.gz" --clobber
           else
-              echo "::warning::Release APK is missing or unsigned — not attached. See docs/dev-environment.md §10."
+              echo "::warning::Release APK is missing or unsigned — not attached. See dev-environment.adoc §10."
           fi

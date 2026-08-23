@@ -35,12 +35,12 @@ import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.ZoneId
 
 /**
- * S3 — the episode detail sheet (`docs/UI.md` §6).
+ * S3 — the episode detail sheet (`UI.adoc` §6).
  *
  * A **full screen**, open for every episode regardless of state including the
  * de-emphasised ones. Its buttons come from [EpisodeUi.actions] and its labels from the same
  * [labelFor] the row uses, so the sheet and the row it opened from cannot offer different actions
- * (`docs/UI.md` §12.6) — which is also why *Choose folder* replaces *Retry* here too.
+ * (`UI.adoc` §12.6) — which is also why *Choose folder* replaces *Retry* here too.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +60,7 @@ fun EpisodeDetailSheet(
     //
     // Made a real screen rather than teaching the sheet to survive a drag: show notes run to
     // paragraphs and the sheet was already `skipPartiallyExpanded`, i.e. always full height. It was
-    // a full screen wearing a sheet's clothes. `docs/UI.md` §6 amended to match.
+    // a full screen wearing a sheet's clothes. `UI.adoc` §6 amended to match.
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -108,7 +108,7 @@ private fun SheetHeader(
         Text(episode.title, style = MaterialTheme.typography.titleMedium)
         Text(
             // The feed's own title, then date and duration — each part omitted when absent rather
-            // than filled in with a placeholder (docs/UI.md §5).
+            // than filled in with a placeholder (UI.adoc §5).
             text =
                 listOfNotNull(episode.feedTitle, episode.metaLine(zone).takeIf { it.isNotEmpty() })
                     .joinToString(" · "),

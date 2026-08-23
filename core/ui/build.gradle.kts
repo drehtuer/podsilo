@@ -2,7 +2,7 @@
 
 // The shared Compose vocabulary: the icon allow-list and the spacing invariants that both feature
 // modules and :app render against. It exists so those cannot drift between screens — the whole point
-// of docs/UI.md §17 and §18 — and holds no state, no ports and no screens.
+// of UI.adoc §17 and §18 — and holds no state, no ports and no screens.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -41,13 +41,13 @@ dependencies {
     // drawables, so every consumer needs it on the compile classpath.
     api(libs.lucide.icons)
     // Artwork comes from the network in every screen that has a slot, so the loader belongs here
-    // beside the icons rather than in each feature module (UI.md §18).
+    // beside the icons rather than in each feature module (UI.adoc §18).
     api(libs.coil.compose)
 
     // The mark is a VectorDrawable, and whether it still reads once rasterised is a question only a
     // real canvas answers — Robolectric's is a no-op. Deliberately runner-only: no Compose, no
     // Espresso, so this set still runs on devices where the Compose instrumented tests currently
-    // cannot (see docs/backlog.md).
+    // cannot (see backlog.adoc).
     androidTestImplementation(libs.junit4)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)

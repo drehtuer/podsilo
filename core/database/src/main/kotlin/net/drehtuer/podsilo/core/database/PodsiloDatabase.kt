@@ -17,7 +17,7 @@ import net.drehtuer.podsilo.core.database.entity.LogEntryEntity
 import net.drehtuer.podsilo.core.database.entity.SyncStateEntity
 
 /**
- * The schema of `docs/architecture.md` §4 — deliberately not a typical podcast app's. Foreign-key
+ * The schema of `architecture.adoc` §4 — deliberately not a typical podcast app's. Foreign-key
  * enforcement is on (Room enables it automatically when a `@ForeignKey` is present), so removing a
  * feed cascades to its episodes; the ledger has no such key and survives.
  *

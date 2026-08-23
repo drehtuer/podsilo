@@ -1,0 +1,90 @@
+= Backlog
+// SPDX-License-Identifier: GPL-3.0-or-later
+:idprefix:
+:idseparator: -
+
+Where ideas go instead of into the code (CLAUDE.md §1/§9: "if you spot something worth doing that
+isn't asked for, note it here and move on"). Nothing in this file is committed to, scheduled, or
+implied. Anything that would touch a §1 non-goal stays a note here permanently unless the author
+says otherwise.
+
+This file was created empty-ish on 2026-08-01 during a documentation consistency pass -- CLAUDE.md
+had referenced it since the beginning and it had never existed, so anything that _should_ have been
+noted here before that date was instead either built, declined in conversation, or lost.
+
+Finished items are *deleted*, not struck through: `journal.adoc` is the record of what was
+done and when, and a backlog that also keeps that record is two records (2026-08-13).
+
+== Open items
+
+[.line-through]#*The default sync interval is four hours*# -- *settled 2026-08-14 by removing the periodic sync
+entirely* (`decisions/0026`). The author's call on D1 was neither "shorter" nor "longer" but
+"no automatic sync; any sync will happen manually". `DEFAULT_SYNC_INTERVAL_MINUTES` survives under its
+old name timing only the *feed refresh*.
+
+* *Full Nextcloud + `gpoddersync` as an opt-in compose profile.* CLAUDE.md §4 offers it as an
+option; `dev-environment.adoc` §7 records the deliberate decision not to build it. The cost is
+that ADR 0008 stays source-read-only, permanently. *Re-declined by the author on 2026-08-14*, on
+better grounds than before: there is now a real Nextcloud to probe against
+(`./gradlew :core:gpodder:nextcloudProbe`), and a real server is stronger evidence than a local one
+would be -- that same run re-confirmed the ±hh:mm timestamp contract of `decisions/0009`
+against it.
+* *The pipeline device test needs two things a script cannot do.* `DownloadPipelineInstrumentedTest`
+skips unless a SAF folder has been granted _and_ the database holds refreshed episodes, and
+`device-test.sh` destroys the first of those on every run by reinstalling. The working sequence is
+in `dev-environment.adoc` §6 and is entirely manual: run the set, grant the folder, pull to
+refresh, then re-run the instrumentation _without_ reinstalling. Automating it would mean a
+fixture account and a way to restore a grant, neither of which exists (2026-08-14).
+
+== Distribution readiness (audited 2026-08-04)
+
+Against https://developer.android.com/studio/publish[developer.android.com/studio/publish] and the
+https://f-droid.org/en/docs/Submitting_to_F-Droid_Quick_Start_Guide/[F-Droid quick start]. What
+already holds is in `dev-environment.adoc` §10; these are the gaps, in the order they bite.
+
+* *No 512×512 PNG for the store listings.* Play and F-Droid both want a raster and neither
+reads it from the APK, so it belongs with the Fastlane metadata below. The dev container has no
+image tooling, so it has to be generated elsewhere; the source is `assets/logos/podsilo-icon.svg`,
+whose geometry does not change with scale.
+* *Outline the wordmark in the lockup SVGs.* `UI.adoc` §C2: anything leaving the app -- store
+listing, README, press -- must not depend on Archivo being installed. Nothing in-app is blocked,
+since the in-app lockups are composed from live type.
+* *jaudiotagger comes from JitPack.* F-Droid builds everything from source in its own buildserver
+and treats a JitPack coordinate as a third-party prebuilt binary. Expect to either add a `srclibs`
+entry that builds `Adonai/jaudiotagger` from source, or vendor it. This is the substantive F-Droid
+blocker, and it is a consequence of architecture §11 -- worth reopening only if F-Droid is actually wanted.
+* *No Fastlane metadata.* F-Droid reads `fastlane/metadata/android/en-US/` (title,
+short_description, full_description, changelogs, screenshots) straight from the repository. None
+exists.
+* *No App Bundle.* Google Play has required `.aab` since 2021; we publish APKs. Correct for
+sideloading and F-Droid, and `bundleRelease` already exists if Play ever matters -- but as it
+stands, Podsilo cannot be submitted to Play.
+* *Reproducible builds are unverified.* `BuildConfig.BUILD_TIME` alone makes two builds of one
+commit differ. F-Droid does not require reproducibility, but it forecloses the verified-build
+badge, and the timestamp is the only obstacle.
+
+== Declined, with reasons
+
+* *An "alternative log in using app password" form.* Nextcloud offers one on its own flow page, and
+it is the only way to name an account directly instead of inheriting the browser's session
+(UI.adoc §8). *Declined by the author on 2026-08-04: grant-by-browser stays, and no login or
+password field goes in the app.* That keeps architecture §2 and CLAUDE.md §5 intact -- the app never
+handles the account password -- at the known cost that a wrong browser session can only be fixed in
+the browser.
+* *The batch actions issue #46 asked for beyond triage.* _Add to queue_, _add to playlist_ and
+_remove/delete_ are CLAUDE.md §1 non-goals permanently -- no player, no playlists, no file lifecycle
+-- recorded here so the answer does not have to be re-derived each time an issue asks for them.
+*Declined by the author on 2026-08-09.* _Mark unplayed_ was declined with them and has since been
+*built* (`decisions/0024`, 2026-08-14): it turned out the objection was to the _delete_, not
+to the feature, and a new `UNPLAYED` state gives the user the affordance while the row -- the dedup
+authority -- stays exactly where it was.
+* *"Download all visible" as a prominent button.* CLAUDE.md §1 names this specifically as the kind
+of thing that looks helpful and isn't. The UI design's per-podcast _Download all (n)_ overflow item
+is a narrower version, and was accepted as a _command_ rather than a rule -- ADR 0014.
+* *A two-pane tablet layout.* Not an omission: `UI.adoc` §19 explains why the triage model makes
+it the wrong shape. The content-width cap is the part of it worth keeping.
+* *A splash screen.* `UI.adoc` §C3 originally specified one -- the mono mark on `#EC3013`, via
+`androidx.core:core-splashscreen`. *Declined by the author on 2026-08-08.* The app reaches S1
+well inside the splash's own minimum duration, so it would be a delay dressed as a brand moment,
+and it costs a dependency. `UI.adoc` §C3 no longer describes one; do not reintroduce it as polish.
+* *Anything that writes to the subscription list.* Permanently out of scope (CLAUDE.md §1).

@@ -36,7 +36,7 @@ import java.time.ZoneOffset
  * - "downloads exactly zero files" — `:core:download`'s `DownloadWorkerTest`, which proves the only
  *   path to a file is an explicit per-episode enqueue that also refuses an already-terminal row.
  * - "a refresh writes `SKIPPED` and never `QUEUED`" — `:core:feed`'s `FeedRefreshWorkerTest`.
- *   `docs/decisions/0013` asked for that assertion *here*, which is not possible: `MarkOldEpisodesRule`
+ *   `decisions/0013` asked for that assertion *here*, which is not possible: `MarkOldEpisodesRule`
  *   lives in `:core:feed` and an Android-free `:core:sync` cannot see it. It is asserted where the
  *   code is, not where the ADR guessed it would be.
  */
@@ -150,7 +150,7 @@ class NoAutoDownloadInvariantTest {
     @Test
     fun `no sync path ever writes a QUEUED row`() =
         runBlocking {
-            // `docs/decisions/0014` allows bulk download as a *command* and forbids it as a *rule*.
+            // `decisions/0014` allows bulk download as a *command* and forbids it as a *rule*.
             // QUEUED is the state that causes a file to be fetched, so "sync never writes QUEUED" is
             // the narrow, checkable form of "no rule downloads anything". The tests above assert the
             // stronger property for a fresh list (zero rows at all); this one holds even when there

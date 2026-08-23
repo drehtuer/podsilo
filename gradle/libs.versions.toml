@@ -4,9 +4,9 @@
 # Retrofit, WorkManager, Paging, MockK, Turbine, and MockWebServer get added
 # when the module that needs them is actually built.
 #
-# rssparser (not Stalla — see docs/decisions/0005) and jaudiotagger (the
+# rssparser (not Stalla — see decisions/0005) and jaudiotagger (the
 # Adonai/Kaned1as Android fork via JitPack, not the stale upstream — see
-# docs/decisions/0006) are pinned here for :core:feed and :core:download.
+# decisions/0006) are pinned here for :core:feed and :core:download.
 #
 # okhttp is pinned explicitly at 5.x even though retrofit 3.0.0 declares 4.12.0
 # transitively — Gradle resolves to the higher version, and pinning it here
@@ -24,13 +24,13 @@
 #
 # coil + lucide added for Tier 4c (the Compose UI). Unlike everything above,
 # neither is in CLAUDE.md §3's mandated table, so both were proposed and
-# approved before being added — see docs/decisions/0015. coil-network-okhttp is
+# approved before being added — see decisions/0015. coil-network-okhttp is
 # not optional trimming: Coil 3 split networking out of the core artifact, and
 # it is the piece that makes Coil reuse the OkHttp already pinned here rather
 # than bringing a second HTTP stack, which is the reason it was chosen.
 #
 # No time/date dependency is pinned, deliberately: java.time is free at
-# minSdk 33 and already used across four modules — docs/decisions/0016.
+# minSdk 33 and already used across four modules — decisions/0016.
 [versions]
 agp = "9.3.1"
 kotlin = "2.4.10"

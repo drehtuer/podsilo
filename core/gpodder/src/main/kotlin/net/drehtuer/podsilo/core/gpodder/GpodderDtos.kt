@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  * Field names and shapes verified against `thrillfall/nextcloud-gpodder`'s controllers/repositories
  * (the reference implementation CLAUDE.md section 5 says to infer the contract from) and
  * cross-checked against `kd2org/opodsync`. Differences between the two are handled here, not
- * pushed onto callers -- see `docs/decisions/0008`.
+ * pushed onto callers -- see `decisions/0008`.
  */
 @Serializable
 internal data class SubscriptionsResponseDto(
@@ -36,7 +36,7 @@ internal data class EpisodeActionPageDto(
  *   `null` when mapping to the domain type.
  * @property timestamp ISO-8601. `nextcloud-gpodder` emits an offset (PHP `format("c")` ->
  *   `2021-10-06T11:49:23+00:00`), `opodsync` emits a trailing `Z`, and the (stale) API README
- *   shows a bare local-time form. All three are parsed -- see `docs/architecture.md` §6.
+ *   shows a bare local-time form. All three are parsed -- see `architecture.adoc` §6.
  */
 @Serializable
 internal data class EpisodeActionDto(

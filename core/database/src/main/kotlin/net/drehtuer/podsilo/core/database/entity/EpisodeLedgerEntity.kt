@@ -9,7 +9,7 @@ import androidx.room.PrimaryKey
  * Room row for `EpisodeLedgerRow` — "the one table that must never be lost" (CLAUDE.md §5). No
  * foreign key onto `episodes`: it shares the `episodeKey` value-space but must survive its episode
  * being pruned when a feed is unsubscribed, or a re-subscribe would re-download the back catalogue
- * (`docs/architecture.md` §4). [state] is stored as the `LedgerState` enum name; the mapper
+ * (`architecture.adoc` §4). [state] is stored as the `LedgerState` enum name; the mapper
  * converts. [syncedToServer] is the outbox flag ([EpisodeLedgerDao.getUnsynced] is `WHERE
  * syncedToServer = 0`).
  */

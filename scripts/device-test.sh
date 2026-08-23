@@ -19,10 +19,10 @@
 #
 #   1. **Android-vs-JVM behavioural deviations.** Regexes compiled by ICU rather than
 #      `java.util.regex`, locale-sensitive case conversion, ICU date formatting, the device's own
-#      SQLite. `docs/decisions/0017` exists because one of these shipped a bug past 437 green tests.
+#      SQLite. `decisions/0017` exists because one of these shipped a bug past 437 green tests.
 #   2. **Platform surfaces with no test double worth trusting** — SAF writes, the Keystore cipher,
 #      a foreground service actually starting, the cleartext-traffic policy.
-#   3. **UI conformance to `docs/UI.md`** on a real Compose runtime.
+#   3. **UI conformance to `UI.adoc`** on a real Compose runtime.
 #
 # ⚠ THIS UNINSTALLS AND REINSTALLS THE APP, SO IT WIPES ITS DATA
 #
@@ -35,7 +35,7 @@
 #
 # So: export a backup from Settings first if the install holds anything you want to keep, and expect
 # to reconnect Nextcloud afterwards. Restoring that backup is itself gated on being connected again
-# (`docs/decisions/0018`), which is the intended order rather than an obstacle.
+# (`decisions/0018`), which is the intended order rather than an obstacle.
 #
 # USAGE
 #
@@ -56,7 +56,7 @@ fi
 #
 # `adb` and AGP both honour ANDROID_SERIAL, so exporting it is the whole mechanism; nothing here
 # needs a `-s` flag. It matters because more than one device in the list is the normal case rather
-# than the exotic one: over wireless debugging (docs/dev-environment.md §9.4) a stale
+# than the exotic one: over wireless debugging (dev-environment.adoc §9.4) a stale
 # `emulator-5554` or a previous `<ip>:<port>` entry sits alongside the phone, and Gradle then fails
 # with "found 2 devices" rather than picking one. An ANDROID_SERIAL the caller already set wins,
 # which is how you choose between them.

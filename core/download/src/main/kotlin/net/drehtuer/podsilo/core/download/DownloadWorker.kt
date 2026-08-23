@@ -40,17 +40,17 @@ import java.util.concurrent.TimeUnit
 private const val PROGRESS_INTERVAL_MS = 1_000L
 private const val BACKOFF_SECONDS = 30L
 
-/** Terminal ledger states (`docs/architecture.md` §9) — none of them may be re-entered by a download. */
+/** Terminal ledger states (`architecture.adoc` §9) — none of them may be re-entered by a download. */
 private val TERMINAL_STATES =
     setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY)
 
 /**
- * The plain-language half of a failed download (`docs/UI.md` §11: the sentence the user reads comes
+ * The plain-language half of a failed download (`UI.adoc` §11: the sentence the user reads comes
  * first, the technical half is separate and collapsed).
  *
  * Each one names the *next step* where there is one, because a log entry the user can act on is the
  * whole reason S8 exists. `FOLDER_UNAVAILABLE` deliberately does not say "retry": retrying cannot
- * work until the folder is chosen again (`docs/architecture.md` §11).
+ * work until the folder is chosen again (`architecture.adoc` §11).
  */
 private fun ErrorCause.sentence(): String =
     when (this) {
@@ -69,7 +69,7 @@ private fun ErrorCause.sentence(): String =
  * Downloads one episode, then durably records it (CLAUDE.md §5's mark-on-download: **ledger row
  * first, POST second, never the other way round**). The POST itself is not made here — the row is
  * written with `syncedToServer = false` and [SyncTrigger] asks for a sync pass, so exactly one
- * piece of code ever talks to the GPodder API (`docs/architecture.md` §10).
+ * piece of code ever talks to the GPodder API (`architecture.adoc` §10).
  *
  * The pipeline it drives is [EpisodeDownloader]; this class owns only the WorkManager contract, the
  * ledger transitions, and the foreground notification.
@@ -108,7 +108,7 @@ class DownloadWorker
             // the episode is already handled, so downloading it now would be the double-download the
             // ledger exists to prevent (CLAUDE.md §11).
             //
-            // The single exception is an explicit *Download again* (docs/decisions/0012): the flag is
+            // The single exception is an explicit *Download again* (decisions/0012): the flag is
             // settable only from a UI event, never by a worker or a sync path, which is what keeps
             // "only a user can create a file from a terminal row" one grep and one test to verify.
             if (existing != null && existing.state in TERMINAL_STATES && !userRequested) return Result.success()
@@ -149,7 +149,7 @@ class DownloadWorker
             feed: Feed,
             userRequested: Boolean,
         ): Result {
-            // docs/decisions/0012 section 3: a re-decision is a new attempt chain, not a continuation.
+            // decisions/0012 section 3: a re-decision is a new attempt chain, not a continuation.
             // Leaving attempts at 3 would render a fresh download as "attempt 3 of 3" and look
             // exhausted before it started. writtenFileName is deliberately NOT reset — it is what the
             // duplicate guard checks, and losing it would let a second copy be written.
@@ -186,7 +186,7 @@ class DownloadWorker
                 is DownloadOutcome.Delivered -> succeed(episode, attempts, outcome.fileName)
                 is DownloadOutcome.AlreadyPresent -> {
                     // Nothing was fetched, so this is not an attempt: the row goes back to exactly
-                    // what it was, `attempts` and all. Not an ERROR, not logged (docs/decisions/0012
+                    // what it was, `attempts` and all. Not an ERROR, not logged (decisions/0012
                     // §4) — the UI reports it as a snackbar and the file stays untouched.
                     ledgerRepository.upsert(
                         rowFor(episode, LedgerState.DOWNLOADED, existing?.attempts ?: 0, outcome.fileName),
@@ -220,7 +220,7 @@ class DownloadWorker
          * **Every attempt, not only the last.** The row shows the current state and the log shows
          * the history, and the DAO collapses repeats onto one entry with a count — which is what
          * turns "it failed three times overnight" from an inference into a `×3` the user can read
-         * (`docs/UI.md` §11). Logging only the final attempt would lose exactly that.
+         * (`UI.adoc` §11). Logging only the final attempt would lose exactly that.
          *
          * A download that fails because the folder is gone or the disk is full is a **storage**
          * problem the user fixes elsewhere, so it is filed under that category rather than under
@@ -262,7 +262,7 @@ class DownloadWorker
         /**
          * Publishes byte progress for the UI, in the **same throttled tick** as the notification.
          *
-         * That shared tick is the point, not an economy: `docs/UI.md` §B7 requires the
+         * That shared tick is the point, not an economy: `UI.adoc` §B7 requires the
          * notification, the episode row, S1's aggregate and S7 never to disagree, and the surest way
          * to guarantee that is for one clock to drive them all. This is the only publisher; nothing
          * persists a percentage, so after process death there is simply no progress to read and the
@@ -308,7 +308,7 @@ class DownloadWorker
         /**
          * Ledger rows carry denormalised `feedUrl`/`enclosureUrl`/`durationSeconds` snapshots so the
          * outbox can still build a valid action after the episode row is pruned
-         * (`docs/architecture.md` §4). `syncedToServer` is always `false` on a local write — only a
+         * (`architecture.adoc` §4). `syncedToServer` is always `false` on a local write — only a
          * confirmed 2xx flips it, and only the sync pass may do that.
          */
         @Suppress("LongParameterList")
@@ -351,7 +351,7 @@ class DownloadWorker
             const val KEY_EPISODE_KEY: String = "episodeKey"
 
             /**
-             * The one way past the terminal-row refusal (`docs/decisions/0012`). **Settable only
+             * The one way past the terminal-row refusal (`decisions/0012`). **Settable only
              * from a UI triage event** — never from a worker, a sync pass, or `FeedRefresher`.
              *
              * A flag rather than relaxing the refusal, because the invariant then reads "only a UI

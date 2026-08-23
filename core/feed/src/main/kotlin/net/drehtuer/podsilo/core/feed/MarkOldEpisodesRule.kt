@@ -19,7 +19,7 @@ import java.time.ZoneId
 private const val MILLIS_PER_SECOND = 1_000
 
 /**
- * *Mark old episodes as played*, applied to whatever a refresh just parsed (`docs/decisions/0013`).
+ * *Mark old episodes as played*, applied to whatever a refresh just parsed (`decisions/0013`).
  *
  * Once the user has set an *older than* cutoff, an episode arriving already older than it is marked
  * immediately and without a preview — they consented once, at the setting, and re-asking on every
@@ -81,6 +81,6 @@ private fun Episode.toSkippedRow(now: Long): EpisodeLedgerRow =
         lastError = null,
         writtenFileName = null,
         // Snapshotted so the outbox can encode the PLAY action's total/position even if the episode
-        // row is pruned before the push (`docs/architecture.md` §4 and 0002).
+        // row is pruned before the push (`architecture.adoc` §4 and 0002).
         durationSeconds = durationMs?.let { (it / MILLIS_PER_SECOND).toInt() },
     )

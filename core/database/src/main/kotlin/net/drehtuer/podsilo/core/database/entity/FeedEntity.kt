@@ -6,7 +6,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Room row for `Feed` — a read-only mirror of one server subscription (`docs/architecture.md` §4).
+ * Room row for `Feed` — a read-only mirror of one server subscription (`architecture.adoc` §4).
  * `EpisodeEntity` has a cascading foreign key onto this table, so removing a feed prunes its
  * cached episodes; the ledger has **no** such key and survives (subscription-mirroring rule, §5).
  */

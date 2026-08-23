@@ -33,13 +33,13 @@ import kotlin.coroutines.CoroutineContext
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * S1 — the launcher screen (`docs/UI.md` §B2).
+ * S1 — the launcher screen (`UI.adoc` §B2).
  *
  * **The ordering is frozen**, and that is the one rule in this class worth reading twice: the sort
  * is computed on cold start and on each explicit refresh, then held as a list of feed URLs into
  * which updated rows are re-projected. Recomputing it inside the `combine` is the bug the rule
  * exists to prevent — a background sync would then reorder the list under the user's finger
- * (`docs/UI.md` §4).
+ * (`UI.adoc` §4).
  */
 @Suppress("LongParameterList")
 class PodcastListViewModel(
@@ -112,7 +112,7 @@ class PodcastListViewModel(
         val (filter, refreshing, folder) = Triple(chrome.filter, chrome.refreshing, chrome.folder)
         val byUrl = counts.associate { it.feedUrl to it.count }
         // Only actually-running work counts as "downloading". An ERROR row is in flight for S7's
-        // purposes but is emphatically not a download in progress (docs/UI.md §12.5).
+        // purposes but is emphatically not a download in progress (UI.adoc §12.5).
         val downloadingByFeed =
             chrome.inFlight
                 .filter { it.ledger?.state in ACTIVE_STATES }
@@ -125,7 +125,7 @@ class PodcastListViewModel(
         val visible =
             when (filter) {
                 // A feed whose count is unknown stays visible: "never fetched" is not "nothing new",
-                // and hiding it would make a newly subscribed podcast invisible (docs/UI.md §12.5).
+                // and hiding it would make a newly subscribed podcast invisible (UI.adoc §12.5).
                 PodcastFilter.WITH_NEW -> rows.filter { it.undecidedCount == null || it.undecidedCount > 0 }
                 PodcastFilter.ALL -> rows
             }
@@ -178,14 +178,14 @@ class PodcastListViewModel(
     private fun refresh() {
         viewModelScope.launch {
             // Checked before anything starts, so an offline pull answers immediately instead of
-            // timing out against every feed in turn (docs/UI.md §12.10).
+            // timing out against every feed in turn (UI.adoc §12.10).
             if (!connectivityMonitor.observe().first().online) {
                 emit(PodcastListEffect.ShowMessage(SnackbarText.Offline))
                 return@launch
             }
             refreshing.value = true
             try {
-                // Sync first, then the feeds — `docs/UI.md` §4 asks for both and only the second
+                // Sync first, then the feeds — `UI.adoc` §4 asks for both and only the second
                 // shipped (issue #60). The order matters: the pass replaces the subscription list,
                 // so refreshing first would fetch the set of feeds we are about to replace.
                 scheduler.syncAndAwait()
@@ -207,7 +207,7 @@ class PodcastListViewModel(
             feeds
                 .sortedWith(
                     // Newest publication first; never-fetched last, then title A–Z. `compareByDescending`
-                    // on a nullable puts nulls last, which is exactly the rule (docs/UI.md §4).
+                    // on a nullable puts nulls last, which is exactly the rule (UI.adoc §4).
                     compareByDescending<Feed> { latest[it.url] }
                         .thenBy { it.title.lowercase() },
                 ).map { it.url }
@@ -257,7 +257,7 @@ private fun Feed.toUi(
     artworkUrl = imageUrl,
     lastRefreshedAt = EpochTime.ofMillisOrNull(lastRefreshedAt),
     // A feed that has never been fetched has no episode rows, so SQL contributes no count for
-    // it — and "no count" must render as "–", not as 0 (docs/UI.md §12.5).
+    // it — and "no count" must render as "–", not as 0 (UI.adoc §12.5).
     undecidedCount = if (lastRefreshedAt == null) null else undecidedCount ?: 0,
     activeDownloads = activeDownloads,
 )

@@ -39,7 +39,7 @@ import net.drehtuer.podsilo.feature.episodes.PodcastListViewModel
 import net.drehtuer.podsilo.feature.episodes.SnackbarText
 
 /**
- * All eight of `docs/UI.md`'s screens, and every route between them.
+ * All eight of `UI.adoc`'s screens, and every route between them.
  *
  */
 @Composable
@@ -65,7 +65,7 @@ fun PodsiloNavHost(
                 EpisodesDestination(feedUrl, factory, host)
             }
             composable(Routes.SETTINGS) { SettingsDestination(factory, host) }
-            // A dialog destination: S5 sits over S4 rather than replacing it (docs/UI.md §B9).
+            // A dialog destination: S5 sits over S4 rather than replacing it (UI.adoc §B9).
             dialog(Routes.CONNECT) { ConnectDestination(factory, host) }
             composable(Routes.NAMING) { NamingDestination(factory, host) }
             composable(Routes.ACTIVITY) { ActivityDestination(factory, host) }
@@ -157,7 +157,7 @@ private fun EpisodesDestination(
             is EpisodeListEffect.CopyLink -> host.actions.copy(effect.url)
             EpisodeListEffect.ResolvePausedQueue -> host.onChooseFolder()
             is EpisodeListEffect.ShowMessage -> host.snackbar.showMessage(effect.text)
-            // The one snackbar with a reply. The view model still owns the window (UI.md §12.3); this
+            // The one snackbar with a reply. The view model still owns the window (UI.adoc §12.3); this
             // only reports a tap, and a tap that arrives after the write finds nothing to undo.
             is EpisodeListEffect.ShowUndo -> {
                 val result =
@@ -185,7 +185,7 @@ private fun DetailDestination(
     OnEffect(viewModel.effect) { effect ->
         when (effect) {
             EpisodeDetailEffect.Close -> host.navController.popBackStack()
-            // Not navigation: the sheet stays open behind the browser (docs/UI.md §6).
+            // Not navigation: the sheet stays open behind the browser (UI.adoc §6).
             is EpisodeDetailEffect.OpenUrl -> host.onOpenUrl(effect.url)
             is EpisodeDetailEffect.CopyLink -> host.actions.copy(effect.url)
             EpisodeDetailEffect.OpenErrorLog -> host.navController.navigate(Routes.ERROR_LOG)
@@ -219,7 +219,7 @@ private suspend fun SnackbarHostState.showMessage(text: SnackbarText) {
  * What the undo snackbar says a swipe did.
  *
  * Past tense, because as far as the user is concerned it *has* happened — the row already shows it.
- * That the write is still five seconds away is the app's business, not theirs (UI.md §12.3).
+ * That the write is still five seconds away is the app's business, not theirs (UI.adoc §12.3).
  */
 private fun EpisodeUiAction.undoMessage(): String =
     when (this) {

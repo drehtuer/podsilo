@@ -6,7 +6,7 @@ package net.drehtuer.podsilo.core.datastore
  * Deterministic in-memory stand-in for [KeystoreAppPasswordCipher] (whose real Android Keystore
  * backing can't run under the JVM test runner). The transform is intentionally trivial and
  * reversible; the point of the tests is the store/serialise plumbing, not the crypto — which is
- * verified on-device (`docs/architecture.md` §2). The obvious non-identity `enc:` prefix lets a test
+ * verified on-device (`architecture.adoc` §2). The obvious non-identity `enc:` prefix lets a test
  * assert the value written to DataStore is *not* the plaintext password.
  */
 class FakeAppPasswordCipher : AppPasswordCipher {

@@ -77,7 +77,7 @@ class PlatformSurfacesTest {
      *
      * Not a bug — the platform default at `targetSdk` 28+, and the right default. It is asserted
      * because it is invisible from the JVM (OkHttp there will happily use `http://`) and because it
-     * has a real consequence recorded in `docs/backlog.md`: the author's `heute journal` feed
+     * has a real consequence recorded in `backlog.adoc`: the author's `heute journal` feed
      * advertises its cover art over `http://`, so that row falls back to a monogram. If an
      * *enclosure* ever arrives over `http://` it will fail to download for this reason and the error
      * will not say so.

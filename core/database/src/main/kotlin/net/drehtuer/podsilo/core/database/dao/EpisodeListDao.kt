@@ -16,7 +16,7 @@ import net.drehtuer.podsilo.core.database.entity.EpisodeLedgerEntity
  * Keeping the three list queries and [countUndecidedByFeed] in one place is deliberate: they must
  * share the *same* "no ledger row" predicate, or a count badge could disagree with the list it
  * opens, and a bulk-confirmation dialog could promise a different number than it writes
- * (`docs/UI.md` §12.5).
+ * (`UI.adoc` §12.5).
  *
  * All three list queries share the same `l_`-aliased projection of the ledger columns (see
  * [EpisodeWithLedger]); the three columns the two tables have in common (`episodeKey`, `feedUrl`,
@@ -45,12 +45,12 @@ interface EpisodeListDao {
      * Still one predicate and still no date clause.
      *
      * `UNPLAYED` is the exception, and it is the whole reason the sub-select has a `WHERE`
-     * (`docs/decisions/0024`): that state means the user withdrew a decision, so the episode is
+     * (`decisions/0024`): that state means the user withdrew a decision, so the episode is
      * undecided again while its row — and with it `writtenFileName` and the history — survives. The
      * ledger still has no delete.
      *
      * The `pubDate >= Feed.firstSeenAt` cutoff this query used to carry is **retired**
-     * (`docs/decisions/0013`), removed rather than left behind a flag: old episodes are hidden by
+     * (`decisions/0013`), removed rather than left behind a flag: old episodes are hidden by
      * *writing* `SKIPPED` rows now, and an unused parameter is one caller away from becoming a
      * second, contradictory mechanism. `Feed.firstSeenAt` stays in the schema as the default cutoff
      * date offered for a newly-appearing feed.
@@ -150,7 +150,7 @@ interface EpisodeListDao {
      * "did it actually land?" affordance.
      *
      * Ledger rows rather than the join: the group renders `writtenFileName` and the feed, both of
-     * which the ledger row carries denormalised (`docs/architecture.md` §4), so it stays correct for an
+     * which the ledger row carries denormalised (`architecture.adoc` §4), so it stays correct for an
      * episode whose cached row was pruned by an unsubscribe.
      *
      * [since] is the *display cursor* `SettingsRepository.observeDeliveredClearedAt` holds — "stop
@@ -183,7 +183,7 @@ interface EpisodeListDao {
 
     /**
      * Per-feed counts of undecided episodes for a bulk-confirmation dialog — the safeguard that
-     * replaced the old rule against writing backlog rows at all (`docs/decisions/0013`).
+     * replaced the old rule against writing backlog rows at all (`decisions/0013`).
      *
      * Mirrors [observeNewEpisodes]'s "no ledger row" predicate exactly, so the number the dialog
      * promises is the number that gets written. Undated episodes are **excluded** when an

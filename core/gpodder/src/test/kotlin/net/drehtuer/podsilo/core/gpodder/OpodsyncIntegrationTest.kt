@@ -24,12 +24,12 @@ import java.time.format.DateTimeFormatter
  * running. Set the variable (see `.env.example`) to opt in.
  *
  * ✅ **Verified green against opodsync 0.5.3 on 2026-07-31** (3 tests, 0 skipped). That run is what
- * turned `docs/decisions/0009-gpodder-api-wire-contract.md` from a contract *read* out of opodsync's
- * source into one actually exercised over the wire. See `docs/dev-environment.md` for how to run it.
+ * turned `decisions/0009-gpodder-api-wire-contract.adoc` from a contract *read* out of opodsync's
+ * source into one actually exercised over the wire. See `dev-environment.adoc` for how to run it.
  *
  * ⚠️ **opodsync is not proof of Nextcloud's behaviour.** Most importantly, opodsync *stores*
  * `DOWNLOAD` actions while `nextcloud-gpodder` silently discards them
- * (`docs/decisions/0008-nextcloud-gpodder-discards-download-actions.md`), so a green run here says
+ * (`decisions/0008-nextcloud-gpodder-discards-download-actions.adoc`), so a green run here says
  * nothing about whether downloads sync cross-client on a real Nextcloud. Deliberately asserted
  * below so the difference is visible rather than assumed.
  */

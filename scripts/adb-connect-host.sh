@@ -8,7 +8,7 @@
 # not need any: adb is a client/server protocol over TCP, so on the USB path the container runs only
 # the *client* and the server that owns the device runs in WSL (or on Windows). That is why
 # `linux-tools-virtual` and `hwdata` belong in the WSL distro, where usbipd-win delivers the device,
-# and not in this image — see docs/dev-environment.md §9.
+# and not in this image — see dev-environment.adoc §9.
 #
 # OVER WIRELESS DEBUGGING (§9.4) THAT IS INVERTED: no USB device is owned by anyone, the server
 # reaches the phone over TCP, and the server therefore belongs *here*. This script supports both, and
@@ -127,7 +127,7 @@ if [ -z "$devices" ]; then
         say  "      adb devices                # in WSL, which starts a server that owns the device"
         say  "      $0                         # here again"
         say  ""
-        say  "  For wireless debugging (docs/dev-environment.md §9.4) this server is the right one —"
+        say  "  For wireless debugging (dev-environment.adoc §9.4) this server is the right one —"
         say  "  it just has nothing connected yet. Pair and connect the phone:"
         say  "      adb pair <ip>:<pairing-port> <code>"
         say  "      adb connect <ip>:<connect-port>     # a DIFFERENT port, shown on the same screen"
@@ -150,7 +150,7 @@ say "$devices"
 if printf '%s\n' "$devices" | awk '{print $1}' | grep -qE ':[0-9]+$'; then
     say ""
     say "  (network device — wireless debugging, so the adb server belongs in this container;"
-    say "   docs/dev-environment.md §9.4. Do not 'fix' it with adb kill-server.)"
+    say "   dev-environment.adoc §9.4. Do not 'fix' it with adb kill-server.)"
 fi
 
 say ""

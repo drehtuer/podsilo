@@ -58,7 +58,7 @@ consumed by something else entirely.
 - **No automatic downloading.** No "auto-download new episodes" setting, no per-feed auto-download
   rules, nothing downloaded by a worker, a sync pass, a refresh, or app start. Disk space on a phone
   is finite and the author wants to decide episode by episode.
-  - **Amended 2026-08-01 (`docs/decisions/0014`): the rule is "nothing downloads that the author
+  - **Amended 2026-08-01 (`decisions/0014`): the rule is "nothing downloads that the author
     didn't ask for", not "never more than one at a time".** A *command* the user issues now, to a
     set they can see, behind a confirmation naming the count, is allowed — that is S2's
     *Download all (n)* overflow item and its selection mode, both scoped to one podcast. A *rule*
@@ -73,7 +73,7 @@ consumed by something else entirely.
   agent-driven development**. There is no commercialization plan and no external users to support.
 - That means: favour clarity and correctness over cleverness or premature generality. It is fine for
   the app to be opinionated and small.
-- It also means: **the process is part of the point.** Keep `docs/journal.md` updated (see §9).
+- It also means: **the process is part of the point.** Keep `journal.adoc` updated (see §9).
 
 ---
 
@@ -88,7 +88,7 @@ consumed by something else entirely.
   change this, ask first.
 - **Attribution is mandatory.** If you adapt code from AntennaPod or any other GPL project, add a
   comment at the top of the file naming the upstream project, the file, the commit/version, and its
-  licence. Record it in `docs/third-party.md` too.
+  licence. Record it in `third-party.adoc` too.
 - Only add dependencies with permissive or GPL-compatible licences (Apache-2.0, MIT, BSD, GPL-3.0).
   **Never** add anything AGPL, SSPL, or with a non-commercial/field-of-use restriction. If unsure
   about a licence, ask rather than guess.
@@ -113,16 +113,16 @@ don't quietly hand-roll one.
 | Background work | WorkManager | own `AlarmManager`/`JobScheduler` scheduling, own retry/backoff |
 | HTTP | OkHttp (+ Retrofit for the GPodder REST API) | own HTTP client, own connection pool |
 | JSON | kotlinx.serialization or Moshi (pick one, be consistent) | own JSON parser |
-| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`docs/architecture.md` §7) | **own XML/RSS parser, ever** |
+| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`architecture.adoc` §7) | **own XML/RSS parser, ever** |
 | DI | Hilt | own service locator |
 | Preferences | Jetpack DataStore (Preferences) | SharedPreferences wrappers, own config file format |
 | Folder access | `DocumentFile` / SAF APIs | `java.io.File` paths into external storage |
-| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`docs/architecture.md` §11) | **hand-written ID3/MP4 frame code, ever** |
+| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`architecture.adoc` §11) | **hand-written ID3/MP4 frame code, ever** |
 | Filename sanitising | a small, well-tested internal util is acceptable here — see §6 | ad-hoc `replace()` calls scattered across the codebase |
 | Long lists | Paging 3 | manual offset/limit paging in the ViewModel |
-| Image loading | Coil (`docs/UI.md` §18) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
-| Icons | Lucide's Compose artifact; `docs/UI.md` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
-| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`docs/architecture.md` §5) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
+| Image loading | Coil (`UI.adoc` §18) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
+| Icons | Lucide's Compose artifact; `UI.adoc` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
+| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`architecture.adoc` §5) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
 | Logging | Timber (or plain `Log` — do not build an abstraction layer) | own logging framework |
 | Testing | JUnit5 or JUnit4 + Truth/AssertJ, Turbine (Flows), MockK, Robolectric, OkHttp `MockWebServer`, Room in-memory DB, Compose UI test | own test harness, own fakes where MockWebServer suffices |
 | Dev container / emulator | existing published images and scripts (see §4) | own from-scratch Dockerfile for the emulator |
@@ -158,7 +158,7 @@ plus an emulator usable for testing and UI work. Deliverables:
   docker-compose.yml        # app-dev container + emulator + test sync server
   post-create.sh            # SDK component install, gradle warm-up
 docs/
-  dev-environment.md        # how to run it, including host prerequisites
+  dev-environment.adoc        # how to run it, including host prerequisites
 ```
 
 ### Toolchain that must be inside the container
@@ -183,7 +183,7 @@ configuration explicitly; do not assume a native Linux host.
 
 An Android emulator needs hardware virtualisation (`/dev/kvm`). Inside WSL2 this means **nested
 virtualisation**, which is available but conditional. Required host setup, to be documented in
-`docs/dev-environment.md`:
+`dev-environment.adoc`:
 
 1. **Windows 11.** The `nestedVirtualization` flag is Windows 11 only — it does not work on
    Windows 10. Verify the author's Windows version before promising an in-container emulator.
@@ -265,7 +265,7 @@ Unit tests must not depend on either; they use `MockWebServer` with recorded fix
 - Run as a **non-root user** with a UID/GID matching the host so files aren't root-owned.
 - No secrets in the image, in `devcontainer.json`, or in git. Nextcloud test credentials come from
   `.env` (gitignored) with a committed `.env.example`.
-- `docs/dev-environment.md` must let someone go from clean checkout to green `./gradlew test`
+- `dev-environment.adoc` must let someone go from clean checkout to green `./gradlew test`
   following it literally. Verify that yourself before claiming it works.
 
 ---
@@ -391,7 +391,7 @@ episodes with no action in the log — most of them predating gpoddersync. Becau
 automatically**, this is no longer a disk-space or bandwidth hazard. It is a *list length* hazard: a
 "New" tab with 5,000 rows is useless for triage.
 
-**Amended 2026-08-01 — see `docs/decisions/0013`.** This section originally solved the problem with
+**Amended 2026-08-01 — see `decisions/0013`.** This section originally solved the problem with
 a read-time filter and explicitly forbade writing ledger rows for the backlog. The author has ruled
 the other way: the backlog is cleared by **writing `SKIPPED` rows**, because that state is visible in
 the UI, reversible per episode, and — the deciding reason — shared with the author's other clients,
@@ -399,7 +399,7 @@ which a local filter never is. The current rules:
 
 - The default "New" filter shows episodes with **no ledger row**. That is the whole predicate: no
   date clause, one SQL condition for both the list and the count badge.
-- Old episodes leave "New" via S4's *Mark old episodes as played* (`docs/UI.md` §7), which upserts
+- Old episodes leave "New" via S4's *Mark old episodes as played* (`UI.adoc` §7), which upserts
   `SKIPPED` rows in one transaction and pushes the resulting `PLAY` actions through the normal
   outbox in batches. They then appear under "Played / handled" and stay individually downloadable.
 - Record `Feed.firstSeenAt` when a feed first appears. It is no longer a query predicate — it is the
@@ -425,7 +425,7 @@ which a local filter never is. The current rules:
     false`), **then** attempt the POST. Never the other way round. Set `syncedToServer = true` only
     on a confirmed 2xx.
   - The actions to emit are `DOWNLOAD` **and** `PLAY`, in that order (amended 2026-08-14,
-    `docs/decisions/0023`). `DOWNLOAD` is the honest signal for "this device has fetched this
+    `decisions/0023`). `DOWNLOAD` is the honest signal for "this device has fetched this
     episode"; `PLAY` is what any other client can actually read, since Nextcloud discards `DOWNLOAD`
     and there is no "read" or "seen" flag in this API at all.
 - **Skip semantics.** "Skip" is the author's way of saying *I am done with this episode, never show it
@@ -438,18 +438,18 @@ which a local filter never is. The current rules:
     duration exists, still send `PLAY`, and document what you put in `position`/`total`. Do not block
     the skip action on missing metadata, and do not invent a plausible-looking duration.
   - Skip follows the same durability rule as download: **ledger row first, then POST.**
-- ~~**`PLAY` is not emitted on download.**~~ **Amended 2026-08-14 (`docs/decisions/0023`): a
+- ~~**`PLAY` is not emitted on download.**~~ **Amended 2026-08-14 (`decisions/0023`): a
   successful download emits `DOWNLOAD` *and* `PLAY`.** The original rule reasoned that a `PLAY` the
   user did not perform asserts something untrue and can trigger auto-delete elsewhere. What it did
   not account for is that on this setup a download *is* the end of the episode's life in Podsilo —
   the file goes to a player that never reports back — and that Nextcloud discards `DOWNLOAD` on
-  arrival (`docs/decisions/0008`), so a downloaded episode stayed new in every other client for ever.
+  arrival (`decisions/0008`), so a downloaded episode stayed new in every other client for ever.
   The author ruled that this is a bug rather than a design property.
   - The auto-delete risk is real and accepted knowingly: another client may remove its own copy of an
     episode this device has downloaded. That is the intended reading — this device is done with it.
   - Incoming remote `DOWNLOAD` or `DELETE`, and a `PLAY` **that reads as ended**, all mean **do not
     download it here.** A `PLAY` that is not ended is how a client says *unread* and must not be
-    treated as terminal (`docs/decisions/0022`).
+    treated as terminal (`decisions/0022`).
 - Generate and persist a stable `deviceId` so our own echoed-back actions are recognisable.
 - Timestamps are the conflict basis (last-write-wins per episode per action type). Unit-test the
   rules with canned responses: clock skew, duplicate actions, actions for episodes not in any
@@ -648,8 +648,8 @@ glance.
   say that plainly. A clear "the emulator tier doesn't work on this host and here's why" is far more
   useful than a confident claim that doesn't hold up. Don't mark a task done to close it out.
 - **Don't expand scope.** If you spot something worth doing that isn't asked for, note it in
-  `docs/backlog.md` instead of building it.
-- **Keep `docs/journal.md` current.** Since this project doubles as an agent-development experiment,
+  `backlog.adoc` instead of building it.
+- **Keep `journal.adoc` current.** Since this project doubles as an agent-development experiment,
   append a short entry per work session: what was attempted, what worked, what didn't, what needed
   human correction, and any prompt/approach lessons. Be candid about failures — that's the data the
   author actually wants from this experiment.
@@ -663,7 +663,7 @@ glance.
 Work in this order; each step should be green before moving on.
 
 1. **Dev container + Gradle skeleton.** Empty modules, version catalog, ktlint/detekt, CI workflow.
-   Prove `./gradlew test` runs in the container. Write `docs/dev-environment.md`.
+   Prove `./gradlew test` runs in the container. Write `dev-environment.adoc`.
 2. **`:core:model` + `:core:database`.** Entities, DAOs, migration setup, Room tests.
 3. **`:core:feed`.** Stalla integration, mapping to our model, fixture-driven parser tests.
 4. **`:core:naming`.** Templates, sanitisation, truncation, collision handling. Pure JVM, no Android
@@ -674,9 +674,9 @@ Work in this order; each step should be green before moving on.
 6. **`:core:gpodder`.** Retrofit client against `MockWebServer`, then verified against `opodsync` in
    compose. Read AntennaPod's implementation first.
 7. **`:core:sync`.** Outbox draining, reconciliation, explicit conflict rules, heavy unit tests.
-8. **UI.** Designed in full before any of it was written: **`docs/UI.md` is the canonical UX
-   document** and `docs/UI.md` Part B the code seam. Build in dependency order, not screen order —
-   see `docs/UI.md` and `docs/architecture.md` §13.
+8. **UI.** Designed in full before any of it was written: **`UI.adoc` is the canonical UX
+   document** and `UI.adoc` Part B the code seam. Build in dependency order, not screen order —
+   see `UI.adoc` and `architecture.adoc` §13.
    - **Amended 2026-08-01: eight screens, not two destinations.** This step originally said "two
      destinations is the target". The design pass found that the missing six were not decoration —
      an episode's description is raw HTML that no list row can render (S3), and download progress,
@@ -711,7 +711,7 @@ Work in this order; each step should be green before moving on.
   the `timestamp` field inside action objects is **ISO-8601**. Do not use one formatter for both.
   Test round-tripping explicitly; getting this wrong silently breaks incremental sync in ways that
   look like "sync just doesn't work".
-  - **Correction (verified Tier 3, `docs/decisions/0009`):** this file originally said the per-action
+  - **Correction (verified Tier 3, `decisions/0009`):** this file originally said the per-action
     timestamp carries *no* timezone offset (`2009-12-12T09:00:00`). That is no longer true of either
     reference server — `nextcloud-gpodder` emits `+00:00`, `opodsync` emits `Z`. Podsilo parses all
     three forms and emits the bare one, which both servers read as UTC. Parse into an
@@ -721,7 +721,7 @@ Work in this order; each step should be green before moving on.
   time — clock skew will silently drop or duplicate actions.
 - **Doze and background limits** will delay WorkManager. Use a foreground service for active
   downloads; treat periodic work as best-effort and always offer manual refresh.
-  - **Amended 2026-08-14 (`docs/decisions/0026`): there is no periodic sync at all.** Every sync pass
+  - **Amended 2026-08-14 (`decisions/0026`): there is no periodic sync at all.** Every sync pass
     is one something asked for — pull-to-refresh, S7's *Sync now*, S4's two directional buttons, a
     triage decision, a finished download, a bulk mark, or the mark-old rule after a feed refresh.
     Feed refresh stays periodic (§1 requirement 2). If you re-add a periodic sync, **cancel is not
@@ -753,7 +753,7 @@ Work in this order; each step should be green before moving on.
 - [ ] Code compiles; `./gradlew ktlintCheck detekt test` passes (and you actually ran it)
 - [ ] New logic has tests; bug fixes have regression tests
 - [ ] No new dependency added without asking
-- [ ] Upstream attribution added if code was adapted; `docs/third-party.md` updated
+- [ ] Upstream attribution added if code was adapted; `third-party.adoc` updated
 - [ ] Nothing in §1's non-goals crept in (especially: no feed management, no auto-download)
-- [ ] `docs/journal.md` entry appended
+- [ ] `journal.adoc` entry appended
 - [ ] Limitations and anything unverified stated plainly in the summary

@@ -36,7 +36,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * S7 — activity (`docs/UI.md` §10). *What is the app doing, and what is stuck?*
+ * S7 — activity (`UI.adoc` §10). *What is the app doing, and what is stuck?*
  *
  * Explicitly **not** a file manager: the *recently downloaded* group shows what was written and
  * offers no delete, no open-file and no existence check (README, CLAUDE.md §11).
@@ -110,7 +110,7 @@ private fun PausedBanner(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // A condition the queue is in, not user input to fix (docs/UI.md §18).
+            // A condition the queue is in, not user input to fix (UI.adoc §18).
             PodsiloIcon(PodsiloIcons.Warning, contentDescription = null)
             Text(message, style = MaterialTheme.typography.bodyMedium)
         }
@@ -140,7 +140,7 @@ private fun SyncRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        // Disabled with the reason shown, rather than a button that times out (docs/UI.md §12.10).
+        // Disabled with the reason shown, rather than a button that times out (UI.adoc §12.10).
         TextButton(
             onClick = { onEvent(ActivityEvent.SyncNowClicked) },
             enabled = sync.canSyncNow,

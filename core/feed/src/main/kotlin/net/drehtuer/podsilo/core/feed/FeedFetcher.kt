@@ -13,7 +13,7 @@ private const val HTTP_NOT_MODIFIED = 304
  * Result of one conditional feed fetch.
  *
  * [httpEtag]/[httpLastModified] are echoed back from the response so the caller can persist them
- * onto `Feed` for the next conditional request (`docs/architecture.md` section 7's refresh
+ * onto `Feed` for the next conditional request (`architecture.adoc` section 7's refresh
  * sequence) -- this class deliberately holds no state of its own between calls.
  */
 sealed interface FeedFetchResult {
@@ -58,7 +58,7 @@ sealed interface FeedFetchResult {
 
 /**
  * Fetches feed XML over HTTP with conditional-GET support (CLAUDE.md section 7,
- * `docs/architecture.md` section 7): sends `If-None-Match`/`If-Modified-Since` from the previously
+ * `architecture.adoc` section 7): sends `If-None-Match`/`If-Modified-Since` from the previously
  * stored validators so an unchanged feed costs a 304 and no body.
  *
  * Failures are returned as [FeedFetchResult] values rather than thrown -- CLAUDE.md section 8:

@@ -30,7 +30,7 @@ import javax.inject.Singleton
 
 /**
  * Binds the four persistence ports from `:core:model` to their Room adapters — one of the few
- * places in the app that knows Room exists at all (`docs/architecture.md` §2).
+ * places in the app that knows Room exists at all (`architecture.adoc` §2).
  *
  * `@Provides` rather than `@Binds` because the adapters are plain constructor-injectable classes
  * with no Hilt annotations of their own, which is what keeps `:core:database` free of DI plumbing.
@@ -75,7 +75,7 @@ object DatabaseModule {
     fun provideSyncStateRepository(database: PodsiloDatabase): SyncStateRepository =
         SyncStateRepositoryImpl(database.syncStateDao())
 
-    /** The zip backup of the whole database (`docs/UI.md` §7). */
+    /** The zip backup of the whole database (`UI.adoc` §7). */
     @Provides
     @Singleton
     fun provideDatabaseArchive(

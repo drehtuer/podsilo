@@ -13,7 +13,7 @@ import androidx.compose.runtime.Composable
  * Shown **before** the file picker, not after: the warning is about what a restore does at all, and
  * nothing in it depends on which file gets chosen.
  *
- * This follows the same principle as [BulkPreviewDialog] (`docs/decisions/0013`) — a destructive,
+ * This follows the same principle as [BulkPreviewDialog] (`decisions/0013`) — a destructive,
  * non-undoable operation says in words what it will do before it does it. What is at stake here is
  * the ledger: everything else on the device can be rebuilt from Nextcloud and the feeds, but "which
  * episodes have I already handled" is the app's own memory.

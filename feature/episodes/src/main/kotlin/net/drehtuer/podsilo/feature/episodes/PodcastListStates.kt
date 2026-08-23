@@ -31,7 +31,7 @@ import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
  * S1's chrome and its four empty states — every condition the home screen can be in that is not a
- * list of podcasts (`docs/UI.md` §4). Split from the screen itself because they are a different
+ * list of podcasts (`UI.adoc` §4). Split from the screen itself because they are a different
  * job: the screen composes, these render one state each.
  */
 @Composable
@@ -61,7 +61,7 @@ internal fun PodcastPausedBanner(
         // weight, and the button unwrapped: without these the message takes the whole row and the
         // action wraps to one word per line ("Choos / e / folder"), seen on the first device run.
         // A condition the queue is in, never user input to fix — the two icons are not
-        // interchangeable (docs/UI.md §18).
+        // interchangeable (UI.adoc §18).
         PodsiloIcon(PodsiloIcons.Warning, contentDescription = null)
         Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         TextButton(
@@ -89,7 +89,7 @@ internal fun PodcastOfflineBanner() {
 
 @Composable
 internal fun PodcastLoadingState() {
-    // Shimmer rows rather than a spinner overlay (docs/UI.md §4): the list is about to appear, and
+    // Shimmer rows rather than a spinner overlay (UI.adoc §4): the list is about to appear, and
     // a spinner over an empty screen reads as "something is wrong".
     Column(modifier = Modifier.fillMaxWidth()) {
         repeat(SHIMMER_ROWS) {
@@ -111,7 +111,7 @@ internal fun PodcastLoadingState() {
 private const val SHIMMER_ROWS = 3
 
 /**
- * The one place the app introduces itself (`docs/UI.md` §C4.2).
+ * The one place the app introduces itself (`UI.adoc` §C4.2).
  *
  * This state led with the `server` glyph, which said "a server is missing" — true, and not what a
  * user seeing the app for the first time needs. The stacked lockup goes here instead: it is the
@@ -145,7 +145,7 @@ internal fun NoSubscriptionsState(onEvent: (PodcastListEvent) -> Unit) {
 /**
  * @param leading a glyph for a momentary, local state — or, in exactly one case, the brand lockup.
  *   A slot rather than an icon id because the not-configured state is the app introducing itself and
- *   the others are not (`docs/UI.md` §C4.2); two parameters for the two cases would be one more way
+ *   the others are not (`UI.adoc` §C4.2); two parameters for the two cases would be one more way
  *   to say the same thing.
  */
 @Composable

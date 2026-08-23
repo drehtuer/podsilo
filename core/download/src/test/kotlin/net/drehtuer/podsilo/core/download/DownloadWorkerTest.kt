@@ -41,7 +41,7 @@ private const val NOW_MILLIS = 1_784_019_600_000
 /**
  * [DownloadWorker]'s ledger contract: the states it writes, in what order, and what it refuses to
  * do. Robolectric supplies the Android `Context` WorkManager needs; there is no emulator involved
- * (CLAUDE.md §4). The SAF write is [FakeDownloadTarget] (`docs/architecture.md` §11).
+ * (CLAUDE.md §4). The SAF write is [FakeDownloadTarget] (`architecture.adoc` §11).
  */
 @RunWith(RobolectricTestRunner::class)
 class DownloadWorkerTest {
@@ -217,7 +217,7 @@ class DownloadWorkerTest {
     @Test
     fun `the user-requested flag is the only way past the terminal-row refusal`() =
         runBlocking {
-            // The half of docs/decisions/0012 that keeps the no-auto-download invariant provable.
+            // The half of decisions/0012 that keeps the no-auto-download invariant provable.
             // Same episode, same terminal row, same everything — only the flag differs.
             ledger.upsert(queuedRow(state = LedgerState.DOWNLOADED, writtenFileName = "already there.mp3"))
             ledger.writes.clear()
@@ -233,7 +233,7 @@ class DownloadWorkerTest {
     @Test
     fun `a re-download resets attempts and clears the error, but keeps the written file name`() =
         runBlocking {
-            // docs/decisions/0012 sections 2 and 3. Keeping writtenFileName is the non-obvious half:
+            // decisions/0012 sections 2 and 3. Keeping writtenFileName is the non-obvious half:
             // it is what the duplicate guard checks, so losing it here would let a second copy be
             // written on the *next* re-download.
             server.enqueue(MockResponse().setResponseCode(200).setBody(mp3Body()))
@@ -256,7 +256,7 @@ class DownloadWorkerTest {
     @Test
     fun `a re-download whose own file is still there aborts instead of writing a second copy`() =
         runBlocking {
-            // The one licensed existence check in the app (docs/decisions/0012 §4). Not an ERROR:
+            // The one licensed existence check in the app (decisions/0012 §4). Not an ERROR:
             // the row stays DOWNLOADED and the user is told the file is already there.
             target.seed("Der Podcast", "20260714_earlier name.mp3")
             ledger.upsert(
@@ -340,7 +340,7 @@ class DownloadWorkerTest {
     /**
      * Every attempt records, not only the last: the DAO collapses repeats into one entry with a
      * count, and that count is the only way a user can tell "it failed once" from "it has been
-     * failing all night" (`docs/UI.md` §11).
+     * failing all night" (`UI.adoc` §11).
      */
     @Test
     fun `each attempt records, so the store can collapse them into a count`() =
@@ -364,7 +364,7 @@ class DownloadWorkerTest {
     /**
      * A lost folder is a storage problem the user fixes elsewhere, so it is filed under `STORAGE`
      * and its sentence names the fix rather than offering a retry that cannot work
-     * (`docs/architecture.md` §11).
+     * (`architecture.adoc` §11).
      */
     @Test
     fun `a lost download folder is a storage entry that names the fix`() =

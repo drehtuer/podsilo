@@ -26,7 +26,7 @@ private const val MAX_ATTEMPTS = 5
 /**
  * The thin `CoroutineWorker` around `:core:sync`'s [SyncOrchestrator]. It lives in `:app` rather
  * than `:core:sync` for one reason: `androidx.work` is an Android dependency and `:core:sync` must
- * stay plain-JVM testable (`docs/architecture.md` §2). Everything interesting — order of
+ * stay plain-JVM testable (`architecture.adoc` §2). Everything interesting — order of
  * operations, reconciliation, the outbox — is in the orchestrator and tested without Android.
  */
 @HiltWorker
@@ -46,7 +46,7 @@ class SyncWorker
 
             // One worker, three modes — the same shape `FeedRefreshWorker.KEY_FEED_URL` already uses.
             // Three workers would be three copies of the credential check, the outcome mapping and the
-            // retry policy, differing only in which method they call (`docs/decisions/0025`).
+            // retry policy, differing only in which method they call (`decisions/0025`).
             val outcome =
                 when (inputData.getString(KEY_SYNC_MODE)) {
                     MODE_FORCE_PULL -> orchestrator.forcePull()
@@ -73,7 +73,7 @@ class SyncWorker
 
             /**
              * Kept **only** so the schedule an older build persisted can be cancelled
-             * (`docs/decisions/0026`). Nothing enqueues under this name any more, and the request
+             * (`decisions/0026`). Nothing enqueues under this name any more, and the request
              * builder that used to is gone: a builder for work nobody schedules is an invitation to
              * schedule it again by accident.
              */

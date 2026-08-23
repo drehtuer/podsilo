@@ -2,7 +2,7 @@
 
 // Android library: Room needs an Android Context. Implements the four repository ports from
 // :core:model (FeedRepository, EpisodeRepository, EpisodeLedgerRepository, SyncStateRepository) —
-// see docs/architecture.md §2/§4. Hilt @Binds wiring is deferred to :app (Tier 4c); the
+// see architecture.adoc §2/§4. Hilt @Binds wiring is deferred to :app (Tier 4c); the
 // repositories are plain constructor-injectable classes so that wiring is trivial when it lands.
 plugins {
     alias(libs.plugins.android.library)

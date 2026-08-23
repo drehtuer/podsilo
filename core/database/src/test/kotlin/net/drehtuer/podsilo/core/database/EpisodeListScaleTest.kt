@@ -15,9 +15,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * **The measurement `docs/backlog.md` asked for before adding Paging 3.**
+ * **The measurement `backlog.adoc` asked for before adding Paging 3.**
  *
- * `docs/UI.md` §B14.3 says a 500-episode feed under `All` needs "paging or a keyed `LazyColumn`",
+ * `UI.adoc` §B14.3 says a 500-episode feed under `All` needs "paging or a keyed `LazyColumn`",
  * and CLAUDE.md §3/§5 name Paging 3 for long lists. The note deliberately refused to decide that
  * from principle, because the cost of the dependency is real and the size of the problem was
  * unmeasured. These tests are the measurement, at three sizes: the 500 the UI contract names, the

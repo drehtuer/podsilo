@@ -20,7 +20,7 @@ private const val MIN_PERIODIC_MINUTES = 15L
  * intervals) lives in one readable place instead of being spread across view models and workers.
  *
  * Also the [SyncTrigger] `:core:download` asks for after a download lands
- * (`docs/architecture.md` §10) — which is why the download module never needs to know that a
+ * (`architecture.adoc` §10) — which is why the download module never needs to know that a
  * `SyncWorker` exists at all.
  */
 @Singleton
@@ -88,7 +88,7 @@ class WorkScheduler
         }
 
         /**
-         * The two directional passes (`docs/decisions/0025`). `APPEND_OR_REPLACE` for the same reason
+         * The two directional passes (`decisions/0025`). `APPEND_OR_REPLACE` for the same reason
          * [requestSyncNow] uses it: a pass already in flight may have read the ledger before the user
          * pressed this, so the button needs a pass of its own afterwards rather than joining one.
          */
@@ -106,7 +106,7 @@ class WorkScheduler
 
         /** UPDATE so changing the interval in settings re-times the existing schedule instead of adding one. */
         fun schedulePeriodicWork(intervalMinutes: Long) {
-            // **No periodic sync** (`docs/decisions/0026`). The author's decision: every pass is
+            // **No periodic sync** (`decisions/0026`). The author's decision: every pass is
             // something they asked for — pull-to-refresh, S7's *Sync now*, the two directional
             // buttons, or the pass a triage decision triggers so it reaches Nextcloud at once.
             //

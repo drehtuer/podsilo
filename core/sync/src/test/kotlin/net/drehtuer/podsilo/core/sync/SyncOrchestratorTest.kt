@@ -134,7 +134,7 @@ class SyncOrchestratorTest {
             val outcome = orchestratorOf(ledgerRepository = ledgerRepository, gpodderClient = gpodderClient).sync()
 
             assertEquals(SyncOutcome.Success, outcome)
-            // Two actions for one row since `docs/decisions/0023`: DOWNLOAD, then the PLAY that makes
+            // Two actions for one row since `decisions/0023`: DOWNLOAD, then the PLAY that makes
             // it read as handled on a server which discards DOWNLOAD.
             assertEquals(
                 listOf(EpisodeActionType.DOWNLOAD, EpisodeActionType.PLAY),

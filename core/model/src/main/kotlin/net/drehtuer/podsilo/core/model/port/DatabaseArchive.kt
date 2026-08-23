@@ -9,17 +9,17 @@ package net.drehtuer.podsilo.core.model.port
  * else it owns — CLAUDE.md §5 calls it "the ONE table that must never be lost". Most of it *can* be
  * recovered from Nextcloud's action log, but only the part that reached the server: rows still in
  * the outbox, the `writtenFileName` a retry needs, and every `DOWNLOAD` action (which Nextcloud
- * discards outright — `docs/decisions/0008`) exist nowhere else. A phone that dies takes them with
+ * discards outright — `decisions/0008`) exist nowhere else. A phone that dies takes them with
  * it. This is the export that doesn't.
  *
  * **The archive holds no credentials.** The Nextcloud app password lives in DataStore behind a
- * Keystore-backed cipher (`docs/architecture.md` §2), not in the database, so it is not in the zip and
+ * Keystore-backed cipher (`architecture.adoc` §2), not in the database, so it is not in the zip and
  * a restored install must be reconnected. That is deliberate: a backup file the user may copy to a
  * PC or a cloud drive must not be a credential file. It *does* contain feed and enclosure URLs,
  * episode titles and show notes — the user's subscription list in readable form.
  *
  * URIs cross this seam as strings, the same way `SettingsRepository.observeDownloadFolderUri` does,
- * so `:core:model` stays free of `android.net.Uri` (`docs/architecture.md` §2).
+ * so `:core:model` stays free of `android.net.Uri` (`architecture.adoc` §2).
  */
 interface DatabaseArchive {
     /** Writes a zip to [destinationUri], a SAF document the host just created. */

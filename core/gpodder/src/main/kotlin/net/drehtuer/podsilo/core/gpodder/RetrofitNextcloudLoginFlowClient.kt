@@ -37,11 +37,11 @@ private const val HTTP_OK = 200
 private val loginJson = Json { ignoreUnknownKeys = true }
 
 /**
- * Nextcloud **Login Flow v2** (`docs/UI.md` §8). The only way this app ever obtains credentials:
+ * Nextcloud **Login Flow v2** (`UI.adoc` §8). The only way this app ever obtains credentials:
  * the user authenticates in a browser against their own server, and what comes back is an **app
  * password**, never their account password (CLAUDE.md §5).
  *
- * Stays in the JVM module (`docs/architecture.md` §2) — nothing here touches an Android API. Opening
+ * Stays in the JVM module (`architecture.adoc` §2) — nothing here touches an Android API. Opening
  * the browser is the UI's job, delivered as a one-shot effect; this client only starts the flow,
  * polls it, and verifies the result.
  *
@@ -110,7 +110,7 @@ class RetrofitNextcloudLoginFlowClient(
                 // This whole loop used to sit inside `runCatchingRequest` with nothing catching per
                 // attempt, so one `IOException` — a DNS blip, a Wi-Fi/mobile handover — abandoned all
                 // 200 attempts and reported "can't reach that address" while the user was still
-                // completing the grant in their browser. Since `docs/decisions/0020` the poll only
+                // completing the grant in their browser. Since `decisions/0020` the poll only
                 // runs in the foreground, which removes the cause that was actually biting; this
                 // keeps a *foreground* blip from costing the flow too. `execute()` is the only thing
                 // guarded — a malformed body or an unexpected status still fails immediately, because
@@ -254,7 +254,7 @@ internal fun String.keepingSchemeAtLeastAsSecureAs(secure: Boolean): String =
  * Silently upgrading `http://192.168.1.10` to HTTPS would connect to a different endpoint than the
  * user named and fail with a confusing error, and silently *downgrading* would put an app password
  * on the wire in plaintext. Neither is ours to decide here: S5's field renders a fixed `https://`
- * prefix (`docs/UI.md` §8), so the UI is where the default is made visible, and this stays
+ * prefix (`UI.adoc` §8), so the UI is where the default is made visible, and this stays
  * consistent with `RetrofitGpodderClient`, which honours the stored URL's scheme too.
  *
  * This applies to what the **user** typed. URLs the *server* hands back are a different question,

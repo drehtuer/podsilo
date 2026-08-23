@@ -63,6 +63,18 @@ ENV LANG=C.UTF-8 \
 # these packages costs only the ability to lint YAML and shell, and to write
 # ad-hoc scripts.
 #
+# asciidoctor is both the renderer and the linter for the AsciiDoc documentation:
+# `asciidoctor --failure-level=WARN -o /dev/null` turns a broken cross-reference or
+# a malformed table into a non-zero exit, which is the same shape as yamllint and
+# shellcheck above — a language Gradle cannot see, checked by the tool that owns it.
+# The Markdown converter is kramdown-asciidoc (`kramdoc`), installed below as a gem
+# rather than from apt — the one deliberate exception to the "distro packages only"
+# rule, and the reason is that pandoc, which *is* in apt, produces AsciiDoc that has
+# to be repaired: an explicit [[anchor]] above every heading (invalid whenever the
+# heading starts with a digit, which silently deletes the heading), verbose
+# [cols=",,,"] on every table, and `''''' ` for a thematic break. kramdoc emits none
+# of those. It is pinned like every other dependency.
+#
 # python3-venv + python3-pip because noble enforces PEP 668: `pip install` into
 # the system interpreter refuses with "externally-managed-environment", so
 # anything beyond the distro packages belongs in a `python3 -m venv` and these are
@@ -85,11 +97,25 @@ RUN apt-get update \
       python3-yaml \
       yamllint \
       shellcheck \
+      asciidoctor \
+      nodejs \
+      npm \
       less \
       procps \
       sudo \
       tzdata \
  && rm -rf /var/lib/apt/lists/*
+
+# kramdoc, the Asciidoctor project's own Markdown converter. `asciidoctor` above
+# brings Ruby and rubygems, so this is the only extra step. --no-document skips
+# rdoc/ri, which nothing here reads.
+RUN gem install --no-document kramdown-asciidoc:2.1.1
+
+# Antora builds the documentation site (docs/antora.yml, antora-playbook.yml). It is
+# a Node application, which is the only reason nodejs and npm are in the image at all
+# — nothing in the app, Gradle or the test tiers touches them. Pinned like everything
+# else; `antora` is the CLI plus the default site generator.
+RUN npm install -g --no-fund --no-audit antora@3.1.10
 
 # --- Android emulator runtime libraries ---------------------------------------
 # Only needed for Tier 2 (headless emulator inside the container). Safe to drop

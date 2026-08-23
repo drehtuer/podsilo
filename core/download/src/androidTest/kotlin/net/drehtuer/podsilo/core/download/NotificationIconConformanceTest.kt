@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * **The notification small icon against the real alpha mask** (`docs/UI.md` §C7's second open Tier 3
+ * **The notification small icon against the real alpha mask** (`UI.adoc` §C7's second open Tier 3
  * item, and §3).
  *
  * Android does not draw a small icon as supplied. It keeps the **alpha channel**, throws the colour
@@ -74,7 +74,7 @@ class NotificationIconConformanceTest {
         // Down the mark's vertical centre line the figure is: gap, bar, gap, bar, gap (the silo's
         // open mouth), stored band, gap, floor. Opaque and transparent runs must therefore ALTERNATE
         // several times. A blob — bars fused into the vessel — is one long opaque run, which is
-        // exactly the failure `docs/UI.md` §C1's minimum size and §3's 18-in-24 padding exist to
+        // exactly the failure `UI.adoc` §C1's minimum size and §3's 18-in-24 padding exist to
         // prevent, and exactly what a careless re-export would produce.
         val px = (24 * context.resources.displayMetrics.density).toInt()
         val mask = alphaMask(px)

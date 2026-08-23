@@ -28,7 +28,7 @@ import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 
 /**
- * S2's app bar (`docs/UI.md` §5) — **the screen shipped without one at all**, alone among the eight.
+ * S2's app bar (`UI.adoc` §5) — **the screen shipped without one at all**, alone among the eight.
  *
  * The consequences were larger than "missing chrome" suggests: no up navigation, no feed title, the
  * screen's content beginning under the status bar, nowhere for the *Download all (n)* item to live —
@@ -53,7 +53,7 @@ internal fun EpisodeListAppBar(
 ) {
     // Selection mode *replaces* the bar rather than adding to it: the actions belong to the
     // selection, and leaving "back" in place beside "3 selected" invites leaving the screen when the
-    // user meant to leave the mode (docs/UI.md §5).
+    // user meant to leave the mode (UI.adoc §5).
     state.selection?.let { selection ->
         SelectionAppBar(selection, onEvent)
         return
@@ -78,7 +78,7 @@ internal fun EpisodeListAppBar(
         },
         actions = {
             // The app bar is the one place an icon-only control exists — the target is conventional
-            // there and nowhere else (docs/UI.md §18).
+            // there and nowhere else (UI.adoc §18).
             IconButton(
                 onClick = { onEvent(EpisodeListEvent.ActivityClicked) },
                 modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
@@ -91,14 +91,14 @@ internal fun EpisodeListAppBar(
 }
 
 /**
- * Selection mode's bar: `n selected`, the two triage actions, *Select all*, and ✕ (`docs/UI.md` §5).
+ * Selection mode's bar: `n selected`, the two triage actions, *Select all*, and ✕ (`UI.adoc` §5).
  *
  * The answer to "12 new episodes, no undo, 12 swipes" — and the reason issue #46 was ordered after
  * the app bar existed at all, since there was previously nowhere to put this.
  *
  * Two details that are requirements rather than polish:
  *
- * - **The count is a live region** (`docs/UI.md` §12.12): TalkBack announces `n selected` on every
+ * - **The count is a live region** (`UI.adoc` §12.12): TalkBack announces `n selected` on every
  *   change, which is the only feedback a non-sighted user gets that a tap toggled anything.
  * - **Acting confirms first.** Both actions go through [EpisodeListEvent.SelectionActionRequested],
  *   which writes nothing; only the dialog's confirm button writes. That is the same safeguard
@@ -151,7 +151,7 @@ private fun SelectionAppBar(
 }
 
 /**
- * The confirmation selection-mode actions commit through (`docs/UI.md` §5, `docs/decisions/0014`).
+ * The confirmation selection-mode actions commit through (`UI.adoc` §5, `decisions/0014`).
  *
  * Names the exact count, and for *Mark as played* says where the state goes — the wording is not
  * decoration: those actions reach the shared log and other clients act on them.
@@ -203,8 +203,8 @@ internal fun SelectionActionDialog(
 private fun episodeWord(count: Int): String = if (count == 1) "episode" else "episodes"
 
 /**
- * *Download all (n)* — in the overflow rather than as a button, deliberately (`docs/UI.md` §5,
- * `docs/decisions/0014`): it is a command the user issues to a set they can see, not an affordance
+ * *Download all (n)* — in the overflow rather than as a button, deliberately (`UI.adoc` §5,
+ * `decisions/0014`): it is a command the user issues to a set they can see, not an affordance
  * that invites itself. There is no global "download everything" anywhere, and this one is scoped to
  * one podcast.
  *
@@ -232,13 +232,13 @@ private fun DownloadAllOverflow(
         DropdownMenuItem(
             text = { Text("Download all (${state.downloadAllCount})") },
             // Disabled *with the reason*, never silently: a greyed item that does not say why is a
-            // dead end (docs/UI.md §5, §12.11).
+            // dead end (UI.adoc §5, §12.11).
             enabled = paused == null,
             trailingIcon = paused?.let { { Text(it.shortReason, style = MaterialTheme.typography.bodySmall) } },
             onClick = {
                 // Opening the menu decides nothing and this click decides nothing either: it asks the
                 // view model for a preview, and only the dialog's confirm button writes
-                // (docs/decisions/0014).
+                // (decisions/0014).
                 expanded = false
                 onEvent(EpisodeListEvent.DownloadAllRequested)
             },

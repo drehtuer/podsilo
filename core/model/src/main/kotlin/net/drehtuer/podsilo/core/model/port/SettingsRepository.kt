@@ -11,7 +11,7 @@ import java.time.ZoneId
  * Port for user-configurable settings, implemented in `:core:datastore` (Jetpack DataStore, with
  * the Nextcloud app password encrypted via a Keystore-backed cipher — never plaintext, CLAUDE.md
  * §5). Lives in Android-free `:core:model` so `:core:sync` and the feature view models depend on
- * the interface, not the DataStore implementation (`docs/architecture.md` §2).
+ * the interface, not the DataStore implementation (`architecture.adoc` §2).
  *
  * Everything except the app password is observable as a [Flow] so the UI (and the live naming
  * preview in `:feature:settings`) reacts to edits. The password is read-only through the suspend
@@ -36,7 +36,7 @@ interface SettingsRepository {
 
     /**
      * How often the **feed refresh** runs in the background. Named for sync because it once timed
-     * a periodic sync pass too; since `docs/decisions/0026` there is no such pass — every sync is
+     * a periodic sync pass too; since `decisions/0026` there is no such pass — every sync is
      * something the user asked for — and this is the feed-refresh interval only. The key is left
      * alone rather than migrated: it is one value, stored once, with no user-visible label.
      */
@@ -49,7 +49,7 @@ interface SettingsRepository {
     suspend fun setTheme(theme: ThemePreference)
 
     /**
-     * Which triage action each swipe direction performs (`docs/UI.md` §12.1). Persisted because the
+     * Which triage action each swipe direction performs (`UI.adoc` §12.1). Persisted because the
      * swipe background's icon and word are rendered *from* this — so the UI cannot show one verb
      * and perform another.
      */
@@ -80,7 +80,7 @@ interface SettingsRepository {
     suspend fun setDeliveredClearedAt(millis: Long)
 
     /**
-     * The *mark old episodes as played* cutoff (`docs/decisions/0013`). [OlderThan.OFF] by default:
+     * The *mark old episodes as played* cutoff (`decisions/0013`). [OlderThan.OFF] by default:
      * this rule **writes** `SKIPPED` rows and emits `PLAY` actions other clients will see, so it is
      * opt-in and its first bulk application always goes through the counted preview.
      */
@@ -152,7 +152,7 @@ const val DEFAULT_SYNC_INTERVAL_MINUTES: Long = 240
 
 /**
  * Light / dark / system, applied at the Compose root without recreating the activity
- * (`docs/UI.md` §12.7). Material You dynamic colour is deliberately **off** — one seed, two
+ * (`UI.adoc` §12.7). Material You dynamic colour is deliberately **off** — one seed, two
  * schemes, so both can actually be verified.
  */
 enum class ThemePreference { LIGHT, DARK, SYSTEM }
@@ -179,7 +179,7 @@ data class SwipeMapping(
 
     /**
      * Assigns [action] to [direction], **swapping** rather than rejecting when the other direction
-     * already holds it (`docs/UI.md` §7) — the user's most recent choice is always honoured, and
+     * already holds it (`UI.adoc` §7) — the user's most recent choice is always honoured, and
      * the pair stays valid, so the swipe background can be rendered from state with no defensive
      * branch. [SwipeAction.NONE] is exempt: both directions may be disabled at once.
      */
@@ -197,7 +197,7 @@ data class SwipeMapping(
 }
 
 /**
- * The *mark old episodes as played* cutoff (`docs/decisions/0013`). [OFF] by default — the rule
+ * The *mark old episodes as played* cutoff (`decisions/0013`). [OFF] by default — the rule
  * writes ledger rows and emits `PLAY` actions to the shared log, so it never runs unasked.
  *
  * `@Suppress("MagicNumber")`: each constant's name states its own number, so extracting
@@ -219,7 +219,7 @@ enum class OlderThan(
      *
      * Calendar arithmetic, not `now - 90 days`: "3 months" has to mean three calendar months or the
      * cutoff drifts against what the label says. [zone] is passed in rather than read from the
-     * device mid-calculation, for the same reason `:core:naming` takes one (`docs/architecture.md` §11).
+     * device mid-calculation, for the same reason `:core:naming` takes one (`architecture.adoc` §11).
      */
     fun cutoffMillis(
         now: Instant,

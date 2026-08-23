@@ -47,7 +47,7 @@ private val json =
  * **Known server limitation, not a bug here:** `nextcloud-gpodder` >= 3.13.3 silently discards any
  * posted action whose type isn't `PLAY` and still returns 200 -- so `DOWNLOAD` actions sent by
  * [postEpisodeActions] never reach the shared log on a real Nextcloud. Podsilo emits them anyway
- * (honest, and correct against `opodsync`/older servers); see `docs/decisions/0008`.
+ * (honest, and correct against `opodsync`/older servers); see `decisions/0008`.
  *
  * **No failure leaves this class untyped.** All three methods run through [guarded], so a caller
  * only ever sees a [GpodderException] carrying a [GpodderFailure] -- never Retrofit's `HttpException`,

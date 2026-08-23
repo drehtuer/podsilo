@@ -44,7 +44,7 @@ class EpisodeHtmlTest {
 
     @Test
     fun `images are removed entirely — a remote one is a tracking pixel`() {
-        // The sheet opening must not report back to anyone, and docs/UI.md §6 strips them anyway.
+        // The sheet opening must not report back to anyone, and UI.adoc §6 strips them anyway.
         val out = render("""Notes<img src="https://tracker.example/pixel.gif" width="1"/>end""")
         assertEquals("Notesend", out)
         assertFalse(out.contains("tracker"))

@@ -94,7 +94,7 @@ object AppModule {
 @InstallIn(SingletonComponent::class)
 abstract class BindingsModule {
     /**
-     * The two directional passes S4 offers (`docs/decisions/0025`). A separate port from
+     * The two directional passes S4 offers (`decisions/0025`). A separate port from
      * [SyncTrigger] on purpose: "sync now" and "overwrite the server with my state" are different
      * requests, and one interface with a mode parameter is one typo away from confusing them.
      */
@@ -111,7 +111,7 @@ abstract class BindingsModule {
 
     /**
      * The screens ask "is there a network" before starting a refresh, so an offline pull can answer
-     * instantly rather than timing out against every feed (`docs/UI.md` §12.10).
+     * instantly rather than timing out against every feed (`UI.adoc` §12.10).
      */
     @Binds
     abstract fun bindConnectivityMonitor(monitor: AndroidConnectivityMonitor): ConnectivityMonitor

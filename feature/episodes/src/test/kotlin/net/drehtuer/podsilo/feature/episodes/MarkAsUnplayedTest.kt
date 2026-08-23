@@ -16,7 +16,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * *Mark as unplayed* (`docs/decisions/0024`) — the affordance the project declined three times, and
+ * *Mark as unplayed* (`decisions/0024`) — the affordance the project declined three times, and
  * the reason it can exist now.
  *
  * Every refusal was the same objection: "undecided" is the **absence** of a ledger row, so un-marking
@@ -73,7 +73,7 @@ class MarkAsUnplayedTest {
     /**
      * The specific thing a delete would have destroyed. `writtenFileName` is what the duplicate guard
      * checks before a re-download, so losing it here would let a second copy of a file the user
-     * already has be written later (`docs/decisions/0012`).
+     * already has be written later (`decisions/0012`).
      */
     @Test
     fun `the written file name survives being marked unplayed`() =

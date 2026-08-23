@@ -49,7 +49,7 @@ class PodsiloApplication :
      * Coil, on the OkHttp this app already pins.
      *
      * That reuse is the whole reason `coil-network-okhttp` is in the catalog rather than Coil's
-     * default engine (`docs/UI.md` §18) — one connection pool, one TLS config, one place where
+     * default engine (`UI.adoc` §18) — one connection pool, one TLS config, one place where
      * timeouts are set. Without this factory Coil silently builds a second HTTP stack.
      */
     override fun newImageLoader(context: PlatformContext): ImageLoader =

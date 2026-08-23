@@ -24,7 +24,7 @@ AVD_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}/${AVD_NAME}.avd"
 # (CLAUDE.md §11).
 if [ ! -w /dev/kvm ]; then
     echo "ERROR: /dev/kvm is not writable by $(id -un)." >&2
-    echo "       See docs/dev-environment.md §3.2 and §8.4 — the emulator needs nested" >&2
+    echo "       See dev-environment.adoc §3.2 and §8.4 — the emulator needs nested" >&2
     echo "       virtualisation on a Windows 11 host, and Tier 1 works without it." >&2
     exit 1
 fi

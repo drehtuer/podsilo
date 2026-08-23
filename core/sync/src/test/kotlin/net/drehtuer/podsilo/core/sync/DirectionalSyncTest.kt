@@ -20,7 +20,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * The two directional passes (`docs/decisions/0025`) — *apply Nextcloud's state here* and *send this
+ * The two directional passes (`decisions/0025`) — *apply Nextcloud's state here* and *send this
  * device's state to Nextcloud*.
  *
  * The pull's whole design is that it is **the ordinary reconciliation with `since = 0`**, overriding
@@ -96,7 +96,7 @@ class DirectionalSyncTest {
     /**
      * D4 and D5, as behaviour rather than as prose. The pull can only ever *shorten* the To-decide
      * list — it never re-opens a decision, and never replaces a `DOWNLOADED` row, which the server
-     * structurally cannot carry back (`docs/decisions/0008`).
+     * structurally cannot carry back (`decisions/0008`).
      */
     @Test
     fun `the pull leaves every decided state exactly as it found it`() =
@@ -139,7 +139,7 @@ class DirectionalSyncTest {
             val outcome = orchestrator(ledger, client).forcePush()
 
             assertEquals(SyncOutcome.Success, outcome)
-            // SKIPPED -> one PLAY; DOWNLOADED -> DOWNLOAD + PLAY (`docs/decisions/0023`).
+            // SKIPPED -> one PLAY; DOWNLOADED -> DOWNLOAD + PLAY (`decisions/0023`).
             assertEquals(3, client.postedActions.size)
         }
 

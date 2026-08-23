@@ -75,7 +75,7 @@ object DownloadModule {
             downloadTarget = downloadTarget,
             cacheDir = File(context.cacheDir, DOWNLOAD_CACHE_DIR),
             // The device's zone, fixed here rather than re-resolved per call, so one episode always
-            // formats to the same date across retries (`docs/architecture.md` §11).
+            // formats to the same date across retries (`architecture.adoc` §11).
             zoneId = clock.zone,
             artworkFetcher = artworkFetcher,
         )

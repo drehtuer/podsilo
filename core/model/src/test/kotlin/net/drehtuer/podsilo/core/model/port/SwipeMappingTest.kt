@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The invariant under test is `docs/UI.md` §7's: the two directions never hold the same action, and
+ * The invariant under test is `UI.adoc` §7's: the two directions never hold the same action, and
  * picking a taken one **swaps** rather than being rejected. If this ever breaks, one triage verb
  * becomes unreachable by gesture while the swipe background still advertises it.
  */
@@ -43,7 +43,7 @@ class SwipeMappingTest {
     @Test
     fun `both directions may be disabled at once`() {
         // NONE is exempt from the uniqueness rule — "no swipe actions at all" is a legal choice,
-        // since every swipe has a visible equivalent in the overflow (docs/UI.md §1).
+        // since every swipe has a visible equivalent in the overflow (UI.adoc §1).
         val mapping =
             SwipeMapping()
                 .with(SwipeDirection.LEFT, SwipeAction.NONE)

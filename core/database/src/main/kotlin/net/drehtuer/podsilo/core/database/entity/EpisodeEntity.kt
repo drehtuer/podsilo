@@ -8,7 +8,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room row for `Episode` — the disposable parsed-RSS cache (`docs/architecture.md` §4). The
+ * Room row for `Episode` — the disposable parsed-RSS cache (`architecture.adoc` §4). The
  * cascading foreign key onto `feeds` is what implements "a feed disappearing from the server
  * deletes its episodes"; the ledger is deliberately a separate table with no such key, so its rows
  * outlive these (CLAUDE.md §5).

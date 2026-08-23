@@ -48,7 +48,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * S1 — the podcast list, and the app's home (`docs/UI.md` §4).
+ * S1 — the podcast list, and the app's home (`UI.adoc` §4).
  *
  * Stateless, like S2: it renders [state] and emits [onEvent]. The one thing it must never grow is an
  * add-feed affordance — the empty state says subscriptions are managed in Nextcloud, and that empty
@@ -69,7 +69,7 @@ fun PodcastListScreen(
                 title = { PodcastListTitle() },
                 actions = {
                     // The app bar is the one place an icon-only control exists — the target is
-                    // conventional there and nowhere else (docs/UI.md §18).
+                    // conventional there and nowhere else (UI.adoc §18).
                     IconButton(
                         onClick = { onEvent(PodcastListEvent.ActivityClicked) },
                         modifier = Modifier.sizeIn(minHeight = MinTouchTarget),
@@ -94,7 +94,7 @@ fun PodcastListScreen(
         // the Refresh button in the *no subscriptions* empty state — which by definition never
         // renders once there are feeds. On a real account with four subscriptions the result was
         // that every feed read "never refreshed" for ever and no episode ever arrived, because the
-        // periodic worker is the only other caller (see docs/journal.md, 2026-08-02).
+        // periodic worker is the only other caller (see journal.adoc, 2026-08-02).
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(PodcastListEvent.PullToRefresh) },
@@ -126,7 +126,7 @@ fun PodcastListScreen(
 
 /**
  * S1 is the launcher screen and the only one whose app-bar title is the product name, so it is the
- * only app bar the mark appears in (`docs/UI.md` §C4.1, §5).
+ * only app bar the mark appears in (`UI.adoc` §C4.1, §5).
  *
  * The wordmark stays live type beside the mark rather than becoming part of an image: a title has to
  * scale with the user's font setting, and a drawable will not.
@@ -270,7 +270,7 @@ private fun PodcastRow(
         horizontalArrangement = Arrangement.spacedBy(RowPadding),
     ) {
         // The row reserved `ArtworkSize` height from the day it was written and never drew anything
-        // into it — Coil was in the catalog, approved (UI.md §18), and used by no module at all.
+        // into it — Coil was in the catalog, approved (UI.adoc §18), and used by no module at all.
         PodsiloArtwork(url = feed.artworkUrl, title = feed.displayTitle)
         Column(modifier = Modifier.weight(1f)) {
             Text(

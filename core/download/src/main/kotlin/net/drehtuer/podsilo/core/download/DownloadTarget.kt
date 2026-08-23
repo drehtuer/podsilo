@@ -6,15 +6,15 @@ import java.io.File
 
 /**
  * The final step of the download pipeline: getting a finished, tagged cache file into the user's
- * chosen folder (`docs/architecture.md` §8/§11).
+ * chosen folder (`architecture.adoc` §8/§11).
  *
  * This is a deliberate seam, not a "in case we swap SAF later" wrapper — CLAUDE.md §3 forbids the
  * latter. SAF is the only implementation there will ever be ([SafDownloadTarget]), but a
  * `DocumentFile` write needs a real `DocumentsProvider`, which exists on a device and not in a JVM
  * unit test. Without this interface the entire pipeline — naming, collision suffixing, tagging,
  * retry reuse of `writtenFileName`, cache cleanup — would be testable only on an emulator, and this
- * project has never successfully booted one (`docs/dev-environment.md` §6). See
- * `docs/architecture.md` §11.
+ * project has never successfully booted one (`dev-environment.adoc` §6). See
+ * `architecture.adoc` §11.
  */
 interface DownloadTarget {
     /**
@@ -27,7 +27,7 @@ interface DownloadTarget {
      * fighting over one name.
      *
      * **One caller is licensed to use it as an existence check, and only one**
-     * (`docs/decisions/0012` §4): [EpisodeDownloader]'s pre-flight duplicate guard, which runs *only*
+     * (`decisions/0012` §4): [EpisodeDownloader]'s pre-flight duplicate guard, which runs *only*
      * when `KEY_USER_REQUESTED` is set and the row already carries a `writtenFileName`. It asks a
      * narrower question — "is the file *this* episode previously wrote still here?" — because the
      * user asked for that specific file again. It never decides whether an episode is new or whether
@@ -52,7 +52,7 @@ interface DownloadTarget {
      * share, some cloud providers), and that is normal rather than an error.
      *
      * Used only for the non-blocking warning line on the bulk-download confirmation
-     * (`docs/UI.md` §5). `null` means the warning is simply not shown: the estimate it feeds is
+     * (`UI.adoc` §5). `null` means the warning is simply not shown: the estimate it feeds is
      * derived from `itunes:duration`, which is unreliable enough that it must never *block* a
      * decision — so being unable to compute it is not a failure worth surfacing.
      */

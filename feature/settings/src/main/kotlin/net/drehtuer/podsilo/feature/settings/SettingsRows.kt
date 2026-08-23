@@ -60,7 +60,7 @@ internal fun SettingsRow(
             // zip is being written, and a row that vanished mid-operation would read as a crash.
             SettingsRowBody(title, subtitle, onClick.takeIf { enabled }, isWarning)
         }
-        // The affordance, not a control — the whole row is the tap target (docs/UI.md §18).
+        // The affordance, not a control — the whole row is the tap target (UI.adoc §18).
         if (onClick != null) PodsiloIcon(PodsiloIcons.ChevronRight, contentDescription = null)
     }
 }

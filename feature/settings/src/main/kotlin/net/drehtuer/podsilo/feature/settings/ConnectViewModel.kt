@@ -25,10 +25,10 @@ import net.drehtuer.podsilo.core.model.port.SettingsRepository
 import net.drehtuer.podsilo.core.model.port.SyncTrigger
 
 /**
- * S5 — the Nextcloud connection dialog (`docs/UI.md` §8).
+ * S5 — the Nextcloud connection dialog (`UI.adoc` §8).
  *
  * **Login Flow v2 exclusively.** The app never sees, asks for, or stores a user password; what it
- * persists is the app password the flow hands back (CLAUDE.md §5, `docs/architecture.md` §2). There is
+ * persists is the app password the flow hands back (CLAUDE.md §5, `architecture.adoc` §2). There is
  * no username/password form in this module and there must never be one.
  *
  * The order below is load-bearing: **success is claimed only after the authenticated
@@ -37,7 +37,7 @@ import net.drehtuer.podsilo.core.model.port.SyncTrigger
  * password is discarded rather than stored.
  *
  * And even then it is not stored: **the user confirms the account first**
- * ([ConnectUiState.Phase.ConfirmingAccount], `docs/UI.md` §8). The flow returns whichever
+ * ([ConnectUiState.Phase.ConfirmingAccount], `UI.adoc` §8). The flow returns whichever
  * account the *browser* was signed into, which is not a choice the app gets to make or even
  * influence — so the one thing it can do is show the name before acting on it.
  */
@@ -263,14 +263,14 @@ class ConnectViewModel(
 
         // Polling starts only if we are still on screen. The usual case is that we are not for long:
         // `OpenBrowser` is about to put the browser in front of us, `ForegroundChanged(false)`
-        // arrives, and the poll waits for the user to come back (docs/decisions/0020).
+        // arrives, and the poll waits for the user to come back (decisions/0020).
         startPollingIfForeground()
     }
 
     /**
      * Polls until the user grants access, then verifies and asks them to confirm the account.
      *
-     * **Runs only while the app is in the foreground** (`docs/decisions/0020`). Login Flow v2 is a
+     * **Runs only while the app is in the foreground** (`decisions/0020`). Login Flow v2 is a
      * loop that watches for something the *user* does in a browser, and its result is only useful
      * once they come back here — so polling behind their back buys nothing and costs the one thing
      * that broke it: a backgrounded process on Android 17 could not resolve the host, and a single
@@ -295,7 +295,7 @@ class ConnectViewModel(
         _state.value = _state.value.copy(phase = ConnectUiState.Phase.VerifyingGpodderSync)
         loginFlowClient.verifyGpodderSync(result.credentials).getOrElse {
             // The password is *not* stored: connecting to a Nextcloud without gpoddersync would
-            // leave the user with an app that silently syncs nothing (docs/UI.md §8).
+            // leave the user with an app that silently syncs nothing (UI.adoc §8).
             return fail(it.asConnectError(ConnectError.NO_GPODDERSYNC), it.message)
         }
 
@@ -317,7 +317,7 @@ class ConnectViewModel(
      * The dialog has room for one plain sentence, which is correct for it and useless for
      * diagnosis: "Can't reach that address" is the same six words whether DNS failed, the server
      * answered on a host the phone cannot route to, or Android refused a cleartext URL the server
-     * asked for. `docs/UI.md` §8 has said all along that these are "each also written to S8"; they
+     * asked for. `UI.adoc` §8 has said all along that these are "each also written to S8"; they
      * were not. Now the underlying message — which names the host and the actual failure — lands in
      * the error log, where it can be read, copied and shared.
      *
@@ -342,7 +342,7 @@ class ConnectViewModel(
 }
 
 /**
- * Validation happens on submit only, so typing never fights the user (`docs/UI.md` §8).
+ * Validation happens on submit only, so typing never fights the user (`UI.adoc` §8).
  *
  * `null` means "good enough to try" — the server is the real authority on whether it exists, and
  * guessing harder here would only reject valid setups.
@@ -374,7 +374,7 @@ private fun parsesAsAHost(host: String): Boolean =
     runCatching { java.net.URI(normaliseHost(host)).host != null }.getOrDefault(false)
 
 /**
- * A typed scheme is **stripped, not rejected** (`docs/UI.md` §8), and https is then assumed: the
+ * A typed scheme is **stripped, not rejected** (`UI.adoc` §8), and https is then assumed: the
  * field renders a fixed `https://` prefix, so a pasted `https://cloud.example.org` must not become
  * `https://https://…`. A deliberate `http://` is honoured — a self-hosted instance on a LAN is a
  * real setup, and silently upgrading it would fail confusingly.
@@ -393,7 +393,7 @@ private fun String.withoutScheme(): String = removePrefix("https://").removePref
  * Maps the client's typed failure onto the message S5 shows.
  *
  * [fallback] is what an *untyped* failure degrades to — the step's most likely cause. This mapping
- * exists because collapsing every failure into one message is exactly the bug `docs/UI.md` §8's
+ * exists because collapsing every failure into one message is exactly the bug `UI.adoc` §8's
  * table was written to prevent: a mistyped host reported as "this doesn't look like a Nextcloud
  * server" sends the user to check their server instead of their spelling. Found by running the
  * manual probe against an address that does not resolve.

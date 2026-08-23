@@ -13,7 +13,7 @@ import androidx.compose.ui.text.style.TextDecoration
 /**
  * Renders an episode's show notes.
  *
- * `Episode.description` is stored **raw**, exactly as the feed supplied it (`docs/architecture.md`
+ * `Episode.description` is stored **raw**, exactly as the feed supplied it (`architecture.adoc`
  * §4), so this is the single point where hostile third-party HTML meets a renderer — which is why
  * it is a pure function with a table test rather than something the screen does inline.
  *

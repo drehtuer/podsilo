@@ -161,7 +161,7 @@ internal fun DeliveredRow(
  * One decision in S7's *recent actions* group (issue #90).
  *
  * The verb is past tense and names what the user did, not the ledger constant — "Played" rather than
- * `SKIPPED`, matching the vocabulary rule the rest of the UI follows (`docs/UI.md` §1). The action
+ * `SKIPPED`, matching the vocabulary rule the rest of the UI follows (`UI.adoc` §1). The action
  * beside it withdraws that decision, which is the reason the group exists: the undo window closes
  * after five seconds and until now there was no way to find the row again.
  */
@@ -201,7 +201,7 @@ internal fun ActionRow(
  * What the user did, in their words.
  *
  * `HANDLED_REMOTELY` says *elsewhere* because that decision was not made on this device — presenting
- * it as "you played this" would be the app asserting something it does not know (`docs/UI.md` §12.6).
+ * it as "you played this" would be the app asserting something it does not know (`UI.adoc` §12.6).
  */
 internal fun LedgerState.pastTense(): String =
     when (this) {

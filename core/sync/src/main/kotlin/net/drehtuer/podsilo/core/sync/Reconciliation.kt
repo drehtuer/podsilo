@@ -9,7 +9,7 @@ import net.drehtuer.podsilo.core.model.port.EpisodeAction
 import net.drehtuer.podsilo.core.model.port.EpisodeActionType
 import java.time.Clock
 
-/** States a remote action must never override -- see `docs/architecture.md` section 9. */
+/** States a remote action must never override -- see `architecture.adoc` section 9. */
 private val TERMINAL_STATES = setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY)
 
 /**
@@ -60,7 +60,7 @@ private fun EpisodeAction.hasEnded(): Boolean {
  * Matches CLAUDE.md section 5's identification rule (`guid ?: episode`) and section 9's state
  * machine: local terminal states are never revisited -- an idempotent no-op, which is also what
  * makes replays of our own echoed-back actions harmless, since the wire format carries no device id
- * to check against (`docs/architecture.md` section 6). Duplicate remote actions for the same
+ * to check against (`architecture.adoc` section 6). Duplicate remote actions for the same
  * episode within one batch are resolved by latest timestamp, with ties won by the later entry in
  * [remoteActions] -- deterministic, not a guess at true wall-clock ordering under clock skew.
  *

@@ -17,7 +17,7 @@ import org.robolectric.RobolectricTestRunner
  *
  * The assertions worth having are about the **fallback**, because that is the case a naive
  * implementation gets wrong: a null URL must render the monogram, not a blank square, and it must
- * describe itself the same way real artwork does (`docs/UI.md` §18 — "same content description as
+ * describe itself the same way real artwork does (`UI.adoc` §18 — "same content description as
  * real artwork, never 'no image'").
  */
 @RunWith(RobolectricTestRunner::class)

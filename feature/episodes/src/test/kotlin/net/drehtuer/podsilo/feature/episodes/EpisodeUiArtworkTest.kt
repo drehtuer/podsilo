@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * Which artwork an episode row shows.
  *
- * `docs/UI.md` §5's row anatomy says "episode image if the feed supplies one, else the feed's". The
+ * `UI.adoc` §5's row anatomy says "episode image if the feed supplies one, else the feed's". The
  * projection ignored `Episode.imageUrl` altogether and always used the podcast's cover — which, in
  * the author's own subscriptions, meant 9,558 of 9,565 episodes rendered the wrong image. It only
  * became visible once artwork was drawn at all.

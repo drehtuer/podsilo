@@ -7,12 +7,12 @@ import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
 import net.drehtuer.podsilo.core.model.ErrorCause
 
 /**
- * A failure as a row renders it (`docs/UI.md` §B1).
+ * A failure as a row renders it (`UI.adoc` §B1).
  *
  * @property message passed through **verbatim** from whatever produced it, per the seam's rule that
  *   a server-supplied string is the one thing the view model does not re-word.
  * @property retryable whether another attempt could plausibly work. This is the field
- *   `docs/UI.md` §12.11 and `docs/architecture.md` §11 hang a real guarantee on: a lost folder grant must
+ *   `UI.adoc` §12.11 and `architecture.adoc` §11 hang a real guarantee on: a lost folder grant must
  *   offer **Choose folder** and never a bare **Retry**, because retrying cannot succeed until the
  *   user acts. Historical rows written before the classification existed have no verdict, and
  *   default to retryable — offering a Retry that fails is recoverable; hiding the only useful button
@@ -53,7 +53,7 @@ internal fun EpisodeLedgerRow.toFailureUi(): FailureUi? {
 
 /**
  * Folder-missing, permission-revoked and disk-full are three causes of **one** user-visible
- * condition (`docs/UI.md` §12.11). It is a queue-level state, not a per-episode one: existing
+ * condition (`UI.adoc` §12.11). It is a queue-level state, not a per-episode one: existing
  * `QUEUED` rows stay queued and new requests are still accepted, because the app never refuses a
  * decision over a fixable configuration problem.
  */

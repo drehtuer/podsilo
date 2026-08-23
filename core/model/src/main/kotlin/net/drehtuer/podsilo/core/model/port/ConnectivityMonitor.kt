@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Port for "is there a network right now", implemented over `ConnectivityManager` in an Android
- * module (`docs/UI.md` §12.10).
+ * module (`UI.adoc` §12.10).
  *
  * The point is that connectivity is checked **before** a request is started, never inferred from a
  * timeout afterwards: a pull-to-refresh with no network returns immediately with a banner instead

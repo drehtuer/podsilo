@@ -37,7 +37,7 @@ private const val NOW_MILLIS = 1_784_019_600_000
 
 /**
  * [FeedRefreshWorker] against MockWebServer + in-memory ports. Robolectric because rssparser's
- * Android target resolves `XmlPullParserFactory` at runtime (`docs/architecture.md` §7) — headless, no
+ * Android target resolves `XmlPullParserFactory` at runtime (`architecture.adoc` §7) — headless, no
  * emulator.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -251,7 +251,7 @@ class FeedRefreshWorkerTest {
     @Test
     fun `the mark-old rule writes SKIPPED, never QUEUED`() =
         runBlocking {
-            // docs/decisions/0013 amended CLAUDE.md §5 to permit this write — but only this one.
+            // decisions/0013 amended CLAUDE.md §5 to permit this write — but only this one.
             // FeedRefresher has no download dependency at all, so a QUEUED row is not merely absent,
             // it is unreachable; this pins the guarantee against a future edit that adds one.
             settings.markOldOlderThan = OlderThan.MONTH_3

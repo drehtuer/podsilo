@@ -31,7 +31,7 @@ class TriageWriter(
      * Marks [episodes] as played, in **one transaction and one `Flow` emission** — bulk triage
      * routinely covers hundreds of rows and the list underneath is on screen.
      *
-     * `writtenFileName` survives a `DOWNLOADED` → `SKIPPED` transition (`docs/decisions/0012` §3a):
+     * `writtenFileName` survives a `DOWNLOADED` → `SKIPPED` transition (`decisions/0012` §3a):
      * losing it would silently disarm the duplicate guard, so a later *Download again* would write a
      * second copy of a file already in the folder.
      */
@@ -50,7 +50,7 @@ class TriageWriter(
         )
         // Issue #60: this is the *only* reason a skip ever reaches Nextcloud promptly, and it did
         // not exist. Nothing asked for a pass after a triage decision, so a skip waited for a
-        // completed download or an app-bar tap — and since `docs/decisions/0026` removed the
+        // completed download or an app-bar tap — and since `decisions/0026` removed the
         // periodic pass, there is no timer left to catch it either. One request per call, not per
         // episode: the write above is one transaction and this is one pass, however many rows it
         // covered.
@@ -58,7 +58,7 @@ class TriageWriter(
     }
 
     /**
-     * Puts [episodes] back into *To decide* — the inverse of [markAsPlayed] (`docs/decisions/0024`).
+     * Puts [episodes] back into *To decide* — the inverse of [markAsPlayed] (`decisions/0024`).
      *
      * **Writes a row rather than deleting one.** "Undecided" is normally the absence of a row, so the
      * obvious implementation is a delete — and that is exactly what CLAUDE.md §11 forbids, because
@@ -66,7 +66,7 @@ class TriageWriter(
      * `writtenFileName` and the history while the list treats the episode as undecided again.
      *
      * It reaches Nextcloud like any other decision: `PLAY` with `position = 0`, which is how the API
-     * expresses *unread* (`docs/decisions/0022`).
+     * expresses *unread* (`decisions/0022`).
      */
     suspend fun markAsUnplayed(episodes: List<Episode>) {
         if (episodes.isEmpty()) return
@@ -87,14 +87,14 @@ class TriageWriter(
     /**
      * Marks [episodes] `QUEUED` so the list reflects the decision immediately, before any worker
      * runs. The download itself is enqueued by the caller through `WorkScheduler` — this class never
-     * touches WorkManager (`docs/UI.md` §B0.2).
+     * touches WorkManager (`UI.adoc` §B0.2).
      *
      * **No sync is requested here, and that is not an omission.** `QUEUED` has no outbound action —
      * `toOutboundActions` returns nothing for it, because "I intend to download this" is local state
      * the API cannot express. The `DOWNLOAD` action exists only once the file has landed, and
      * `DownloadWorker` asks for the pass then.
      *
-     * `attempts` resets to 0 and `lastError` clears, per `docs/decisions/0012` §3: a re-decision is a
+     * `attempts` resets to 0 and `lastError` clears, per `decisions/0012` §3: a re-decision is a
      * new attempt chain, and a fresh download that rendered as "attempt 3 of 3" would look exhausted
      * before it started.
      */
@@ -129,7 +129,7 @@ class TriageWriter(
             lastError = null,
             writtenFileName = writtenFileName,
             // Snapshotted at write time so the outbox can still build a valid action if the episode
-            // row is pruned before the push (`docs/architecture.md` §4).
+            // row is pruned before the push (`architecture.adoc` §4).
             durationSeconds = durationMs?.let { (it / MILLIS_PER_SECOND).toInt() },
         )
 }

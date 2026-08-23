@@ -23,7 +23,7 @@ private const val HTTP_SERVER_ERROR_FLOOR = 500
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
 
-/** What one run of the pipeline in `docs/architecture.md` §11 produced. */
+/** What one run of the pipeline in `architecture.adoc` §11 produced. */
 sealed interface DownloadOutcome {
     /**
      * The file is in the user's folder under [fileName] (extension included) — the name to persist
@@ -46,14 +46,14 @@ sealed interface DownloadOutcome {
         /**
          * Classified here, where the failure is understood, and carried into the ledger so a screen
          * never has to parse [reason] to decide between *Retry* and *Choose folder*
-         * (`docs/UI.md` §12.11).
+         * (`UI.adoc` §12.11).
          */
         val cause: ErrorCause,
     ) : DownloadOutcome
 
     /**
      * The user asked to download this episode again, and **its own previously written file is still
-     * in the folder** — so nothing was fetched (`docs/decisions/0012` §4).
+     * in the folder** — so nothing was fetched (`decisions/0012` §4).
      *
      * Informational, not a failure: the ledger returns to `DOWNLOADED` unchanged, the UI says
      * *"Already in your folder — <name>"*, and nothing is written to the error log. Aborting rather
@@ -72,7 +72,7 @@ sealed interface DownloadOutcome {
  * @property previousFileName the name a previous successful delivery recorded in the ledger.
  *   Reused verbatim so a retry overwrites its own file instead of creating a second copy
  *   (CLAUDE.md §6). Never derived from what is on disk.
- * @property userRequested set **only** from a UI triage event (`docs/decisions/0012`). It is what
+ * @property userRequested set **only** from a UI triage event (`decisions/0012`). It is what
  *   permits re-downloading a terminal row at all, and the only thing that enables the pre-flight
  *   duplicate check below.
  */
@@ -89,11 +89,11 @@ data class DownloadRequest(
  * `download to app cache → verify → resolve name → rewrite tags → copy into the SAF tree → delete cache`.
  *
  * Nothing here touches an Android API: the SAF half sits behind [DownloadTarget]
- * (`docs/architecture.md` §11) and the ledger writes belong to [DownloadWorker], which is what makes
+ * (`architecture.adoc` §11) and the ledger writes belong to [DownloadWorker], which is what makes
  * this class — the part with all the branching — testable without an emulator.
  *
  * It contains **no** string-sanitisation logic of its own; every naming decision, including
- * collision suffixing, comes from `:core:naming` (`docs/architecture.md` §11).
+ * collision suffixing, comes from `:core:naming` (`architecture.adoc` §11).
  *
  * @property cacheDir app-private scratch space. One in-flight download at a time is the budget
  *   CLAUDE.md §6 asks for; the partial file is deliberately left behind on a failed or cancelled
@@ -132,7 +132,7 @@ class EpisodeDownloader(
         val episode = request.episode
         val naming = request.naming
         val previousFileName = request.previousFileName
-        // The one licensed existence check in the app (docs/decisions/0012 §4). It runs *only*
+        // The one licensed existence check in the app (decisions/0012 §4). It runs *only*
         // because the user asked for this specific file again, and only when this episode already
         // wrote one. It never decides whether an episode is new or whether it was handled — that
         // stays the ledger, unconditionally (CLAUDE.md §11). A first-time download performs no
