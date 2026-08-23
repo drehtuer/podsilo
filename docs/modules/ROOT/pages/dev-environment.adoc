@@ -150,8 +150,8 @@ below differ enormously in how well-proven they are.
 | 2026-08-23 on PR #107: `docs.yml`'s build job green in 1m18s -- the Kroki service pair came up and rendered on the first attempt, and Antora produced the same 22 pages it does locally
 
 | *The documentation site, deployed*
-| ❌ *Never run*
-| The `deploy` job is skipped on pull requests by design, so `deploy-pages` and the repository's Pages-source setting are reasoned about, not observed. First push to `main` is what proves them
+| ✅ *Verified*
+| 2026-08-23, first push to `main` after #107: `deploy` green in 10s and the site answers at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo] -- 20 pages in the sitemap, and the diagrams are served as site assets, so nothing points at the build-time Kroki
 |===
 
 *In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
