@@ -1,0 +1,49 @@
+{{!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  Overrides `partials/header-content.hbs` from the stock Antora UI bundle
+  (antora-playbook.yml pins it), which ships a demo navbar: "Products" and
+  "Services" dropdowns listing Product A/B/C and Service A/B/C, every one of them
+  an `href="#"`. They are placeholders for a company site that has products to
+  sell, and this is one component from one repository, so they were furniture with
+  dead links in it.
+
+  The rest of the file is upstream's, unchanged, and has to stay that way: a
+  supplemental file REPLACES its counterpart in the bundle rather than patching it,
+  so anything dropped here is dropped from the site. That includes the search field
+  above, which is inert only because SITE_SEARCH_PROVIDER is unset — delete it and
+  adding search later stops working for a reason nobody will find.
+
+  When the UI bundle updates (it is the rolling HEAD artifact), diff this against
+  the new `partials/header-content.hbs` inside the zip. Nothing warns you that an
+  override has gone stale.
+--}}
+<header class="header">
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="{{{or site.url siteRootPath}}}">{{site.title}}</a>
+      {{#if env.SITE_SEARCH_PROVIDER}}
+      <div class="navbar-item search hide-for-print">
+        <div id="search-field" class="field">
+          <input id="search-input" type="text" placeholder="Search the docs"{{#if page.home}} autofocus{{/if}}>
+        </div>
+      </div>
+      {{/if}}
+      <button class="navbar-burger" aria-controls="topbar-nav" aria-expanded="false" aria-label="Toggle main menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+    <div id="topbar-nav" class="navbar-menu">
+      <div class="navbar-end">
+        <a class="navbar-item" href="#">Home</a>
+        <div class="navbar-item">
+          <span class="control">
+            <a class="button is-primary" href="#">Download</a>
+          </span>
+        </div>
+      </div>
+    </div>
+  </nav>
+</header>

@@ -34,6 +34,7 @@ on:
       - 'docs/**'
       - 'antora-playbook.yml'
       - 'antora-extensions/**'
+      - 'supplemental-ui/**'
       - '.github/workflows/docs.yml'
   # Built but not deployed. A broken xref or an unparsable diagram should fail on
   # the pull request, not after it is merged and live.
@@ -43,6 +44,7 @@ on:
       - 'docs/**'
       - 'antora-playbook.yml'
       - 'antora-extensions/**'
+      - 'supplemental-ui/**'
       - '.github/workflows/docs.yml'
   # The UI bundle is the rolling HEAD artifact (antora-playbook.yml explains why),
   # so the site can change with no commit here. This is how it gets rebuilt.

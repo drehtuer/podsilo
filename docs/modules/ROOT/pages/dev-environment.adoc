@@ -478,6 +478,17 @@ Three things follow from choosing Antora, and the first is a real cost:
      them, because a failed render is a warning where a failed parse on GitHub is a blank box.
 * *The UI bundle is the rolling `HEAD` artifact*, because the branch-pinned URL 404s. `snapshot: true`
   is required for that reason. To freeze it, vendor the zip rather than pin a URL that does not exist.
+* *One file overrides the stock UI:* `supplemental-ui/partials/header-content.hbs`, wired up by
+  `ui.supplemental_files` in the playbook. Upstream ships a demo navbar -- "Products" and "Services"
+  dropdowns listing Product A/B/C and Service A/B/C, every entry an `href="#"` -- which is furniture
+  for a company site, with dead links in it.
+
+  Two things about supplemental files are worth knowing before adding a second one. They *replace*
+  their counterpart in the bundle rather than patching it, so whatever the override omits is gone from
+  the site -- the header's search field is kept for exactly that reason, inert only because
+  `SITE_SEARCH_PROVIDER` is unset. And because the bundle rolls, *nothing warns you when an override
+  goes stale*: when the site looks wrong after a UI update, diff the override against the same path
+  inside the zip (`~/.cache/antora/ui/*.zip`).
 
 *Publishing is `.github/workflows/docs.yml`*, and the site is at
 https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo]. Pages' own build step only knows
