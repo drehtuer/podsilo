@@ -5777,3 +5777,35 @@ which is the point: the guard costs nothing and the mistake cost an apology.
 **Integration checked after the merge** (all six PRs plus dependabot's Compose BOM bump, 2026.06.01
 → 2026.08.00, which none of this work was built against): `ktlintCheck detekt test` on merged `main`
 is green at **819 tests, 0 failures, 3 skipped**.
+
+---
+
+## 2026-08-23 (0.7.0) — a release about taking a decision back
+
+Cut after the device session. Three of the four user-visible changes came from issues the author
+filed while using 0.6.0 on the phone, which is the first time that has been the shape of a release.
+
+- **S7 lists what you decided** (#90). The gap it fills is not a missing capability — *Mark as
+  unplayed* has existed since `docs/decisions/0024` — but a missing *list*: a swipe is silent five
+  seconds after it happens, and an episode that leaves *To decide* leaves the screen. Recent actions
+  is the finding, and it was used for exactly that during the device session, to reverse the one
+  write the testing made.
+- **An edge swipe goes to the system again** (#92). Rows were `fillMaxWidth`, so the node carrying
+  the swipe started at x = 0 and competed with back and app-switch. The gutter is
+  `max(the device's own gesture inset, 16 dp)` — 30 dp on the author's phone, which is why a
+  hardcoded 16 would not have been enough.
+- **The list no longer freezes during a download** (#91). Nothing to do with the downloader: every
+  list view model projected its rows on the main thread, re-run on every emission of every combined
+  source — and live byte progress ticks once a second for the length of a download.
+- **A bad address names itself** (#98), instead of borrowing the words of a network failure.
+
+**What this release is verified by**, in the order the evidence is worth anything: 819 JVM tests; 61
+device tests on the Pixel 10a with no skips, including the six SAF cases that only run when a folder
+grant survives the install; and the two UI fixes driven by hand on the phone that reported them —
+an edge swipe reaching the system, and 3.01 % janky frames during a real download against a
+2,468-episode library.
+
+**What it is not.** #91 has no before-number: nobody measured the pre-fix build on that phone, so the
+honest claim is "smooth now", not a factor. The release build was verified locally before the tag was
+pushed, because this repository's immutable releases mean a tag spent on a broken build is a version
+number lost — which is how v0.5.0 went.

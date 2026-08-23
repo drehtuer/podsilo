@@ -39,25 +39,32 @@ does not play them.
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
 
-> **Status: [v0.6.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
-> end to end, and this release is about what it does when something goes wrong.** Subscription
+> **Status: [v0.7.0 released](https://github.com/drehtuer/podsilo/releases/latest) — the app works
+> end to end, and this release is about being able to take a decision back.** Subscription
 > mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
-> are built and tested (796 JVM tests, green), and all eight screens in `docs/UI.md` render and are
-> reachable. `podsilo-0.6.0.apk` is a signed, minified release build; sideload it on your own device.
+> are built and tested (819 JVM tests, green), and all eight screens in `docs/UI.md` render and are
+> reachable. `podsilo-0.7.0.apk` is a signed, minified release build; sideload it on your own device.
 >
-> **Failures now say what they are.** An expired app password reads as an *Account* problem telling
-> you to sign in again, instead of hiding among the sync errors — the GPodder client classifies its
-> own failures rather than leaving the caller to guess from a message string. An episode published
-> over plain `http://`, which Android refuses to fetch, says so once instead of retrying for ever
-> behind "the server did not respond". Cover art served over `http://` is fetched over TLS instead,
-> so podcasts that advertise it that way now show their artwork. Declining an account at the
-> confirmation step now **deletes** the app password Nextcloud had already issued, rather than
-> leaving it listed under *Security* for an account you refused.
+> **Activity now lists what you decided, not just what is downloading.** *Mark as played* holds its
+> decision for five seconds and is then silent, so a mis-swipe was unrecoverable in practice — not
+> because the state could not be changed back, but because there was no way to find out *which*
+> episode it was. S7's new **Recent actions** group is that list, with *Mark as unplayed* beside each
+> decision it can still take back.
 >
-> **Verified on real hardware against a real Nextcloud** (2026-08-14, Pixel 10a / Android 17): the
-> device test set is **61 tests, 0 failed, 0 skipped** — the first run with no skips, including the
-> SAF write and a new end-to-end pipeline test that downloads a real episode, tags it and delivers it
-> through the Storage Access Framework. See [`docs/dev-environment.md`](docs/dev-environment.md) §6.
+> **Two things that made the app feel broken are gone.** A swipe meant for the system — back from
+> either screen edge, or the app-switch drag — no longer lands on an episode row and marks it played.
+> And the episode list no longer freezes during a download: its rows were being re-projected on the
+> main thread once a second for the length of every download, and on every triage decision.
+>
+> **A bad address now says what is wrong with it.** A space in the server address used to report as
+> "can't reach that address" — the same words a real network failure gets — which sends you to look
+> at your network for a typo. It is now named while you type, before anything is contacted.
+>
+> **Verified on real hardware against a real Nextcloud** (2026-08-23, Pixel 10a / Android 17): the
+> device test set is **61 tests, 0 failed, 0 skipped**, and the two fixes above were driven on the
+> phone that reported them — an edge swipe now goes to the system, and a real download measured
+> **3 % janky frames** while scrolling a 2,468-episode library. See
+> [`docs/dev-environment.md`](docs/dev-environment.md) §6.
 
 ## The idea
 
