@@ -4,6 +4,7 @@
 
 image:https://github.com/drehtuer/podsilo/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsilo/actions/workflows/ci.yml]
 image:https://github.com/drehtuer/podsilo/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main[CodeQL,link=https://github.com/drehtuer/podsilo/security/code-scanning]
+image:https://github.com/drehtuer/podsilo/actions/workflows/docs.yml/badge.svg?branch=main[Docs,link=https://drehtuer.github.io/podsilo]
 image:https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver[Release,link=https://github.com/drehtuer/podsilo/releases/latest]
 link:LICENSE[image:https://img.shields.io/badge/licence-GPL--3.0--or--later-blue[Licence: GPL-3.0-or-later\]]
 
@@ -24,6 +25,12 @@ which, and names the two tests that assert the same thing for real).
 The badge deliberately says nothing about the device tests: those live in `src/androidTest/` and no
 hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
 why an emulator is not added there).
+
+The *Docs* badge is the documentation site at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo].
+GitHub Pages can only build Jekyll, and these documents are AsciiDoc assembled by Antora, so
+`.github/workflows/docs.yml` builds the site itself -- diagrams and all, against a Kroki service --
+and hands the finished artifact to Pages. It also fails on an unresolved `xref:`, which is the one
+check a per-file lint cannot do.
 
 The *CodeQL* badge is GitHub code scanning, on default setup rather than a workflow file in this
 repository -- which is why its badge URL points at `github-code-scanning/codeql` and not at
@@ -147,7 +154,10 @@ They are an https://antora.org/[Antora] component, which is why the paths above 
 siblings. `antora --fetch antora-playbook.yml` builds the site into `build/site/`. One consequence
 worth knowing before clicking a link in here: pages reference each other with Antora's `xref:` macro,
 which GitHub's file view does not resolve, so cross-references work on the built site and not while
-browsing the repository.
+browsing the repository. That site is published at
+https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo] on every push to `main` that touches
+the documentation, and it is the better place to read any of this: the links resolve and the 26
+Mermaid diagrams are rendered.
 
 Two further markdown files sit outside `docs/` because they are addressed to the agent rather than
 to a reader: link:.claude/CLAUDE.md[`.claude/CLAUDE.md`] is the standing brief every session starts

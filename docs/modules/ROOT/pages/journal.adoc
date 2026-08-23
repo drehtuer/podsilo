@@ -6045,3 +6045,56 @@ whereas a diagram that fails to render through Kroki is a build warning. The sit
 surfaced them.
 
 All 26 render now, and the build is warning-free.
+
+'''
+
+== 2026-08-23 (pages) — publishing the site, and a dependency that was never in the image
+
+*Attempted:* deploy the Antora site to GitHub Pages, now that the repository's Pages source is set to
+*GitHub Actions* rather than a branch.
+
+=== The rebuild found the bug for me
+
+The dev container had just been rebuilt, and the first `antora --fetch antora-playbook.yml` died with
+`Cannot find module 'asciidoctor-kroki'`. Yesterday's Kroki work had installed that package by hand
+and never written it into `.devcontainer/Dockerfile` — so the *only* machine on which the diagrams
+had ever rendered was the one running container that had the ad-hoc install. A rebuild was always
+going to reveal it; a CI job would have revealed it the same way, on the day it was needed.
+
+Worth naming as a pattern, because it is not specific to npm: *a tool used to produce a committed
+result belongs in the image in the same change as the result.* The commit before this one described a
+Kroki pipeline that no fresh checkout could actually run.
+
+Pinning it was its own trap. The current release is `asciidoctor-kroki@1.0.1`, it installs cleanly,
+Antora loads it without complaint, and then the build fails with `block.$!= is not a function` — 1.x
+targets Asciidoctor.js 3 while Antora 3.1 bundles 2.x. The error names neither the package nor the
+version, and the working pin is `0.18.1`. Both facts are now comments at the two places that install
+it, because nothing else in the tree would have said so.
+
+=== What the workflow does that `ci.yml` deliberately does not
+
+`.github/workflows/docs.yml` is separate, on two grounds. Deploying needs `pages: write` and
+`id-token: write`, and those have no business being held by the job that also decodes a signing
+keystore. And the two checks are different questions: `ci.yml` runs `asciidoctor --failure-level=WARN`
+over each file, which parses it; this one runs `antora --log-failure-level=warn`, which resolves the
+whole site. An `xref:` to a page that does not exist is invisible to the first and fatal to the
+second — verified by pointing one at a missing page and watching the build exit 1.
+
+Kroki runs as two service containers, because the core image delegates Mermaid to a headless-browser
+companion. The companion has no health check and the core answers `/health` well before it can draw
+anything, so the readiness step *renders a diagram in a loop* rather than sleeping. It also sends
+`Content-Type: text/plain` — the same trap as yesterday: without it curl form-encodes the body, Kroki
+mangles it, and the failure reads as a broken diagram rather than a broken request.
+
+=== State
+
+Locally green from the rebuilt container: 22 pages, all 26 diagrams, no warnings.
+
+The build half then proved itself sooner than expected: because the workflow's own path filter matches
+the pull request that adds it, PR #107 ran it — green in 1m18s, Kroki rendering on the first attempt,
+the same 22 pages CI produced as the container did. That is the half I had written off as unobservable
+until merge, and it was observable one push earlier.
+
+*The deploy half is still unrun*, because it is skipped on pull requests by design. `deploy-pages` and
+the repository's Pages-source setting are reasoned about rather than observed, and the first push to
+`main` is what will say. `dev-environment.adoc` §1 carries both rows.

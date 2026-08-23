@@ -1,0 +1,168 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Builds the Antora documentation site and publishes it to GitHub Pages at
+# https://drehtuer.github.io/podsilo.
+#
+# WHY THIS IS A WORKFLOW AND NOT A PAGES BRANCH: Pages' own build step only knows
+# Jekyll, and these documents are AsciiDoc assembled by Antora (docs/antora.yml,
+# antora-playbook.yml). Nothing GitHub runs on its own can turn them into HTML, so
+# the site has to arrive as a finished artifact. The repository's Pages source is
+# therefore set to "GitHub Actions" — a repository setting, not a file. If it is
+# ever switched back to a branch, the deploy job below starts failing with
+# "Resource not accessible by integration" and nothing here can fix that.
+#
+# WHY IT IS SEPARATE FROM ci.yml: this one needs `pages: write` and `id-token:
+# write`, and a documentation typo has no business holding permissions that can
+# publish a site while it also builds and signs an APK. ci.yml still lints every
+# .adoc file with `asciidoctor --failure-level=WARN`, which is a per-file parse
+# check; this workflow is the whole-site check — an `xref:` to a page that does not
+# exist is invisible to the former and fails the latter.
+#
+# WHY KROKI RUNS AS A SERVICE: the diagrams are Mermaid, and Antora's stock UI
+# shows them as source. asciidoctor-kroki renders them to SVG at build time against
+# a Kroki server, and `kroki-fetch-diagram` writes the result into the site as an
+# asset — so the published pages carry no reference to the build-time server. It is
+# self-hosted here for the same reason it is self-hosted in the dev container: the
+# public kroki.io would work and would post every architecture and UI diagram in
+# this repository to a third party on each build.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'antora-playbook.yml'
+      - 'antora-extensions/**'
+      - '.github/workflows/docs.yml'
+  # Built but not deployed. A broken xref or an unparsable diagram should fail on
+  # the pull request, not after it is merged and live.
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'antora-playbook.yml'
+      - 'antora-extensions/**'
+      - '.github/workflows/docs.yml'
+  # The UI bundle is the rolling HEAD artifact (antora-playbook.yml explains why),
+  # so the site can change with no commit here. This is how it gets rebuilt.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # Two containers, not one: the core Kroki image renders PlantUML, GraphViz and
+    # friends in-process, but Mermaid needs a headless browser and lives in its own
+    # companion. Omit the companion and every diagram here fails. They find each
+    # other by service label on the network the runner creates for them, which is
+    # what KROKI_MERMAID_HOST names; the build itself reaches the core over the
+    # published port. Same images and pins as .devcontainer/docker-compose.yml.
+    services:
+      kroki-mermaid:
+        image: yuzutech/kroki-mermaid:0.28.0
+
+      kroki:
+        image: yuzutech/kroki:0.28.0
+        env:
+          KROKI_MERMAID_HOST: kroki-mermaid
+          KROKI_SAFE_MODE: secure
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8000/health"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The playbook builds from this working tree (`url: .`, `branches: HEAD`), so
+      # only the checked-out commit matters — no history is read and the default
+      # shallow clone is enough. Unlike ci.yml, which needs the full history to
+      # compute a versionCode.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      # Pinned to exactly what .devcontainer/Dockerfile installs, so "it builds on
+      # my machine" and "it builds on CI" are the same claim. asciidoctor-kroki must
+      # stay on 0.18.x: 1.x targets Asciidoctor.js 3 against Antora's bundled 2.x
+      # and fails at render time with `block.$!= is not a function`.
+      - name: Install Antora
+        run: npm install -g --no-fund --no-audit antora@3.1.10 asciidoctor-kroki@0.18.1
+
+      # The core container is health-checked by the runner, but its Mermaid
+      # companion is not, and the core answers /health long before the browser
+      # behind it can draw anything. So the readiness check is an actual render —
+      # poll until one small diagram comes back, rather than sleeping and hoping.
+      #
+      # Content-Type matters: without it curl posts form-encoded data and Kroki
+      # mangles it, which reads as a broken diagram rather than a broken request.
+      - name: Wait for Kroki to render Mermaid
+        run: |
+          for attempt in $(seq 1 30); do
+              if curl -fsS -X POST -H 'Content-Type: text/plain' \
+                  --data-binary $'graph TD\nA-->B' \
+                  http://localhost:8000/mermaid/svg -o /dev/null; then
+                  echo "Kroki rendered Mermaid on attempt $attempt."
+                  exit 0
+              fi
+              sleep 2
+          done
+          echo "::error::Kroki never rendered a Mermaid diagram — every diagram in the site would be missing."
+          exit 1
+
+      # --fetch re-fetches the UI bundle, which is a snapshot and would otherwise be
+      # cached; there is no cache on a fresh runner, but it keeps the command
+      # identical to the documented local one.
+      #
+      # --log-failure-level=warn is what makes this a check. Antora reports an
+      # unresolved xref, a missing nav entry or a diagram Kroki refused as a
+      # *warning* and still exits 0, which would publish a site with holes in it.
+      - name: Build the site
+        run: antora --fetch --log-failure-level=warn antora-playbook.yml
+
+      - name: Upload the site as a Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/site
+
+  # Split from the build so the elevated permissions exist only for the step that
+  # needs them, and so a pull request runs the build and stops there.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    # Named exactly this: `deploy-pages` requires the github-pages environment, and
+    # it is where the deployment URL is recorded.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    # A queued deploy is not cancelled by a newer one — a half-applied Pages
+    # deployment is worse than a stale one by a few minutes. This is why the
+    # workflow-level concurrency above (which does cancel) is per-ref and this is
+    # not: two refs must not deploy at once either.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

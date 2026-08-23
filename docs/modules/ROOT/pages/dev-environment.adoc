@@ -20,6 +20,7 @@ and this document records what was actually built -- deviations are called out e
 . <<7-the-opodsync-test-sync-server,The opodsync test sync server>>
 . <<8-troubleshooting,Troubleshooting>>
 . <<9-attaching-a-real-android-device,Attaching a real Android device>>
+. <<10-builds-versioning-and-release-signing,Builds, versioning and release signing>>
 . <<11-version-reference,Version reference>>
 
 '''
@@ -139,6 +140,18 @@ below differ enormously in how well-proven they are.
 | *A full `SyncOrchestrator` pass on real data*
 | ✅ *Verified*
 | 2026-08-02: real subscriptions + a real episode -- outbox push, the echo of our own action, and server-clock `since` all confirmed (`journal.adoc`)
+
+| *The documentation site, built locally*
+| ✅ *Verified*
+| 2026-08-23: `antora --fetch --log-failure-level=warn` green from a rebuilt container, 22 pages and all 26 Mermaid diagrams rendered through the self-hosted Kroki
+
+| *The documentation site, built on CI*
+| ✅ *Verified*
+| 2026-08-23 on PR #107: `docs.yml`'s build job green in 1m18s -- the Kroki service pair came up and rendered on the first attempt, and Antora produced the same 22 pages it does locally
+
+| *The documentation site, deployed*
+| ❌ *Never run*
+| The `deploy` job is skipped on pull requests by design, so `deploy-pages` and the repository's Pages-source setting are reasoned about, not observed. First push to `main` is what proves them
 |===
 
 *In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
@@ -423,8 +436,19 @@ directory inside a module.
 
 [source,bash]
 ----
-antora --fetch antora-playbook.yml     # -> build/site/index.html
+cd .devcontainer && docker compose up -d kroki && cd ..   # the diagrams need it
+antora --fetch --log-failure-level=warn antora-playbook.yml   # -> build/site/index.html
 ----
+
+`--log-failure-level=warn` is not optional decoration: Antora reports an unresolved `xref:`, a page
+missing from the nav or a diagram Kroki refused as a *warning* and still exits 0. Without the flag a
+site with holes in it builds green. It is the same argument as `--failure-level=WARN` below, one
+level up -- Asciidoctor checks a file, Antora checks the site.
+
+*`asciidoctor-kroki` is pinned to 0.18.x in the image, and a bump past 1.0 must not be taken.* 1.x
+targets Asciidoctor.js 3 while Antora 3.1 bundles 2.x; the two install and load without complaint and
+then fail at render time with `block.$!= is not a function`, which names neither the extension nor the
+version. The pin moves when Antora's bundled Asciidoctor does, and not before.
 
 Three things follow from choosing Antora, and the first is a real cost:
 
@@ -454,6 +478,24 @@ Three things follow from choosing Antora, and the first is a real cost:
      them, because a failed render is a warning where a failed parse on GitHub is a blank box.
 * *The UI bundle is the rolling `HEAD` artifact*, because the branch-pinned URL 404s. `snapshot: true`
   is required for that reason. To freeze it, vendor the zip rather than pin a URL that does not exist.
+
+*Publishing is `.github/workflows/docs.yml`*, and the site is at
+https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo]. Pages' own build step only knows
+Jekyll, so AsciiDoc has to arrive as a finished artifact: the workflow installs the same two npm
+packages the container carries, runs Kroki as a pair of service containers, builds, and uploads
+`build/site/` for `deploy-pages`. Three things about it are worth knowing before touching it:
+
+* *The repository's Pages source must stay "GitHub Actions"* -- a repository setting, not a file. Set
+  back to a branch, the deploy job fails with `Resource not accessible by integration` and no change
+  in this repository can fix it.
+* *It is separate from `ci.yml` because of permissions.* Deploying needs `pages: write` and
+  `id-token: write`, and a documentation typo should not hold rights to publish a site in the same job
+  that signs an APK. A pull request builds the site and stops there.
+* *Kroki's Mermaid companion has no health check*, and the core container answers `/health` long
+  before the browser behind it can draw anything. The workflow therefore waits by rendering one small
+  diagram in a loop rather than sleeping -- and posts it with an explicit `Content-Type: text/plain`,
+  because curl otherwise form-encodes the body and Kroki mangles it, which reads as a broken diagram
+  rather than a broken request.
 
 `--failure-level=WARN` is what turns Asciidoctor from a renderer into a linter: a heading out of
 sequence or an unclosed block is a *warning*, and a warning that does not fail is a warning nobody
@@ -1468,6 +1510,30 @@ Verified inside the container on 2026-07-31.
 | opodsync
 | *0.5.3*
 | Upstream's version line is `0.x` -- there has never been a `1.x`
+
+| Asciidoctor
+| *2.0.20* (Ubuntu)
+| Renderer and per-file linter for the `.adoc` files. Also a CI step
+
+| kramdoc
+| *2.1.1* (gem)
+| Markdown -> AsciiDoc converter; used once, kept for the next conversion
+
+| Node.js
+| *18.19.1* (Ubuntu)
+| Present only for Antora. CI runs the same packages on Node 20
+
+| Antora
+| *3.1.10* (npm, global)
+| Builds the documentation site. Bundles Asciidoctor.js 2.x, which is what pins the next row
+
+| asciidoctor-kroki
+| *0.18.1* (npm, global)
+| *Do not bump past 0.18.x.* 1.x needs Asciidoctor.js 3 and dies with `block.$!= is not a function`
+
+| Kroki
+| *0.28.0* (compose)
+| `kroki` + `kroki-mermaid`, self-hosted. Renders the 26 Mermaid diagrams at build time
 |===
 
 Persisted as named Docker volumes so rebuilds don't re-download gigabytes or re-authenticate: the
