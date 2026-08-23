@@ -6129,3 +6129,20 @@ would not have rebuilt the site.
 `href="#"`. They were not what was asked for, and where they should point (the site root? the releases
 page? nowhere?) is the author's call, not mine.
 
+'''
+
+== 2026-08-23 (security policy) — the document the site never mentioned
+
+`SECURITY.md` was reachable from the README and from GitHub's Security tab, and from nowhere in the
+documentation site. Now that the site is the reading surface, that is a gap: the file says how to
+report a vulnerability privately, what is in scope, and which limitations are deliberate — all of it
+addressed to a reader who is on the docs, not in the file tree.
+
+Not fixed by converting it to a page. GitHub reads a security policy from `SECURITY.md` at the
+repository root; move it into `docs/modules/ROOT/pages/` and the Security tab loses it, and copying it
+would give the project two versions of a policy to keep in step. So it stays where it is and is linked
+three ways: from the site nav (present on every page, `^` so it opens in a new tab, since it leaves the
+site), from `index.adoc`'s list of documents with a note saying *why* it is the one document not
+hosted here, and from `dev-environment.adoc`'s *See also* — the build and release path is in its
+scope, and it is where the "device tests are not run in CI" claim is stated to an outside reader.
+
