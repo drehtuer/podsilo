@@ -5751,6 +5751,29 @@ scheme with nothing after it before parsing.
 
 `./gradlew ktlintCheck detekt test` green: **819 tests, 0 failures, 3 skipped.**
 
-**Not verified on the device.** The logic is JVM-tested, and the message rendering is compile-checked
-by an exhaustive `when` over the enum, but nobody has typed a space into the field on the phone since
-the change.
+**Verified on the phone** (same session, after the PR was written and while it still said this had
+not been done). Typed into S5 on the Pixel 10a, with the app already connected:
+
+| Typed | Shown under the field |
+|---|---|
+| `cloud drehtuer.net` | *Addresses can't contain spaces — check for a stray one (cloud.example.org, not cloud example.org).* |
+| `://` | *That doesn't look like a server address. It should read like cloud.example.org.* |
+| `cloud.drehtuer.net` | nothing — cleared |
+
+The half that is the actual requirement: **the message appeared while typing**, with
+*Request authorization* never touched, and the error log gained **zero** new `AUTH` entries. The old
+behaviour needed a submit to say anything, wrote a log line, and called it `UNREACHABLE`. The dialog
+was cancelled without connecting; the instance, the account and the ledger were unchanged afterwards.
+
+**A mis-tap worth recording, because it was mine and it was avoidable.** The first attempt tapped
+into the *author's own screen*: the phone was awake and unlocked, so I tapped — and the foreground
+app was Claude, not Podsilo, because the author was reading the conversation on the same device. It
+opened a menu, which was dismissed with one Back press, but the lesson is that "awake and unlocked"
+and "showing the app I think it is" are different questions, and only the second one licenses a tap.
+The retry ran through a focus-guarded driver that re-reads `mCurrentFocus` immediately before every
+tap and aborts rather than tapping. It fired the check about a dozen times and never had to abort,
+which is the point: the guard costs nothing and the mistake cost an apology.
+
+**Integration checked after the merge** (all six PRs plus dependabot's Compose BOM bump, 2026.06.01
+→ 2026.08.00, which none of this work was built against): `ktlintCheck detekt test` on merged `main`
+is green at **819 tests, 0 failures, 3 skipped**.
