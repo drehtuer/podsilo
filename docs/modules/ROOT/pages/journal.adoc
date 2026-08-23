@@ -6095,6 +6095,11 @@ the pull request that adds it, PR #107 ran it — green in 1m18s, Kroki renderin
 the same 22 pages CI produced as the container did. That is the half I had written off as unobservable
 until merge, and it was observable one push earlier.
 
-*The deploy half is still unrun*, because it is skipped on pull requests by design. `deploy-pages` and
-the repository's Pages-source setting are reasoned about rather than observed, and the first push to
-`main` is what will say. `dev-environment.adoc` §1 carries both rows.
+The deploy half followed on merge, and it worked first time: `deploy` green in 10 seconds, the site up
+at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo]. Checked against the published pages
+rather than the job's own verdict — 20 pages in the sitemap, and `architecture.html`'s diagrams load as
+site assets, which is what says `kroki-fetch-diagram` really did fetch them and left no reference to a
+localhost only the builder can reach.
+
+So the documents are now readable somewhere the `xref:` macros resolve, which is what the Antora move
+cost three commits to buy. Nothing in §1 is left unverified for this pipeline.
