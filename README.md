@@ -122,11 +122,20 @@ proved and what is still unverified. The module design, schema and sync semantic
 seam it binds to, and the brand mark — is in [`docs/UI.md`](docs/UI.md).
 
 Five documents, and that is deliberate: `architecture.md` and `UI.md` are the two references,
-[`docs/backlog.md`](docs/backlog.md) holds what is not being built, `docs/third-party.md` tracks
-licences, and `docs/journal.md` keeps a running log — this project doubles as an experiment in
-agent-driven development, so the process is recorded alongside the result. `docs/decisions/` keeps
-only the decisions that still constrain the code and cannot be re-derived from the two references;
-everything else was folded into the section that governs it.
+[`docs/backlog.md`](docs/backlog.md) holds what is not being built,
+[`docs/third-party.md`](docs/third-party.md) tracks licences, and
+[`docs/journal.md`](docs/journal.md) keeps a running log — this project doubles as an experiment in
+agent-driven development, so the process is recorded alongside the result.
+[`docs/decisions/`](docs/decisions/) keeps only the decisions that still constrain the code and
+cannot be re-derived from the two references; everything else was folded into the section that
+governs it.
+
+Two further markdown files sit outside `docs/` because they are addressed to the agent rather than
+to a reader: [`.claude/CLAUDE.md`](.claude/CLAUDE.md) is the standing brief every session starts
+from — scope, the non-goals, the mandated libraries, the definition of done — and
+[`.claude/skills/run-podsilo/SKILL.md`](.claude/skills/run-podsilo/SKILL.md) documents the driver
+that boots the headless emulator, builds and installs the app, seeds it with podcasts, and taps
+through it by on-screen text.
 
 ## Licence
 

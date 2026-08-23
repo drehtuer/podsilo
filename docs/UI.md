@@ -14,7 +14,7 @@ a rule in A, and three files meant three places for the same rule to drift.
 
 The companion is [`docs/architecture.md`](architecture.md) — modules, schema, sync semantics.
 Where Part A adds a screen or a rule that the architecture implies but does not state, it is marked
-**[gap]** and listed again in [§13](#13-coverage-check-against-the-architecture).
+**[gap]** in §2's inventory and argued in the section that owns it.
 
 **Vocabulary:** the user-facing word for the "I don't want this file" decision is **Mark as played**
 (never "Skip"). The ledger state behind it is still `SKIPPED` and the emitted GPodder action is still
@@ -103,7 +103,7 @@ C5. [What it never does](#c5-what-the-logo-never-does) · C6. [Compose integrati
 | S3 | Episode detail | modal bottom sheet | **[gap]** — `Episode.description` is raw HTML/CDATA; a list row cannot render it. Reachable for **every** episode, including greyed-out ones |
 | S4 | Settings | full screen | requested |
 | S5 | Nextcloud connection | dialog over S4 | requested |
-| S6 | Naming template editor | full screen, pushed from S4 | **[gap]** — required by TODO 4c / architecture §11 |
+| S6 | Naming template editor | full screen, pushed from S4 | **[gap]** — required by architecture §11 |
 | S7 | Activity — downloads & sync | full screen, pushed from S1 | **[gap]** — `QUEUED`/`DOWNLOADING`/`ERROR` and outbox depth need somewhere to live |
 | S8 | Error log | full screen, pushed from S4 or S7 | requested |
 
@@ -1055,44 +1055,20 @@ Folder-missing, permission-revoked and disk-full are three causes of **one** use
 
 ## 13. Coverage check against the architecture
 
-| Architecture / README feature | Covered by | Verdict |
-|---|---|---|
-| Mirror read-only subscriptions | S1 (no add/remove affordance anywhere) | ✔ |
-| Per-feed undecided counts (§13 step 9) | S1 badge, §12.5 | ✔ |
-| Manual refresh / sync pass (§6) | S1 & S2 pull-to-refresh, S4 "Last sync", S7 "Sync now" | ✔ |
-| Episode list with image/title/description/date | S2, S3 | ✔ (raw HTML forces S3 — **added**) |
-| Download triage → `QUEUED` (§10) | S2 swipe right, S3, overflow | ✔ |
-| Skip triage → `SKIPPED`/`PLAY` (§10) | S2 swipe left ("Mark as played"), S3, overflow | ✔ |
-| Filter decided/undecided (architecture §5) | S2 chips (To decide · Downloaded · Played · All) | ✔ |
-| Backlog handling (`firstSeenAt` cutoff) | replaced by S4's *Mark old episodes as played* write | ✔ **changed — ADR 0013, accepted (§14.2)** |
-| Theme light/dark/system, persisted | S4 Appearance, §12.7 | ✔ |
-| Nextcloud instance display + change + auth (§8) | S4, S5 (Login Flow v2 only) | ✔ |
-| **SAF download-folder grant + re-grant (§8)** | S4 Download folder row + S1 banner | **added — downloads cannot work without it** |
-| **Naming templates + live preview (§6, §11)** | S6 | **added** |
-| **`QUEUED`/`DOWNLOADING` progress + cancel (§9, §10)** | S2/S3 progress bars, S1 ring, S7, notification (§12.2) | **added** |
-| **`ERROR` state + retry (§9)** | S7 failed group, row badge, S8 | **added** |
-| **`HANDLED_REMOTELY` visibility (§6 inbound)** | §12.6 badge "handled elsewhere", greyed out | **added** |
-| **Outbox depth / unsynced actions (§5, §10)** | S4 "Last sync", S7 sync row | **added** |
-| **Failure diagnostics** | S8 error log | **added** |
-| Re-download of a handled episode | §12.3 Download again + duplicate-file guard | ✔ **changed — ADR 0012, accepted (§14.1)** |
-| Feed titles unknown before first fetch (§4) | S1 falls back to URL | ✔ |
-| Episodes without enclosure (§7) | S2 dimmed "no audio" row | ✔ |
-| Foreground service notification (TODO 4b) | §12.9 | ✔ |
-| No auto-download invariant (§7 item 6) | no rules, no background triage; *Download all* / selection mode are explicit user actions behind a counted confirmation | ✔ **narrowed — ADR 0014, accepted (§14.3)** |
-| Setup completeness before first download | S1 first-run checklist (§4) | **added** |
-| Offline / metered behaviour (§8 "never throw") | §12.10 | **added** |
-| Folder-missing + disk-full as one condition | §12.11 downloads-paused state | **added** |
-| Progress across process death | §12.2 *resuming* rule | **added** |
-| Failure-log flooding | §11 collapsed repeated entries | **added** |
-| Batch triage / long backlog ergonomics | S2 selection mode, *Download all*, sticky headers, fast-scroll | **added** |
-| Episode page link (`<item><link>`) | S3 *Open in browser* (§6), §18's `external-link` | **added — needs `Episode.link`, architecture §4 (schema v2)** |
-| Motion / transitions | §16 | **added** |
-| Spacing consistency across screens | §17 | **added** |
-| Icon set and per-affordance mapping | §18 | **added — nothing recorded it before** |
-| Brand mark, lockups, launcher and notification icon | Part C; §18 says why it is not in the icon table | **added** |
-| Landscape / orientation | §19 | **added** |
-| UI ↔ app-logic contract | Part B | **added** |
-| Not a player / not a file manager | no playback controls; S7 shows filenames only, never deletes | ✔ |
+Every feature in `docs/architecture.md` and the README was audited row by row against a screen or a
+rule here while this document was being written. **It passed, and the table it produced was removed
+on 2026-08-23:** every row read either ✔ or *added*, and each *added* row's reason is now written
+into the section that owns the screen, which is where a reader needs it.
+
+What the audit established, and the reason it is worth keeping a section for at all: **the design
+has eight screens where CLAUDE.md §10 originally named two destinations, and the extra six are not
+decoration.** Three of them are marked `[gap]` in §2 because the architecture implies them without
+stating them — S3, because `Episode.description` is raw HTML that no list row can render; S6, because
+the naming templates of architecture §11 need somewhere to be edited and previewed; S7, because
+download progress, the outbox and the `ERROR` state had nowhere to live at all. That is the answer to
+"why eight screens and not two".
+
+Three rows changed a rule rather than confirming one, and those became ADRs — §14.
 
 ---
 
@@ -1108,110 +1084,54 @@ the old rules were amended in the same pass, so nothing below is still a proposa
 | §14.2 | [0013](decisions/0013-backlog-cutoff-is-written-skipped-rows.md) | Written `SKIPPED` rows **replace** the read-time `firstSeenAt` cutoff — CLAUDE.md §5 amended |
 | §14.3 | [0014](decisions/0014-bulk-user-initiated-download-is-allowed.md) | Bulk download allowed as a *command*, never a *rule* — CLAUDE.md §1 and README amended |
 
-The subsections below are kept as the design rationale that fed each ADR; where a detail differs,
-the ADR is current. [§15](#15-adaptations-to-the-code-as-built) lists the smaller,
-non-contentious adaptations.
+**The ADRs are the rationale.** Each subsection below carried a copy of it until 2026-08-23,
+together with a note saying the ADR wins wherever the two differed — which is a drift already
+declared. What remains here is only the part that is a *UI* rule, plus the anchor, because
+`docs/decisions/` and `:feature:episodes` both cite these three numbers.
 
 ### 14.1 Terminal ledger states are re-openable **by explicit user action**
 
-Architecture §9 states `DOWNLOADED`, `SKIPPED` and `HANDLED_REMOTELY` are terminal and "never
-automatically revisited". That property is preserved for *automatic* logic — sync still never
-revisits them. What changes: the **user** may transition any of them back to `QUEUED` via
-**Download again** (§12.3), adding these edges to the state machine:
-
-```mermaid
-stateDiagram-v2
-    DOWNLOADED --> QUEUED : user taps "Download again"
-    SKIPPED --> QUEUED : user taps "Download"
-    HANDLED_REMOTELY --> QUEUED : user taps "Download"
-    QUEUED --> DOWNLOADED : target file already exists (aborted, informational)
-```
-
-**Settled by ADR 0012**, which is where the detail now lives. In short: a re-decision behaves
-exactly like a first one — the new row re-posts its action (`syncedToServer = false`), `attempts`
-resets to 0, `lastError` clears, and *Mark as played* over a terminal row follows the identical
-rules. The one field that survives a re-decision is `writtenFileName`, because §12.3's duplicate
-guard depends on it.
-
-The mechanism is `KEY_USER_REQUESTED` on the work request, set **only** from a UI event: Tier 4b's
-`DownloadWorker` refuses terminal ledger rows, and that refusal is what makes the no-auto-download
-invariant structural rather than a matter of care. The flag opens the door for the user without
-removing it. `writtenFileName` as a pre-flight existence check stays the *single* licensed exception
-to architecture §11's "never use `writtenFileName` as an existence check" — the guard runs **because
-the user asked for this file**, never to decide whether an episode is new.
+Rationale and mechanism: **ADR 0012**, and the four user-initiated edges are drawn in
+`docs/architecture.md` §9's state machine. The half that belongs to this document: *Download again*
+(§12.3) over a row that still carries its `writtenFileName` runs the pre-flight duplicate guard, and
+"already in your folder" is reported as **information** — a snackbar and a status line, never an
+`ERROR` and never an error-log entry.
 
 ### 14.2 The backlog cutoff moves from read-time filter to a written `SKIPPED` state
 
-Architecture §4/§5 define "New" as `no ledger row AND pubDate >= Feed.firstSeenAt`, with
-the cutoff resolved in SQL. This design instead **writes** `SKIPPED` rows for old episodes (S4's
-*Mark old episodes as played*, §7), which means:
-
-- `LedgerFilter`'s "new" predicate simplifies to `no ledger row` — `firstSeenAt` is no longer part of
-  the episode-list or badge query;
-- the state is visible (`Played` filter), per-episode reversible (`Download`), and shared with other
-  clients as `PLAY` actions — the read-time filter was none of those;
-- it is a bulk write of hundreds of rows plus hundreds of outbox entries — **batched on both sides**
-  (one `upsertAll` transaction, batched outbox POSTs), and the rule **does** run automatically
-  against newly-parsed episodes after a feed refresh once an *older than* value is set;
-- `Feed.firstSeenAt` stays in the schema — it is the natural default for the cutoff on a
-  newly-appearing feed.
-
-**Settled by ADR 0013: this mechanism is authoritative, and the read-time cutoff is retired.**
-Tier 4a's SQL cutoff inside `EpisodeLedgerDao.observeNewEpisodes` is **removed**, parameter and all,
-rather than left in place unused — an unused capability is one flag away from becoming a second
-mechanism, which is the exact confusion this decision exists to end. CLAUDE.md §5, which forbade
-writing ledger rows for the backlog, is amended; the reason it gave — that a bulk write to a shared
-log cannot be taken back — survives as the justification for the preview dialog being mandatory.
+Rationale: **ADR 0013**. What it means for the screens: "To decide" is `no ledger row` with no date
+clause at all — one predicate for both the list and the badge (§12.5) — and the cutoff is applied by
+S4's *Mark old episodes as played* (§7). Its **counted preview dialog is mandatory, not decoration**:
+the write reaches the shared log and other clients act on it, so the dialog names the exact count and
+the per-feed breakdown, and says in words that the state goes to Nextcloud, before anything is
+written.
 
 ### 14.3 Bulk, user-initiated download is allowed — README's "no download all" is narrowed
 
-README states plainly: **"Not automatic. No auto-download rules, no 'download all'."** This design
-adds both a per-podcast **Download all (n)** overflow action and a selection-mode **Download** (§5),
-at the author's request. The distinction to record, because it is the whole reason the original rule
-exists:
-
-| Forbidden (unchanged) | Allowed (new) |
-|---|---|
-| A *rule* that downloads episodes without being asked | A *command* the user issues now, to a set they can see |
-| Anything triggered by sync, refresh, or app start | Only a tap, followed by a confirmation naming the count |
-| Global scope | Scoped to one podcast's current `To decide` filter |
-| Invisible | Every queued episode appears in S7 and can be cancelled individually |
-
-The no-auto-download invariant test (CLAUDE.md §7 item 6 / `NoAutoDownloadInvariantTest`) is
-unaffected: it asserts that sync and parsing create **zero** ledger rows and post **zero** actions,
-and nothing here changes that — the new rows only ever originate from a UI event. *Download all* is
-**not** capped by count: the only guard is a non-blocking warning when the estimated total exceeds
-free space in the download volume (§5).
-
-**Settled by ADR 0014.** README's "Not automatic" bullet and CLAUDE.md §1's non-goal are reworded to
-the rule-versus-command distinction above; the rest of the non-goal — no auto-download setting, no
-per-feed rules, no global bulk scope — stands exactly as it was.
+Rationale, and the rule-versus-command table it turns on: **ADR 0014**. In the screens that means
+*Download all (n)* sits in S2's overflow rather than being a prominent button, is scoped to one
+podcast's current *To decide* filter, and is confirmed by a dialog naming the count (§5). It is
+**not** capped; the only guard is a non-blocking warning when the estimated total exceeds free space
+in the download volume.
 
 ---
 
 ## 15. Adaptations to the code as built
 
-Everything this design binds to now exists (339 tests). These are the points
-where this document meets that code — recorded so Tier 4c doesn't rediscover them.
+Everything this design binds to exists. This section was a 12-row table matching each thing the
+design needed against the built code; it was removed on 2026-08-23, because every row's answer is now
+stated where it binds — Part B names the type, and `docs/architecture.md` names the port.
 
-| This design needs | Status in the built code | Action |
-|---|---|---|
-| Download progress, cancel, foreground notification | `DownloadWorker` + `DownloadNotifications`, progress throttled to 1 Hz | UI adopts the same 1 Hz throttle (§12.2) |
-| Folder states for the checklist and the paused banner | `DownloadFolderAccess` → `NotChosen` / `Granted` / `Revoked` | used verbatim (§4, §12.11) |
-| "File still there?" for the duplicate guard | `DownloadTarget.existingNames(folder)` (architecture §11) | reuse; **no new port method** (§12.3) |
-| Non-retryable folder failure | `DownloadFolderUnavailableException`, no backoff | that row offers **Choose folder**, not **Retry** (§12.11) |
-| Enqueueing from a ViewModel | `WorkScheduler` owns all enqueueing; the `SyncTrigger` port in `:core:model` | ViewModels call `WorkScheduler`, never `WorkManager` directly — keeps §3's data-flow rule intact |
-| Credential change takes effect immediately after S5 | `SyncOrchestratorFactory` builds the client per pass from current credentials | nothing to do; no restart needed after connecting |
-| Re-download of a terminal episode | `KEY_USER_REQUESTED` is the only way past `DownloadWorker`'s terminal-row refusal | set it from a triage event and nowhere else (ADR 0012) |
-| "To decide" list + counts | `EpisodeLedgerRepository.observeEpisodes(filter)` → `EpisodeListItem` | matches §12.5; the `firstSeenAt` cutoff variant is retired (ADR 0013) |
-| **S8 error log** | `LogRepository` over the `error_log` table (schema v2) | collapse and eviction are DAO queries, so the screen just renders (§11) |
-| S2's scoped pull-to-refresh | `FeedRefreshWorker.KEY_FEED_URL` | same worker, not a second one |
-| S5 | `NextcloudLoginFlowClient`, with typed failures | each `ConnectError` in §8 maps to one of them |
-| Artwork and icons | Coil and `icons-lucide-android`, pinned | UI.md §18; §18's table is the allow-list |
+Four of its rows were **constraints on the UI rather than descriptions of it**, so they survive here:
 
-**S8 has content from every failing path** (2026-08-13): feed refresh, the S5 auth flow, every failed
-sync pass and every failed download attempt. Repeats collapse onto one entry with a count, which is
-what turns "it failed all night" into something readable rather than something inferred.
+- Download progress is throttled to **1 Hz** in `DownloadWorker`, and the UI adopts the same rate
+  rather than animating between samples (§12.2).
+- A ViewModel enqueues through `WorkScheduler`, **never** `WorkManager` directly — that is what keeps
+  §3's data-flow rule intact.
+- `DownloadFolderUnavailableException` is not retryable, so the failed row offers **Choose folder**,
+  not **Retry** (§12.11).
+- The duplicate guard reuses `DownloadTarget.existingNames(folder)`; **no new port method** was added
+  for it (§12.3).
 
 ---
 
@@ -1976,21 +1896,9 @@ Before this, none of the table was implemented: the worker published nothing, no
 ## B8. What the screens bind to — all of it built
 
 This was a gap list of ten items the UI needed and the repository did not have. **Every one of them
-now exists** (2026-08-01), so it is kept as a short index of what each turned into, and of the three
-places the built thing differs from the sketch.
-
-| # | Needed for | Built as |
-|---|---|---|
-| 8.1 | S8's entire backing store | `LogRepository` + `error_log` (schema v2). Collapse-on-identity and eviction are **DAO queries**, not UI logic and not an app-start sweep |
-| 8.2 | *Download again* | `KEY_USER_REQUESTED` + the pre-flight duplicate guard — `docs/decisions/0012` |
-| 8.3 | §12.10's offline rules | `ConnectivityMonitor` / `AndroidConnectivityMonitor` |
-| 8.4 | S5 | `NextcloudLoginFlowClient` / `RetrofitNextcloudLoginFlowClient` |
-| 8.5 | the bulk-download warning line | `DownloadTarget.freeBytes()` |
-| 8.6 | S2 selection mode, S4's mark-as-played | `upsertAll`, `previewUndecided`, `undecided` |
-| 8.7 | S2's pull-to-refresh | `FeedRefreshWorker.KEY_FEED_URL` — the same worker, not a second one |
-| 8.8 | *Open in browser* | `Episode.link`, mapped in `:core:feed`, stored in schema v2 |
-| 8.9 | S4's four persisted controls | `SettingsRepository.observeTheme`/`SwipeMapping`/`AllowMobileData`/`MarkOldOlderThan` |
-| 8.10 | artwork and icons | Coil and `icons-lucide-android`, pinned — §18 |
+now exists** (2026-08-01), and each is declared where it is used — B1–B7 name the types, and
+`docs/architecture.md` §5 names the ports — so the index was removed on 2026-08-23. What cannot be
+read off those declarations is kept:
 
 **Three things came out differently from the sketch, and the built shape is the contract:**
 
@@ -2003,11 +1911,11 @@ places the built thing differs from the sketch.
   sweeping one up would emit a `PLAY` the user never agreed to.
 - `Instant` is **`java.time`**, and nothing was added to get it — see §B1 and `docs/architecture.md` §5.
 
-**All five write points exist** (2026-08-13): feed refresh, the S5 auth flow, sync passes and failed
-downloads. The rule that no entry ever carries a credential is enforced by the **store** rather than
-by each caller — `LogRepositoryImpl.record` applies `redactSecrets`, so a sixth write point cannot
-forget it, and the categories a download failure lands in (`STORAGE` for a lost folder or a full
-disk, `DOWNLOAD` otherwise) are what S8's filter chips sort on.
+**All five error-log write points exist** (2026-08-13): feed refresh, the S5 auth flow, sync passes
+and failed downloads. The rule that no entry ever carries a credential is enforced by the **store**
+rather than by each caller — `LogRepositoryImpl.record` applies `redactSecrets`, so a sixth write
+point cannot forget it — and the categories a download failure lands in (`STORAGE` for a lost folder
+or a full disk, `DOWNLOAD` otherwise) are what S8's filter chips sort on.
 
 ## B9. Navigation
 
@@ -2031,10 +1939,10 @@ Back from S2 returns to S1 with its scroll position **and** filter intact — th
 held in the ViewModel's `SavedStateHandle`, session-scoped, resetting to `TO_DECIDE` on cold start.
 S5 cannot be dismissed by tapping outside while an auth request is in flight.
 
-`:feature:episodes`'s TODO scope names only the episode list. S1, S7 and S8 need a home: either the
-module list gains them, or S7/S8 land in `:app`. Recommended: S1 and S2 in `:feature:episodes`
-(they share the ledger query and the `EpisodeUi` projection), S7 and S8 in `:app` (they are
-cross-cutting: workers, sync and the log, none of which are episode-list concerns).
+**Where the screens live, as built:** S1 and S2 in `:feature:episodes` (they share the ledger query
+and the `EpisodeUi` projection), S4/S5/S6 in `:feature:settings`, and S7 and S8 in `:app` — they are
+cross-cutting (workers, sync and the log, none of which are episode-list concerns) and the module
+list was not widened for them.
 
 ---
 

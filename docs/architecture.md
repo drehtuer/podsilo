@@ -266,7 +266,7 @@ tables with a shared key convention, not a Room `@ForeignKey`.
 |---|---|---|---|---|
 | `episodeKey` | `String` | No (PK) | `guid ?: enclosureUrl` | Mirrors the server's identification rule exactly (CLAUDE.md §5) — this is not a free choice. |
 | `feedUrl` | `String` | No | Parent `Feed.url` | |
-| `guid` | `String` | Yes | RSS `<guid>` | Frequently missing, reused, or changed — see [§12](#12-decision-record--resolved-and-still-open). |
+| `guid` | `String` | Yes | RSS `<guid>` | Frequently missing, reused, or changed — see [§12](#12-decision-record). |
 | `enclosureUrl` | `String` | No | RSS `<enclosure url="">` | Used as `episodeKey` fallback and as `EpisodeAction.episode`. |
 | `link` | `String` | Yes | RSS `<item><link>` | The episode's own page, for the UI's *Open in browser* affordance (`docs/UI.md` §6). `null` for feeds that omit it — the affordance is then absent, never a dead tap. **Not** derivable from `enclosureUrl`, which points at an audio file. Added in schema v2. |
 | `title` | `String` | No | RSS `<title>` | Stored **raw**; cleanup regex rules (§6) and sanitisation apply at naming time, not storage time. |
@@ -906,7 +906,8 @@ four extra edges above. The mechanism is an explicit `userRequested` flag on the
 or a sync path — that is what keeps `DownloadWorker`'s refusal of terminal rows intact as the thing
 that makes the no-auto-download invariant provable. The same flag is the only thing that enables the
 pre-flight duplicate-file guard, so `writtenFileName` never becomes the general "have I downloaded
-this?" test; that stays the ledger (§11's central invariant). See §12's first open item — ADR 0012 is still a draft, so these four edges are designed but not yet buildable.
+this?" test; that stays the ledger (§11's central invariant). Specified in `docs/decisions/0012`,
+accepted 2026-08-01 and built.
 
 ---
 
@@ -919,7 +920,7 @@ the download path — it's a trigger. `DownloadWorker` writes the durable ledger
 an expedited `SyncWorker` run, which performs the actual outbox drain (the same code path §6's sync
 sequence already covers). This keeps `:core:download` free of any GPodder-client dependency and
 means there is exactly one piece of code that POSTs episode actions, not two — see
-[§12](#12-decision-record--resolved-and-still-open) for the rationale flagged as a decision
+[§12](#12-decision-record) for the rationale flagged as a decision
 to confirm.
 
 ```mermaid
@@ -1070,25 +1071,12 @@ and deleted (2026-08-13).
 
 ### Decisions folded into this document
 
-Each of these was an ADR until the rule it recorded was written into the section named beside it.
-The rule is unchanged; only its address is.
-
-| Decision | Now lives in |
-|---|---|
-| `EpisodeLedgerRow` denormalises `feedUrl`, `enclosureUrl`, `durationSeconds` at write time | §4 |
-| Skip is `PLAY(started=0, position=total, total=duration ?: 0)` — AntennaPod's own convention | §6 |
-| Per-action timestamps: emit bare UTC, parse bare/`+HH:MM`/`Z`, always via `OffsetDateTime` | §6 |
-| `ZoneId` injected into the naming engine; a missing `pubDate` formats as the sortable `00000000` | §11 |
-| `com.prof18.rssparser`, not Stalla — and why `:core:feed` needs Robolectric | §7 |
-| `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact | §11 |
-| `:core:gpodder` is `kotlin("jvm")`, so "no Android" is compiled in rather than review-enforced | §2 |
-| The app password is encrypted behind `AppPasswordCipher`, keeping the Keystore out of the JVM test path | §2 |
-| `DownloadTarget` in front of the SAF write — a test seam, not a portability layer | §8, §11 |
-| Storage stays `Long` epoch millis; UI state is `java.time`; `EpochTime` is the only seam | §5 |
-| Coil for image loading, Lucide's Compose artifact for icons | `docs/UI.md` §18, `docs/third-party.md` |
-| The database backup is a zipped SQLite file, restored row by row into the live database | `docs/UI.md` §7 |
-| The Nextcloud account is confirmed before it is stored | `docs/UI.md` §8 |
-| Undo for a swipe is a *deferred write*, not a reverted one | `docs/UI.md` §12.3 |
+Fourteen of the original 21 ADRs were deleted on 2026-08-13 and their rules written into the section
+that governs each — the schema rules into §4, the wire and sync rules into §6, naming and tagging
+into §11, the module rules into §2, and the UI-facing ones into `docs/UI.md`. The same commit
+(`7a9545a`) repointed all 95 KDoc citations, so nothing in the code still refers to a deleted number;
+the mapping table that stood here until 2026-08-23 had no readers left. `git log -- docs/decisions/`
+recovers any of them in full.
 
 Four further decisions were made while building and are recorded here rather than as ADRs, because
 each follows from an accepted one rather than being a choice with live alternatives:
@@ -1131,24 +1119,32 @@ Maps CLAUDE.md §10's build order to the sections above. Use this as the impleme
 check a step complete only once its linked section's diagrams/tables/interfaces are actually
 implemented and tested, per the Definition of Done (CLAUDE.md §12).
 
+**"Tier 4a/4b/4c" throughout this document** is the testability-tier build order agreed with the
+author — 4a the database and settings, 4b the workers and the download pipeline, 4c the UI. It lived
+in `docs/TODO.md`, retired on 2026-08-14 once every box in it was ticked; the vocabulary survives in
+these sections because it dates what was built when.
+
 | # | CLAUDE.md §10 step | Status | Relevant section(s) here |
 |---|---|---|---|
 | 1 | Dev container + Gradle skeleton | ✅ done | `docs/dev-environment.md`, `docs/journal.md` |
 | 2 | `:core:model` + `:core:database` (+ `:core:datastore`) | ✅ done (Tier 1 / 4a) | [§4](#4-database-schema), [§5](#5-domain-model--repository-ports) |
 | 3 | `:core:feed` | ✅ done (Tier 2/3 parse + fetch, 4b refresh worker) | [§7](#7-external-interface-podcast-rssatom-feeds) |
 | 4 | `:core:naming` | ✅ done (Tier 1) | [§5](#5-domain-model--repository-ports) (`NamingTemplateEngine`), [§11](#11-naming--tagging-pipeline) |
-| 5 | `:core:download` | ✅ done (Tier 4b) — `SafDownloadTarget` unrun | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
+| 5 | `:core:download` | ✅ done (Tier 4b) | [§8](#8-external-interface-storage-access-framework), [§10](#10-key-flows), [§11](#11-naming--tagging-pipeline) |
 | 6 | `:core:gpodder` | ✅ done (Tier 3) | [§6](#6-external-interface-nextcloud-gpodder-api) |
 | 7 | `:core:sync` | ✅ done (Tier 1, extended in 3/4b) | [§2](#2-module-architecture) (ports/adapters rule), [§6](#6-external-interface-nextcloud-gpodder-api), [§9](#9-episode-ledger-state-machine) |
 | 8 | UI (`:feature:settings`, `:feature:episodes`, `:app`, `:core:ui`) | ✅ done — all eight screens, navigable and icon-complete | [§3](#3-data-flow), [§8](#8-external-interface-storage-access-framework), `docs/UI.md` (Parts A and B) |
-| 9 | Polish (error surfacing, per-feed counts) | ◐ partly — the foreground-service notification exists but has never been displayed | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
+| 9 | Polish (error surfacing, per-feed counts) | ✅ done — S8 collects every failing path, S1 carries the per-feed counts, and the foreground-service notification has been displayed on a device | [§9](#9-episode-ledger-state-machine) (`ERROR` state), [§10](#10-key-flows) |
 
-**The UI is complete** (502 tests, 3 skipped as of 2026-08-02). All eight screens render, every route
-between them exists, and the app has been installed, launched and driven through all of them on the
-in-container emulator. Every port in `docs/UI.md` §B8 is implemented, not just declared.
+**The UI is complete.** All eight screens render, every route between them exists, and the app has
+been installed, launched and driven through all of them — on the in-container emulator and on a real
+phone. Every port in `docs/UI.md` §B8 is implemented, not just declared.
 
 `:core:ui` joined the module list with the icon allow-list (`docs/UI.md` §18) and the spacing
 invariants (§17), both of which are shared by every screen and were starting to drift.
 
-What remains is not code: **nothing has ever run against a real Nextcloud**, and no episode has been
-downloaded by the running app.
+**What has actually been *run* — against a real Nextcloud, real SAF, a real download — is recorded
+in one place: `docs/dev-environment.md` §1, and deliberately not restated here.** Two registers of
+the same runs is how this section came to say, until 2026-08-22, that nothing had ever run against a
+real Nextcloud and that no episode had been downloaded by the running app. Both had, on 2026-08-02,
+and again on hardware on 2026-08-14.

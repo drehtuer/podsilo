@@ -33,7 +33,7 @@ below differ enormously in how well-proven they are.
 | Dev container builds and starts | ✅ Verified | Repeatedly, incl. 2026-07-31 |
 | Android SDK provisioning (`post-create.sh`) | ✅ Verified | Idempotent, installs into the named volume |
 | Portability across hosts with different UID/GID | ✅ Verified | 2026-07-31: second machine, uid 1002 / docker gid 108 — see [§4](#4-host-uidgid-portability) |
-| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-02, Tier 4c complete: 502 tests, 3 skipped, exit 0 |
+| **Tier 1 — `./gradlew ktlintCheck detekt test`** | ✅ **Verified green** | 2026-08-22: **796 tests, 0 failures, 3 skipped**, exit 0. This row is the one place the count is kept — README quotes it, and nothing else should |
 | `./gradlew assembleDebug` | ✅ Verified | 29 MB debug APK |
 | opodsync test sync server | ✅ Verified | 0.5.3, boots + serves the API + integration test green (3 tests, 0 skipped) |
 | `docker` from inside the container | ✅ Verified | Host daemon, group aligned at runtime by `post-create.sh` |
