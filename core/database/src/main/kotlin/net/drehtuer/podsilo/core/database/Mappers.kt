@@ -16,7 +16,7 @@ import net.drehtuer.podsilo.core.model.SyncState
 import net.drehtuer.podsilo.core.model.port.EpisodeListItem
 
 // entity <-> domain mapping, kept at the module boundary so nothing outside :core:database sees a
-// Room entity (docs/architecture.md §4). LedgerState is stored as its enum name; an unrecognised
+// Room entity (docs/architecture.adoc §4). LedgerState is stored as its enum name; an unrecognised
 // value in the column would be a schema-migration bug, so let enumValueOf throw rather than mask it.
 
 internal fun FeedEntity.toDomain(): Feed =

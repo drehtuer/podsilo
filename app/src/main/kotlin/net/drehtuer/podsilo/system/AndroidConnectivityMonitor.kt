@@ -19,7 +19,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * [ConnectivityMonitor] over `ConnectivityManager` (`docs/UI.md` §12.10).
+ * [ConnectivityMonitor] over `ConnectivityManager` (`docs/UI.adoc` §12.10).
  *
  * Its whole purpose is to be consulted **before** a request is started, so a pull-to-refresh with
  * no network returns immediately instead of spinning against every feed in turn until each times

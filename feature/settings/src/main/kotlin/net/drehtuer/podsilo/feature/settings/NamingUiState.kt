@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.feature.settings
 import net.drehtuer.podsilo.core.model.port.NamingSettings
 
 /**
- * S6 — the naming template editor (`docs/UI.md` §B5).
+ * S6 — the naming template editor (`docs/UI.adoc` §B5).
  *
  * @property placeholders exactly the set `DefaultNamingTemplateEngine` resolves. `{ext}` is
  *   deliberately absent: the extension is appended after resolution and is not a variable, so
@@ -40,7 +40,7 @@ data class NamingPreviewLine(
     val resolved: String,
 )
 
-/** The one real line plus the three that catch a template which only looks right (`docs/UI.md` §9). */
+/** The one real line plus the three that catch a template which only looks right (`docs/UI.adoc` §9). */
 enum class PreviewCase { RECENT_EPISODE, MISSING_DATE, OVERLONG_TITLE, ILLEGAL_CHARACTERS }
 
 sealed interface NamingEvent {

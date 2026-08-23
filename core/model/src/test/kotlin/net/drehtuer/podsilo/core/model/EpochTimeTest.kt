@@ -9,7 +9,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * `docs/architecture.md` §5. The arithmetic here is the JDK's; what is worth pinning is that the two
+ * `docs/architecture.adoc` §5. The arithmetic here is the JDK's; what is worth pinning is that the two
  * unit-specific entry points really do treat their input differently, since confusing them is the
  * failure mode the whole object exists to prevent.
  */

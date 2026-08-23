@@ -1,0 +1,74 @@
+= 0024 -- _Mark as unplayed_ is a ledger state, not a deletion
+// SPDX-License-Identifier: GPL-3.0-or-later
+:idprefix:
+:idseparator: -
+
+*Status:* Accepted (2026-08-14). Reverses *D4* and the standing decline recorded in
+`docs/backlog.adoc`, without reversing the invariant that produced them.
+
+== Context
+
+The author, after testing the round trip: _"There is no way of marking episode as unplayed/unread."_
+
+This has been asked for and declined three times -- as issue #46's _mark unplayed_, as *D4* of the
+directional-sync design, and as a backlog entry. *The objection was always the same, and it was
+never about the feature.* "Undecided" in Podsilo is the _absence_ of a ledger row, so the obvious
+implementation of un-marking is a delete -- and CLAUDE.md §11 calls that row
+
+____
+the only dedup authority, and it must outlive the file
+____
+
+Deleting it re-arms the one failure the whole app exists to prevent: downloading a file the user
+already has. Each decline said _no delete_, and each time that got recorded as _no feature_, because
+nobody had separated the two.
+
+Two things changed since:
+
+. *The wire has a representation for it.* `docs/decisions/0022` established that a `PLAY` with
+`position = 0` is how every gpodder client says _unread_ -- the API can neither delete an action
+nor express the idea any other way. So the state is now expressible to Nextcloud, which it was not
+when the feature was last declined.
+. *The author asked for it as a gap, not as a nice-to-have*, alongside a round-trip test that
+found the download-marking bug (`docs/decisions/0023`).
+
+== Decision
+
+A new `LedgerState.UNPLAYED`. It means _the user has withdrawn a decision_.
+
+* *The row stays.* `writtenFileName`, `attempts` and the episode's history survive, so the
+duplicate guard still works and the ledger still outlives the file. There is still no delete
+anywhere in `EpisodeLedgerRepository`.
+* *The list treats it as undecided.* The _To decide_ predicate becomes "no ledger row *that
+expresses a decision*" -- `NOT IN (SELECT episodeKey FROM episode_ledger WHERE state != 'UNPLAYED')`
+-- in all four queries that share it, including the count badges, so a badge cannot disagree with
+the list it opens.
+* *It offers what an undecided episode offers*: _Download_ and _Mark as played_, no status line, no
+badge, full emphasis.
+* *It is offered wherever the app claims an episode is finished* -- `DOWNLOADED`, `SKIPPED` and
+`HANDLED_REMOTELY` -- because those are the three a user might disagree with.
+* *It reaches Nextcloud* as `PLAY` with `position = 0` and the duration left in `total`, through
+the ordinary outbox, and asks for a sync pass like any other decision.
+
+=== What it deliberately does _not_ do
+
+*An incoming remote unread mark still does not re-open a local decision.* That is D4, and it stands:
+reconciliation ignores a `PLAY` that does not read as ended (`docs/decisions/0022`), so another
+client marking something unread cannot un-handle it here. The asymmetry is intentional -- this device's
+user pressing a button is a decision; a remote row arriving is not.
+
+== Consequences
+
+* *A persisted vocabulary grew.* `state` is a `TEXT` column holding the enum name, so no migration
+is needed -- but an older build reading a database containing `UNPLAYED` would fail to parse it.
+That is a downgrade, which this project does not support.
+* *The compiler found every `when` that had to answer for the new state*, and the SQL was the half
+it could not: adding the enum value compiles cleanly while the feature silently does nothing, which
+is why the DAO test is the load-bearing one.
+* *detekt asked for a split* of `EpisodeListViewModel.triage` when the new action pushed it over
+the complexity ceiling, and the seam it wanted is real: actions that _write a decision_ have
+durability rules, actions that only move the user around do not. Fifth time that ceiling has
+pointed at a genuine boundary.
+* ``docs/backlog.adoc``'s decline is removed rather than struck through, and D4's entry in
+D4's surviving half -- a _remote_ unread mark still cannot re-open a decision -- is recorded in
+`docs/decisions/0025`.

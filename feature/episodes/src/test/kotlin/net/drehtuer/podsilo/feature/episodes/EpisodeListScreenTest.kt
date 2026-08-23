@@ -96,7 +96,7 @@ class EpisodeListScreenTest {
 
     @Test
     fun `a missing duration simply has no part in the meta line`() {
-        // Never "unknown", never a fabricated value (docs/UI.md §5).
+        // Never "unknown", never a fabricated value (docs/UI.adoc §5).
         render(listOf(row(publishedAt = null, durationMinutes = null)))
 
         compose.onNodeWithText("Warum Hamburg immer regnet").assertIsDisplayed()
@@ -113,7 +113,7 @@ class EpisodeListScreenTest {
     }
 
     /**
-     * `docs/UI.md` §5's row overflow, and §12.1's **mandatory** non-gesture equivalent of the swipes.
+     * `docs/UI.adoc` §5's row overflow, and §12.1's **mandatory** non-gesture equivalent of the swipes.
      * It did not exist: the row rendered inline `TextButton`s instead, and this replaces them.
      */
     @Test
@@ -176,7 +176,7 @@ class EpisodeListScreenTest {
         compose.onAllNodesWithContentDescription("Actions for Warum Hamburg immer regnet").assertCountEquals(0)
     }
 
-    // ---- The feed-error banner (docs/UI.md §5), which nothing could ever show ----
+    // ---- The feed-error banner (docs/UI.adoc §5), which nothing could ever show ----
 
     @Test
     fun `a feed failure shows its plain sentence above the list, with Try again`() {
@@ -199,7 +199,7 @@ class EpisodeListScreenTest {
 
     @Test
     fun `a lost folder grant shows Choose folder instead of Retry`() {
-        // The rendered half of `docs/architecture.md` §11: a Retry button here cannot possibly work, so
+        // The rendered half of `docs/architecture.adoc` §11: a Retry button here cannot possibly work, so
         // the row must offer the action that can.
         render(
             listOf(
@@ -247,7 +247,7 @@ class EpisodeListScreenTest {
 
     @Test
     fun `a downloading row with no live progress says resuming, not zero percent`() {
-        // `docs/UI.md` §B7: a percentage is only ever drawn from an update seen in this process, so
+        // `docs/UI.adoc` §B7: a percentage is only ever drawn from an update seen in this process, so
         // after process death the row must not imply it knows how far along it is.
         render(listOf(row(ledgerState = LedgerState.DOWNLOADING, progress = null)))
 
@@ -353,13 +353,13 @@ class EpisodeListScreenTest {
 
         compose.onNode(hasText("may not fit", substring = true)).assertIsDisplayed()
         // The confirm button stays present: the estimate is a guess and must not veto the decision.
-        // One node now, not two: the row's own Download moved into its overflow (docs/UI.md §5).
+        // One node now, not two: the row's own Download moved into its overflow (docs/UI.adoc §5).
         compose.onAllNodes(hasText("Download")).assertCountEquals(1)
     }
 
     /**
-     * Artwork was specified in `docs/UI.md` §5's row anatomy and never drawn — Coil was approved
-     * (UI.md §18), added to the catalog, and depended on by no module at all.
+     * Artwork was specified in `docs/UI.adoc` §5's row anatomy and never drawn — Coil was approved
+     * (UI.adoc §18), added to the catalog, and depended on by no module at all.
      */
     @Test
     fun `an episode row draws its artwork`() {
@@ -582,7 +582,7 @@ class EpisodeListScreenTest {
     }
 
     /**
-     * `docs/UI.md` §12.12: selection must be reachable **without** a long-press, because a
+     * `docs/UI.adoc` §12.12: selection must be reachable **without** a long-press, because a
      * gesture-only affordance is unreachable for a TalkBack user. Same event, not a parallel path.
      */
     @Test
@@ -741,7 +741,7 @@ class EpisodeListScreenTest {
  * Invokes a custom accessibility action by its label.
  *
  * Compose's test API has no built-in matcher for this, and the affordance it reaches is a
- * requirement rather than a nicety (`docs/UI.md` §12.12: selection reachable without a long-press),
+ * requirement rather than a nicety (`docs/UI.adoc` §12.12: selection reachable without a long-press),
  * so it is worth the four lines to be able to assert it.
  */
 private fun androidx.compose.ui.test.SemanticsNodeInteraction.performCustomAccessibilityActionLabelled(

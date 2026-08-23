@@ -24,7 +24,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * S4's About lockup on a real device (`docs/UI.md` §C4.3).
+ * S4's About lockup on a real device (`docs/UI.adoc` §C4.3).
  *
  * The horizontal lockup is the one placement where the mark and the wordmark sit on a single
  * baseline, so it is where a mismatch between the mark's `dp` size and the wordmark's `sp` size

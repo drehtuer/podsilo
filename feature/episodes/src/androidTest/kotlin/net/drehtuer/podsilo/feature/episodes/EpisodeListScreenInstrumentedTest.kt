@@ -27,14 +27,14 @@ import java.time.ZoneOffset
 private const val TEST_FEED_URL = "https://example.org/feed.xml"
 
 /**
- * The same screen on a **real Android runtime** — Tier 2 (`docs/dev-environment.md` §6).
+ * The same screen on a **real Android runtime** — Tier 2 (`docs/dev-environment.adoc` §6).
  *
  * Deliberately a thin smoke test rather than a copy of the Robolectric suite: the point is to prove
  * the screen composes, measures and responds to input on a real device, which is the one thing
  * Robolectric's shadows cannot vouch for. Behaviour is asserted in the JVM tests, which are faster
  * and run everywhere.
  *
- * The first case is `docs/architecture.md` §11's guarantee, because it is the one where being wrong is a
+ * The first case is `docs/architecture.adoc` §11's guarantee, because it is the one where being wrong is a
  * button that cannot work.
  *
  * **The rest are issue #48's**, and they are here rather than only in the JVM suite for a specific
@@ -86,8 +86,8 @@ class EpisodeListScreenInstrumentedTest {
     }
 
     /**
-     * `docs/architecture.md` §11's guarantee, asserted **through the row overflow** since the `⋮` replaced
-     * the inline `TextButton`s (`docs/UI.md` §5's row anatomy).
+     * `docs/architecture.adoc` §11's guarantee, asserted **through the row overflow** since the `⋮` replaced
+     * the inline `TextButton`s (`docs/UI.adoc` §5's row anatomy).
      *
      * Opening the menu is the subject rather than incidental setup: §12.1 makes it the mandatory
      * non-gesture equivalent of the swipes, so the remedy being reachable *there* is the actual

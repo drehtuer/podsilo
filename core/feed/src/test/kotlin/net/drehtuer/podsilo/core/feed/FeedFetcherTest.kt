@@ -196,6 +196,6 @@ class FeedFetcherTest {
     }
 
     // The fetch -> parse composition test lives in FeedXmlParserTest instead: it drives rssparser,
-    // which needs the Robolectric runner (`docs/architecture.md` §7). Keeping it out of this class means
+    // which needs the Robolectric runner (`docs/architecture.adoc` §7). Keeping it out of this class means
     // these 12 pure-HTTP tests stay on the plain JVM runner.
 }

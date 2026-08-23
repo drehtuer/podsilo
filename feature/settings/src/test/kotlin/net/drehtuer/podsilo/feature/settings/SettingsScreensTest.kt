@@ -45,7 +45,7 @@ class SettingsScreensTest {
 
     @Test
     fun `the About group carries the lockup beside the version and licence`() {
-        // `docs/UI.md` §C4.3: horizontal lockup, flush left, no card and no frame. GPL-3.0 and a
+        // `docs/UI.adoc` §C4.3: horizontal lockup, flush left, no card and no frame. GPL-3.0 and a
         // version string mean little without saying whose they are.
         renderSettings(SettingsUiState(version = "0.1.0"))
 
@@ -260,7 +260,7 @@ class SettingsScreensTest {
         }
 
         compose.onNode(hasText("Waiting for authorization", substring = true)).assertIsDisplayed()
-        // The primary button is gone; Cancel stays and aborts the poll (docs/UI.md §8).
+        // The primary button is gone; Cancel stays and aborts the poll (docs/UI.adoc §8).
         compose.onAllNodes(hasText("Request authorization")).assertCountEquals(0)
         compose.onNodeWithText("Cancel").performClick()
         assertTrue(connectEvents.contains(ConnectEvent.Cancel))
@@ -275,7 +275,7 @@ class SettingsScreensTest {
             )
         }
 
-        // The name is the question, not a detail buried in a sentence (`docs/UI.md` §8).
+        // The name is the question, not a detail buried in a sentence (`docs/UI.adoc` §8).
         compose.onNodeWithText("Connect as podsilo?").assertIsDisplayed()
         compose.onNode(hasText("your browser was signed in to", substring = true)).assertIsDisplayed()
 

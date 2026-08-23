@@ -166,7 +166,7 @@ class MigrationTest {
             assertTrue("size starts unknown rather than zero", cursor.isNull(1))
         }
         // Without this the new column stays null until a publisher happens to change the feed: a 304
-        // skips the parse, so an unchanged feed never refills the cache (docs/architecture.md §7).
+        // skips the parse, so an unchanged feed never refills the cache (docs/architecture.adoc §7).
         db.query("SELECT httpEtag, httpLastModified FROM feeds").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertTrue("the ETag must be dropped so one full re-fetch happens", cursor.isNull(0))

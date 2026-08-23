@@ -1,0 +1,164 @@
+= 0009 -- GPodder API wire contract, verified against both server implementations
+:idprefix:
+:idseparator: -
+
+== Status
+
+Accepted. Resolves `docs/architecture.adoc` §12 open decision #2 (subscriptions `add`/`remove`
+response shape).
+
+== Context
+
+CLAUDE.md §5 and §11 warn that the Nextcloud GPodder API "is not formally specified anywhere
+authoritative -- infer from implementations, not assumptions", and §12 #2 specifically deferred the
+subscriptions response shape until it could be checked against a real server. This ADR records what
+the two reference implementations actually do, so ``:core:gpodder``'s DTOs and mapping have a cited
+basis rather than a guess.
+
+Sources read: `thrillfall/nextcloud-gpodder` (the Nextcloud app) and `kd2org/opodsync` (the
+independent PHP/SQLite reimplementation CLAUDE.md §4 specifies as the CI test server), both at
+`master`.
+
+== Open decision #2, resolved: the subscriptions response
+
+`SubscriptionChangeController::list()` returns `{"add": [url…], "remove": [url…], "timestamp": N}`
+-- plain URL strings, `timestamp` in Unix seconds from PHP's `time()`.
+
+The key ambiguity was what a no-`since` call returns. `gpodder_subscriptions` is a *state table,
+not an append-only log*: one row per (url, user) carrying a `subscribed` boolean, upserted in
+place. The query filters `subscribed = ? AND updated > :since`, and no `since` becomes
+`DateTime(0)`, matching everything. Therefore:
+
+* `add` without `since` = the *complete current subscription set*
+* `remove` = every URL ever unsubscribed
+* the two are *disjoint by construction* (one row, one flag), so `add − remove == add`
+
+*CLAUDE.md §5's specified `set = add − remove` is correct and safe*, under either interpretation,
+exactly as it predicted. `SyncOrchestrator.pullSubscriptions()` already does this; no change needed.
+
+== Per-action field contract
+
+Keys: `podcast`, `episode`, `guid`, `action`, `timestamp`, `started`, `position`, `total`.
+
+|===
+| Aspect | `nextcloud-gpodder` | `opodsync` | How `:core:gpodder` handles it
+
+| `action` case
+| *UPPER* (`strtoupper` on write)
+| *lower* (`strtolower` on write)
+| Parsed case-insensitively; emitted upper-case
+
+| `started`/`position`/`total` when absent
+| written as *`-1`*
+| *omitted* entirely
+| `-1` and missing both normalise to `null`
+
+| `guid`
+| may be `null`
+| may be omitted
+| nullable either way
+
+| per-action `timestamp`
+| ISO-8601 *with offset* (PHP `format("c")` → `…+00:00`)
+| trailing *`Z`*
+| Both parsed, plus the bare form -- see below
+
+| extra fields
+| --
+| sends `update_urls`
+| `ignoreUnknownKeys = true`
+
+| `since` boundary
+| exclusive (`>`)
+| *inclusive* (`>=`)
+| Reconciliation is idempotent, so a re-delivered boundary action is a no-op
+|===
+
+== The per-action timestamp format -- CLAUDE.md §11 is stale here
+
+CLAUDE.md §11 and the gpodder API README both document this field as ISO-8601 *without* a
+timezone offset (`2009-12-12T09:00:00`). Neither server emits that form any more:
+``nextcloud-gpodder``'s CHANGELOG has _"Always respond with timezone in timestamps"_, and its
+repository formats with PHP `format("c")`.
+
+`parseGpodderTimestamp` (`:core:sync`) therefore accepts *all three* forms -- bare, `+HH:MM`, and
+`Z` -- and `docs/architecture.adoc` §6 is updated accordingly. Podsilo still _emits_ the bare form, which
+both servers parse as UTC (`new DateTime($ts, new DateTimeZone("UTC"))`).
+
+One trap worth naming: an offset-bearing timestamp must be parsed as `OffsetDateTime`, not
+`LocalDateTime`. A `LocalDateTime` silently discards the offset, so `…T11:49:23+02:00` would be
+read as 11:49 UTC instead of 09:49 UTC -- a two-hour error that no test using only UTC-equivalent
+timestamps would catch. `GpodderTimestampsTest` has a dedicated regression case for it.
+
+== Other findings worth keeping
+
+* *`POST episode_action/create` takes a bare JSON array*, not an envelope object -- Nextcloud
+merges the decoded body into request params and the controller keeps only numeric keys.
+* *Auth is plain HTTP Basic.* These are ordinary AppFramework routes (`@NoAdminRequired`,
+`@NoCSRFRequired`), _not_ `OCSController` routes, so *no `OCS-APIRequest` header is needed* and
+responses are plain JSON rather than OCS-wrapped. (Inferred: Basic auth comes from Nextcloud core
+middleware; no explicit header handling appears in the app's own source.)
+* *`opodsync` inner-joins episode actions against subscriptions*, so actions for unsubscribed
+feeds disappear from its `GET`. `nextcloud-gpodder` does not. Podsilo tolerates either -- its
+ledger is keyed by episode, not by subscription (CLAUDE.md §5).
+* *`nextcloud-gpodder` silently discards `DOWNLOAD`/`DELETE` on POST.* Big enough for its own
+ADR: see `docs/decisions/0008`.
+
+== Verification status
+
+*Verified against a live `opodsync` 0.5.3 (2026-07-31)* -- `.devcontainer/docker-compose.yml`
+now builds and boots, and ``:core:gpodder``'s `OpodsyncIntegrationTest` passes against it (3 tests,
+0 skipped). Confirmed live, not just from source:
+
+* `GET /subscriptions` with no `since` returns `{add, remove, update_urls, timestamp}`, with `add`
+and `remove` disjoint and `timestamp` in Unix seconds -- the basis of open decision #2.
+* `POST /episode_action/create` takes a bare JSON array and returns `{timestamp, update_urls}`.
+* Action names come back *lowercase* (`"download"`, `"play"`) regardless of the casing posted.
+* Per-action `timestamp` comes back with a trailing *`Z`* (`2026-07-31T16:00:00Z`), confirming
+this ADR's amendment to CLAUDE.md §11's "no offset" claim.
+* `DOWNLOAD` *is* stored and echoed back -- the difference from `nextcloud-gpodder` that 0008 is
+about.
+* Auth is plain HTTP Basic; an unauthenticated request gets `401`.
+
+One bullet above is now known to be *narrower than stated*: the "inner-joins against
+subscriptions" note. Posting actions for a feed the user is not subscribed to and reading them
+straight back returned them anyway on 0.5.3. Podsilo tolerates either behaviour, so nothing
+changes -- but do not rely on the exclusion happening.
+
+Still unverified, and unverifiable here: everything about *`nextcloud-gpodder`*, which remains
+source-read only. opodsync is *not* proof of Nextcloud's behaviour (see 0008).
+
+== Verified against a real Nextcloud (2026-08-02)
+
+The "still unverified, and unverifiable here" caveat above is now *partly closed*. A manual probe
+(`+core/gpodder/.../ManualNextcloudProbe.kt+`, run by hand against the author's own instance --
+Nextcloud *33.0.5* with gpoddersync installed) exercised the production client and confirmed:
+
+|===
+| Claim | Read from source | Observed on Nextcloud 33.0.5
+
+| per-action `timestamp` carries an offset
+| `…+00:00`
+| *`…+00:00`, all 3,022 of them* -- sample `2025-08-31T22:18:51+00:00`
+
+| Podsilo parses what the server emits
+| asserted by unit tests over fixtures
+| *3,022 / 3,022 parsed* by `parseGpodderTimestamp`
+
+| response `timestamp` is Unix seconds
+| yes
+| `1785671472` -- Unix seconds, as expected
+|===
+
+This is the one that mattered: CLAUDE.md §11 warns that confusing the two timestamp formats *does
+not crash*, it silently breaks incremental sync in a way that looks like "sync just doesn't work".
+It is now checked against reality rather than against our own fixtures.
+
+*The `add − remove` rule is also confirmed, and it is load-bearing.* CLAUDE.md §5 specified
+`set = add − remove` precisely because the no-`since` response shape was ambiguous between "the full
+current set" and "the complete change log", and that formula is correct under either. The real
+response was *`add=8, remove=50`* -- `remove` clearly carries history -- so reading `add` alone
+would have been correct here only by accident.
+
+What remains unverified is unchanged: *0008 stands* (Nextcloud discards `DOWNLOAD`), because
+confirming it needs a _write_, and this probe is deliberately read-only.

@@ -12,9 +12,9 @@ import net.drehtuer.podsilo.core.model.port.ThemePreference
 import java.time.Instant
 
 /**
- * S4 — settings (`docs/UI.md` §B5).
+ * S4 — settings (`docs/UI.adoc` §B5).
  *
- * **There is no Save button**: every control commits on change (`docs/UI.md` §7), so this state is a
+ * **There is no Save button**: every control commits on change (`docs/UI.adoc` §7), so this state is a
  * projection of what is already persisted rather than a form buffer. The one exception is
  * [pendingBulk], which exists precisely because that operation is *not* commit-on-change — it writes
  * `PLAY` actions to a shared log and cannot be undone in bulk, so it is named and confirmed first.
@@ -42,7 +42,7 @@ data class SettingsUiState(
      * other clients act on and nothing can retract, so it names its count first — the same safeguard
      * every bulk write in this app carries. The pull cannot be taken back either, in the sense that
      * the decisions it applies are decisions; it just cannot name a number, because counting would
-     * mean fetching, and a view model does not touch the network (`docs/UI.md` §B0.3).
+     * mean fetching, and a view model does not touch the network (`docs/UI.adoc` §B0.3).
      */
     val pendingDirectionalSync: DirectionalSyncConfirmation? = null,
     /** A directional pass is running; both rows go dead, exactly as the backup rows do. */
@@ -71,7 +71,7 @@ enum class SyncDirection {
 
 /**
  * @property instanceUrl `null` renders an **empty** value area, not a placeholder, and the row is
- *   not tappable (`docs/UI.md` §7).
+ *   not tappable (`docs/UI.adoc` §7).
  * @property outboxDepth rows still to push. Shown next to the last sync because "10 min ago" alone
  *   cannot distinguish "nothing to do" from "three things stuck".
  */

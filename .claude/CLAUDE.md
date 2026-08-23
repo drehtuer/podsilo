@@ -73,7 +73,7 @@ consumed by something else entirely.
   agent-driven development**. There is no commercialization plan and no external users to support.
 - That means: favour clarity and correctness over cleverness or premature generality. It is fine for
   the app to be opinionated and small.
-- It also means: **the process is part of the point.** Keep `docs/journal.md` updated (see §9).
+- It also means: **the process is part of the point.** Keep `docs/journal.adoc` updated (see §9).
 
 ---
 
@@ -88,7 +88,7 @@ consumed by something else entirely.
   change this, ask first.
 - **Attribution is mandatory.** If you adapt code from AntennaPod or any other GPL project, add a
   comment at the top of the file naming the upstream project, the file, the commit/version, and its
-  licence. Record it in `docs/third-party.md` too.
+  licence. Record it in `docs/third-party.adoc` too.
 - Only add dependencies with permissive or GPL-compatible licences (Apache-2.0, MIT, BSD, GPL-3.0).
   **Never** add anything AGPL, SSPL, or with a non-commercial/field-of-use restriction. If unsure
   about a licence, ask rather than guess.
@@ -113,16 +113,16 @@ don't quietly hand-roll one.
 | Background work | WorkManager | own `AlarmManager`/`JobScheduler` scheduling, own retry/backoff |
 | HTTP | OkHttp (+ Retrofit for the GPodder REST API) | own HTTP client, own connection pool |
 | JSON | kotlinx.serialization or Moshi (pick one, be consistent) | own JSON parser |
-| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`docs/architecture.md` §7) | **own XML/RSS parser, ever** |
+| Podcast feed parsing | ~~`dev.stalla:stalla`~~ → **`com.prof18.rssparser:rssparser`** — Stalla turned out unmaintained since 2021; the fallback named here won (`docs/architecture.adoc` §7) | **own XML/RSS parser, ever** |
 | DI | Hilt | own service locator |
 | Preferences | Jetpack DataStore (Preferences) | SharedPreferences wrappers, own config file format |
 | Folder access | `DocumentFile` / SAF APIs | `java.io.File` paths into external storage |
-| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`docs/architecture.md` §11) | **hand-written ID3/MP4 frame code, ever** |
+| Audio tag writing | jaudiotagger — specifically the Android-compatible fork `com.github.Adonai:jaudiotagger` via JitPack, not the stale upstream artifact (`docs/architecture.adoc` §11) | **hand-written ID3/MP4 frame code, ever** |
 | Filename sanitising | a small, well-tested internal util is acceptable here — see §6 | ad-hoc `replace()` calls scattered across the codebase |
 | Long lists | Paging 3 | manual offset/limit paging in the ViewModel |
-| Image loading | Coil (`docs/UI.md` §18) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
-| Icons | Lucide's Compose artifact; `docs/UI.md` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
-| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`docs/architecture.md` §5) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
+| Image loading | Coil (`docs/UI.adoc` §18) — sits on the OkHttp already pinned | own bitmap cache, own async image loading |
+| Icons | Lucide's Compose artifact; `docs/UI.adoc` §18 is the allow-list | hand-converted `VectorDrawable`s kept in step by hand |
+| Date/time | `java.time` (free at `minSdk 33`), `Long` epoch millis in storage, converted only via `EpochTime` (`docs/architecture.adoc` §5) | **kotlinx-datetime — a third time vocabulary**, ad-hoc `Instant.ofEpochMilli` at every call site |
 | Logging | Timber (or plain `Log` — do not build an abstraction layer) | own logging framework |
 | Testing | JUnit5 or JUnit4 + Truth/AssertJ, Turbine (Flows), MockK, Robolectric, OkHttp `MockWebServer`, Room in-memory DB, Compose UI test | own test harness, own fakes where MockWebServer suffices |
 | Dev container / emulator | existing published images and scripts (see §4) | own from-scratch Dockerfile for the emulator |
@@ -158,7 +158,7 @@ plus an emulator usable for testing and UI work. Deliverables:
   docker-compose.yml        # app-dev container + emulator + test sync server
   post-create.sh            # SDK component install, gradle warm-up
 docs/
-  dev-environment.md        # how to run it, including host prerequisites
+  dev-environment.adoc        # how to run it, including host prerequisites
 ```
 
 ### Toolchain that must be inside the container
@@ -183,7 +183,7 @@ configuration explicitly; do not assume a native Linux host.
 
 An Android emulator needs hardware virtualisation (`/dev/kvm`). Inside WSL2 this means **nested
 virtualisation**, which is available but conditional. Required host setup, to be documented in
-`docs/dev-environment.md`:
+`docs/dev-environment.adoc`:
 
 1. **Windows 11.** The `nestedVirtualization` flag is Windows 11 only — it does not work on
    Windows 10. Verify the author's Windows version before promising an in-container emulator.
@@ -265,7 +265,7 @@ Unit tests must not depend on either; they use `MockWebServer` with recorded fix
 - Run as a **non-root user** with a UID/GID matching the host so files aren't root-owned.
 - No secrets in the image, in `devcontainer.json`, or in git. Nextcloud test credentials come from
   `.env` (gitignored) with a committed `.env.example`.
-- `docs/dev-environment.md` must let someone go from clean checkout to green `./gradlew test`
+- `docs/dev-environment.adoc` must let someone go from clean checkout to green `./gradlew test`
   following it literally. Verify that yourself before claiming it works.
 
 ---
@@ -399,7 +399,7 @@ which a local filter never is. The current rules:
 
 - The default "New" filter shows episodes with **no ledger row**. That is the whole predicate: no
   date clause, one SQL condition for both the list and the count badge.
-- Old episodes leave "New" via S4's *Mark old episodes as played* (`docs/UI.md` §7), which upserts
+- Old episodes leave "New" via S4's *Mark old episodes as played* (`docs/UI.adoc` §7), which upserts
   `SKIPPED` rows in one transaction and pushes the resulting `PLAY` actions through the normal
   outbox in batches. They then appear under "Played / handled" and stay individually downloadable.
 - Record `Feed.firstSeenAt` when a feed first appears. It is no longer a query predicate — it is the
@@ -648,8 +648,8 @@ glance.
   say that plainly. A clear "the emulator tier doesn't work on this host and here's why" is far more
   useful than a confident claim that doesn't hold up. Don't mark a task done to close it out.
 - **Don't expand scope.** If you spot something worth doing that isn't asked for, note it in
-  `docs/backlog.md` instead of building it.
-- **Keep `docs/journal.md` current.** Since this project doubles as an agent-development experiment,
+  `docs/backlog.adoc` instead of building it.
+- **Keep `docs/journal.adoc` current.** Since this project doubles as an agent-development experiment,
   append a short entry per work session: what was attempted, what worked, what didn't, what needed
   human correction, and any prompt/approach lessons. Be candid about failures — that's the data the
   author actually wants from this experiment.
@@ -663,7 +663,7 @@ glance.
 Work in this order; each step should be green before moving on.
 
 1. **Dev container + Gradle skeleton.** Empty modules, version catalog, ktlint/detekt, CI workflow.
-   Prove `./gradlew test` runs in the container. Write `docs/dev-environment.md`.
+   Prove `./gradlew test` runs in the container. Write `docs/dev-environment.adoc`.
 2. **`:core:model` + `:core:database`.** Entities, DAOs, migration setup, Room tests.
 3. **`:core:feed`.** Stalla integration, mapping to our model, fixture-driven parser tests.
 4. **`:core:naming`.** Templates, sanitisation, truncation, collision handling. Pure JVM, no Android
@@ -674,9 +674,9 @@ Work in this order; each step should be green before moving on.
 6. **`:core:gpodder`.** Retrofit client against `MockWebServer`, then verified against `opodsync` in
    compose. Read AntennaPod's implementation first.
 7. **`:core:sync`.** Outbox draining, reconciliation, explicit conflict rules, heavy unit tests.
-8. **UI.** Designed in full before any of it was written: **`docs/UI.md` is the canonical UX
-   document** and `docs/UI.md` Part B the code seam. Build in dependency order, not screen order —
-   see `docs/UI.md` and `docs/architecture.md` §13.
+8. **UI.** Designed in full before any of it was written: **`docs/UI.adoc` is the canonical UX
+   document** and `docs/UI.adoc` Part B the code seam. Build in dependency order, not screen order —
+   see `docs/UI.adoc` and `docs/architecture.adoc` §13.
    - **Amended 2026-08-01: eight screens, not two destinations.** This step originally said "two
      destinations is the target". The design pass found that the missing six were not decoration —
      an episode's description is raw HTML that no list row can render (S3), and download progress,
@@ -753,7 +753,7 @@ Work in this order; each step should be green before moving on.
 - [ ] Code compiles; `./gradlew ktlintCheck detekt test` passes (and you actually ran it)
 - [ ] New logic has tests; bug fixes have regression tests
 - [ ] No new dependency added without asking
-- [ ] Upstream attribution added if code was adapted; `docs/third-party.md` updated
+- [ ] Upstream attribution added if code was adapted; `docs/third-party.adoc` updated
 - [ ] Nothing in §1's non-goals crept in (especially: no feed management, no auto-download)
-- [ ] `docs/journal.md` entry appended
+- [ ] `docs/journal.adoc` entry appended
 - [ ] Limitations and anything unverified stated plainly in the summary

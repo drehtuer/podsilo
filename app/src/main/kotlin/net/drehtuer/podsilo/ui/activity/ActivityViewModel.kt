@@ -48,7 +48,7 @@ private const val RECENT_LIMIT = 20
 private const val HISTORY_LIMIT = 50
 
 /**
- * S7 (`docs/UI.md` §B6).
+ * S7 (`docs/UI.adoc` §B6).
  *
  * Reads the ledger rather than WorkManager for what is queued and what failed: the ledger is the
  * durable record and survives process death, whereas `WorkInfo` does not (architecture §9). Live

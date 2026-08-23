@@ -19,8 +19,8 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * `SafDownloadTarget` writing through a **real** `DocumentsProvider` — what `docs/architecture.md` §11
- * says can only be checked on a device, and what `docs/dev-environment.md` listed as "never run".
+ * `SafDownloadTarget` writing through a **real** `DocumentsProvider` — what `docs/architecture.adoc` §11
+ * says can only be checked on a device, and what `docs/dev-environment.adoc` listed as "never run".
  *
  * These run in the **app's own process**, so they inherit the persistable tree-URI grant the app
  * already holds. That is the only way to get a usable tree URI without driving the system picker:

@@ -7,7 +7,7 @@ private const val REDACTED = "<redacted>"
 
 /**
  * Strips the shapes a credential arrives in from free text on its way into the error log
- * (`docs/UI.md` §11: *"Never contains the app password, the Basic-auth header, or full URLs with
+ * (`docs/UI.adoc` §11: *"Never contains the app password, the Basic-auth header, or full URLs with
  * credentials"*).
  *
  * **This is a net, not a guarantee, and the difference matters.** It removes credentials that carry

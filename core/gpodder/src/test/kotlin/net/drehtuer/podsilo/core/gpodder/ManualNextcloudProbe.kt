@@ -125,7 +125,7 @@ fun main(args: Array<String>) {
  *
  * **The second GET is the real assertion.** A 200 from the DELETE proves the server answered, not
  * that the password is gone; re-using it afterwards and being refused is what proves that. This is
- * also exactly what the app does when the user declines an account (`docs/UI.md` §8) — the same
+ * also exactly what the app does when the user declines an account (`docs/UI.adoc` §8) — the same
  * method, on the same credentials, at the same point in the flow.
  */
 private suspend fun revokeAndProveItIsDead(
@@ -282,7 +282,7 @@ private fun String.describeShape(): String =
  * downstream — the outbox, `syncedToServer`, mark-on-download — behaves differently depending on
  * whether it is true.
  *
- * It also checks the mark-as-played encoding from `docs/architecture.md` §6
+ * It also checks the mark-as-played encoding from `docs/architecture.adoc` §6
  * (`started = 0, position = total`) survives a round trip.
  *
  * Both actions name a **synthetic feed and episode** that no real subscription uses, so nothing the
@@ -323,7 +323,7 @@ private suspend fun verifyActionWrites(
                     guid = "probe-$marker-play",
                     action = EpisodeActionType.PLAY,
                     timestamp = stamp,
-                    // `docs/architecture.md` §6: "done with this episode" is a full-length PLAY.
+                    // `docs/architecture.adoc` §6: "done with this episode" is a full-length PLAY.
                     started = 0,
                     position = 1800,
                     total = 1800,

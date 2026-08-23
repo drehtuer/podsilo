@@ -19,7 +19,7 @@ private const val HTTP_PARTIAL_CONTENT = 206
 private const val HTTP_RANGE_NOT_SATISFIABLE = 416
 private const val COPY_BUFFER_BYTES = 64 * 1024
 
-/** Outcome of fetching one episode enclosure into the app cache (step A of `docs/architecture.md` §11). */
+/** Outcome of fetching one episode enclosure into the app cache (step A of `docs/architecture.adoc` §11). */
 sealed interface EnclosureDownloadResult {
     /**
      * The complete file is on disk. [contentType] is the response header verbatim (may be `null`);
@@ -47,7 +47,7 @@ sealed interface EnclosureDownloadResult {
      * Its own case rather than a [NetworkError] because it is **permanent and nothing to do with the
      * network**: the request never left the device, and every retry will be refused identically.
      * Reported as a network error it retried on a backoff for ever and read as "the server did not
-     * respond", which is the failure `docs/backlog.md` predicted would arrive with no obvious cause.
+     * respond", which is the failure `docs/backlog.adoc` predicted would arrive with no obvious cause.
      *
      * Podsilo does **not** upgrade the URL to `https://` to get around this — see the note on
      * `ErrorCause.CLEARTEXT_BLOCKED`.
@@ -88,7 +88,7 @@ class EnclosureDownloader(
     /**
      * @param onProgress called with (bytes on disk, total bytes if the server disclosed one) as the
      *   copy proceeds — drives the foreground notification. Never persisted: byte-level progress
-     *   lives in the worker and the partial file, not the database (`docs/architecture.md` §4).
+     *   lives in the worker and the partial file, not the database (`docs/architecture.adoc` §4).
      */
     suspend fun download(
         enclosureUrl: String,

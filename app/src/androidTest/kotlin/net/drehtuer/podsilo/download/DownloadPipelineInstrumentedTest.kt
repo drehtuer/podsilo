@@ -41,7 +41,7 @@ import java.io.File
 
 /**
  * **The download pipeline end to end, against a real feed and a real SAF folder** — the last thing
- * `docs/backlog.md` had listed as unverifiable without a device: enclosure fetch → tag write →
+ * `docs/backlog.adoc` had listed as unverifiable without a device: enclosure fetch → tag write →
  * artwork embed → SAF copy → ledger row → outbox.
  *
  * The chain is real at every link. The bytes come from the podcast's own CDN over the phone's
@@ -53,10 +53,10 @@ import java.io.File
  *
  * **The user's ledger, and therefore their Nextcloud.** The episode and feed are *read* from the
  * app's real database — that is the only way to get a genuine enclosure URL, since subscriptions
- * arrive from Nextcloud and cannot be seeded (`docs/UI.md` §4) — but the row this test writes goes
+ * arrive from Nextcloud and cannot be seeded (`docs/UI.adoc` §4) — but the row this test writes goes
  * into an **in-memory** database. Writing to the real one would mark an episode handled in the user's
  * app and push a `DOWNLOAD`/`PLAY` pair into their shared action log, where it is not retractable
- * (`docs/architecture.md` §6). The outbox is still exercised for real: the row is written unsynced
+ * (`docs/architecture.adoc` §6). The outbox is still exercised for real: the row is written unsynced
  * and `getUnsynced()` is what proves it is queued. Only the POST is left to `SyncOrchestrator`, which
  * has its own verification against a real server.
  *
@@ -217,7 +217,7 @@ class DownloadPipelineInstrumentedTest {
 
     /**
      * jaudiotagger needs a real `File`, and a SAF document is not one — the same constraint that
-     * shapes the whole pipeline (`docs/architecture.md` §11). Reading the delivery back therefore
+     * shapes the whole pipeline (`docs/architecture.adoc` §11). Reading the delivery back therefore
      * means copying it out again.
      */
     private fun copyOfDelivered(document: DocumentFile): File {

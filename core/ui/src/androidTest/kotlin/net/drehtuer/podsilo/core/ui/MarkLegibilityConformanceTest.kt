@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * **Does the mark still read at 24 dp?** (`docs/UI.md` §C7's first open Tier 3 item.)
+ * **Does the mark still read at 24 dp?** (`docs/UI.adoc` §C7's first open Tier 3 item.)
  *
  * §1 puts a 16 dp floor on the mark because "below 16 dp the three bars stop separating; use nothing
  * rather than a smaller mark". 24 dp — the app-bar size (§4.1) — is the smallest the mark is ever

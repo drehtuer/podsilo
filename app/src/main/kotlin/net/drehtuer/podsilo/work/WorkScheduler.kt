@@ -20,7 +20,7 @@ private const val MIN_PERIODIC_MINUTES = 15L
  * intervals) lives in one readable place instead of being spread across view models and workers.
  *
  * Also the [SyncTrigger] `:core:download` asks for after a download lands
- * (`docs/architecture.md` §10) — which is why the download module never needs to know that a
+ * (`docs/architecture.adoc` §10) — which is why the download module never needs to know that a
  * `SyncWorker` exists at all.
  */
 @Singleton

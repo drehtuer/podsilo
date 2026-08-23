@@ -16,7 +16,7 @@ import net.drehtuer.podsilo.core.database.entity.EpisodeLedgerEntity
  * Keeping the three list queries and [countUndecidedByFeed] in one place is deliberate: they must
  * share the *same* "no ledger row" predicate, or a count badge could disagree with the list it
  * opens, and a bulk-confirmation dialog could promise a different number than it writes
- * (`docs/UI.md` §12.5).
+ * (`docs/UI.adoc` §12.5).
  *
  * All three list queries share the same `l_`-aliased projection of the ledger columns (see
  * [EpisodeWithLedger]); the three columns the two tables have in common (`episodeKey`, `feedUrl`,
@@ -150,7 +150,7 @@ interface EpisodeListDao {
      * "did it actually land?" affordance.
      *
      * Ledger rows rather than the join: the group renders `writtenFileName` and the feed, both of
-     * which the ledger row carries denormalised (`docs/architecture.md` §4), so it stays correct for an
+     * which the ledger row carries denormalised (`docs/architecture.adoc` §4), so it stays correct for an
      * episode whose cached row was pruned by an unsubscribe.
      *
      * [since] is the *display cursor* `SettingsRepository.observeDeliveredClearedAt` holds — "stop

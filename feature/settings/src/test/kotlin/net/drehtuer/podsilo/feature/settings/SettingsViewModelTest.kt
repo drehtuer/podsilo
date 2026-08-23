@@ -101,7 +101,7 @@ class SettingsViewModelTest {
     fun `assigning an action a direction already holds swaps them rather than duplicating`() =
         runTest {
             // Defaults are right = DOWNLOAD, left = MARK_AS_PLAYED. Giving the left DOWNLOAD must
-            // not leave both on DOWNLOAD, which would make one action unreachable (docs/UI.md §7).
+            // not leave both on DOWNLOAD, which would make one action unreachable (docs/UI.adoc §7).
             val viewModel = viewModel()
 
             viewModel.onEvent(SettingsEvent.SwipeChanged(SwipeDirection.LEFT, SwipeAction.DOWNLOAD))

@@ -43,9 +43,9 @@ private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 private const val MILLIS_PER_SECOND = 1_000
 
 /**
- * S4 (`docs/UI.md` §B5).
+ * S4 (`docs/UI.adoc` §B5).
  *
- * Every control commits immediately — there is no Save button and no form buffer (`docs/UI.md` §7).
+ * Every control commits immediately — there is no Save button and no form buffer (`docs/UI.adoc` §7).
  * The single exception is the bulk *mark as played*, which is the one operation here that reaches
  * the shared action log and cannot be undone in bulk, so it goes through a preview that names the
  * count first (`docs/decisions/0013`).
@@ -171,7 +171,7 @@ class SettingsViewModel(
      * is repeated here, so it holds however the event arrives.
      *
      * The count is a ledger query, not a network call — a view model may read the database and may
-     * not touch the network (`docs/UI.md` §B0.3). That asymmetry is the whole reason the pull cannot
+     * not touch the network (`docs/UI.adoc` §B0.3). That asymmetry is the whole reason the pull cannot
      * offer a number: the figure that would matter, *how many of these change anything here*, is only
      * knowable after a fetch.
      */
@@ -210,7 +210,7 @@ class SettingsViewModel(
      * lives here rather than only on the row so it holds however the event arrives.
      *
      * The reason is sequencing, not secrecy. The archive deliberately carries no credentials
-     * (`docs/UI.md` §7), so a restore onto an unconfigured install drops the ledger behind a
+     * (`docs/UI.adoc` §7), so a restore onto an unconfigured install drops the ledger behind a
      * *not configured* screen that shows none of it — which is precisely how it read on the Pixel 5,
      * with the snackbar reporting restored podcasts the list could not display. Connecting first
      * means the restored ledger lands somewhere that renders it, and the next sync reconciles it.
@@ -270,7 +270,7 @@ class SettingsViewModel(
     /**
      * Delegates the "the two directions can't hold the same action" rule to [SwipeMapping.with],
      * which **swaps** rather than rejects — the user's most recent choice always wins and the
-     * pair stays valid, so the swipe background needs no defensive branch (`docs/UI.md` §7).
+     * pair stays valid, so the swipe background needs no defensive branch (`docs/UI.adoc` §7).
      */
     private suspend fun changeSwipe(event: SettingsEvent.SwipeChanged) {
         val current = settingsRepository.observeSwipeMapping().first()
@@ -349,7 +349,7 @@ class SettingsViewModel(
 
 /**
  * Snapshots what a later reader needs, exactly as `TriageWriter` does for a swipe
- * (`docs/architecture.md` §4) — and `syncedToServer = false`, because the durable row exists before
+ * (`docs/architecture.adoc` §4) — and `syncedToServer = false`, because the durable row exists before
  * anything is posted and only a confirmed 2xx flips it (CLAUDE.md §5).
  */
 internal fun Episode.toSkippedRow(now: Long): EpisodeLedgerRow =

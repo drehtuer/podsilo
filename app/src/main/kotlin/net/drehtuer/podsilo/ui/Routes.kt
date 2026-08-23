@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.ui
 import android.net.Uri
 
 /**
- * The routes that exist, as `docs/UI.md` §B9 specifies: one `NavHost`,
+ * The routes that exist, as `docs/UI.adoc` §B9 specifies: one `NavHost`,
  * [PODCASTS] the start destination and the only screen at the bottom of the backstack.
  *
  * Arguments are URL-encoded because both are themselves URLs or GUIDs — a feed URL contains `/`

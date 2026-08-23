@@ -23,7 +23,7 @@ private const val HTTP_SERVER_ERROR_FLOOR = 500
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
 
-/** What one run of the pipeline in `docs/architecture.md` §11 produced. */
+/** What one run of the pipeline in `docs/architecture.adoc` §11 produced. */
 sealed interface DownloadOutcome {
     /**
      * The file is in the user's folder under [fileName] (extension included) — the name to persist
@@ -46,7 +46,7 @@ sealed interface DownloadOutcome {
         /**
          * Classified here, where the failure is understood, and carried into the ledger so a screen
          * never has to parse [reason] to decide between *Retry* and *Choose folder*
-         * (`docs/UI.md` §12.11).
+         * (`docs/UI.adoc` §12.11).
          */
         val cause: ErrorCause,
     ) : DownloadOutcome
@@ -89,11 +89,11 @@ data class DownloadRequest(
  * `download to app cache → verify → resolve name → rewrite tags → copy into the SAF tree → delete cache`.
  *
  * Nothing here touches an Android API: the SAF half sits behind [DownloadTarget]
- * (`docs/architecture.md` §11) and the ledger writes belong to [DownloadWorker], which is what makes
+ * (`docs/architecture.adoc` §11) and the ledger writes belong to [DownloadWorker], which is what makes
  * this class — the part with all the branching — testable without an emulator.
  *
  * It contains **no** string-sanitisation logic of its own; every naming decision, including
- * collision suffixing, comes from `:core:naming` (`docs/architecture.md` §11).
+ * collision suffixing, comes from `:core:naming` (`docs/architecture.adoc` §11).
  *
  * @property cacheDir app-private scratch space. One in-flight download at a time is the budget
  *   CLAUDE.md §6 asks for; the partial file is deliberately left behind on a failed or cancelled

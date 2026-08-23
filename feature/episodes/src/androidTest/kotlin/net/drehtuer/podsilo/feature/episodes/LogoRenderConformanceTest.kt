@@ -27,7 +27,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * **The brand mark on a real device** (`docs/UI.md` §C7's open Tier 3 items).
+ * **The brand mark on a real device** (`docs/UI.adoc` §C7's open Tier 3 items).
  *
  * The Robolectric `LogoPlacementTest` counts placements; it cannot answer whether anything was
  * actually *drawn*. Robolectric's canvas is a no-op, so a mark that resolved to a missing resource,
@@ -96,7 +96,7 @@ class LogoRenderConformanceTest {
 
     @Test
     fun theAppBarMarkIsActuallyDrawnAtTwentyFourDp() {
-        // `docs/UI.md` §C1's 16 dp floor exists because below it the bars stop separating. 24 dp is
+        // `docs/UI.adoc` §C1's 16 dp floor exists because below it the bars stop separating. 24 dp is
         // the app-bar size (§4.1) and the smallest the mark is ever drawn in this app, so it is the
         // one worth photographing on real hardware.
         s1(PodcastListUiState(content = PodcastListUiState.Content.Feeds(emptyList())))

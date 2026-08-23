@@ -38,7 +38,7 @@ import javax.inject.Singleton
 /**
  * The screens' ports, implemented over the adapters `:app` already owns. These exist so
  * `:feature:episodes` depends on neither WorkManager nor `:core:download`
- * (`docs/UI.md` §B0.2, `docs/architecture.md` §2).
+ * (`docs/UI.adoc` §B0.2, `docs/architecture.adoc` §2).
  */
 @Singleton
 class WorkEpisodeScheduler
@@ -134,7 +134,7 @@ class TargetSpaceProbe
 
 /**
  * Renders S1's checklist example through the *real* template engine, so a preview that looks right
- * means downloads will be named right — the point of `docs/UI.md` §4's step 3.
+ * means downloads will be named right — the point of `docs/UI.adoc` §4's step 3.
  */
 @Singleton
 class TemplateNamingPreview
@@ -227,7 +227,7 @@ class WorkManagerDownloadMonitor
                     val key = DownloadWorker.episodeKeyOf(info.tags) ?: return@forEach
                     live += key
                     // Absent until the worker's first 1 Hz tick, and gone again after process death
-                    // — which is exactly the distinction docs/UI.md §B7 renders as
+                    // — which is exactly the distinction docs/UI.adoc §B7 renders as
                     // *resuming* rather than as a stale percentage.
                     val bytes = info.progress.getLong(DownloadWorker.KEY_PROGRESS_BYTES, UNSET)
                     if (bytes >= 0) {

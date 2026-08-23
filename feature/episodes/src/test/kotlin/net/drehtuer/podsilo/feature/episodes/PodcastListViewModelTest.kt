@@ -92,7 +92,7 @@ class PodcastListViewModelTest {
     @Test
     fun `a background sync never reorders the list under the user`() =
         runTest {
-            // The whole point of the frozen order (docs/UI.md §4): rows update in place.
+            // The whole point of the frozen order (docs/UI.adoc §4): rows update in place.
             feeds.seed(
                 feed(url = "a", title = "Alpha", lastRefreshedAt = 1),
                 feed(url = "b", title = "Bravo", lastRefreshedAt = 1),
@@ -137,7 +137,7 @@ class PodcastListViewModelTest {
     @Test
     fun `a never-fetched feed shows no count rather than zero`() =
         runTest {
-            // "Never fetched is not zero" (docs/UI.md §12.5) — the difference between "nothing new"
+            // "Never fetched is not zero" (docs/UI.adoc §12.5) — the difference between "nothing new"
             // and "we have not looked yet".
             feeds.seed(feed(url = "a", title = "Alpha"))
 
@@ -274,7 +274,7 @@ class PodcastListViewModelTest {
         }
 
     /**
-     * Issue #60. `docs/UI.md` §4 specifies a sync pass **and** a feed refresh, and only the second
+     * Issue #60. `docs/UI.adoc` §4 specifies a sync pass **and** a feed refresh, and only the second
      * one shipped — so the gesture fetched RSS and never touched the action log in either direction.
      *
      * The order is asserted, not incidental: the pass replaces the subscription list, so refreshing

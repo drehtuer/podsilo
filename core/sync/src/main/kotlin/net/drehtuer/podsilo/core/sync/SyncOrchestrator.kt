@@ -89,7 +89,7 @@ private fun <T> List<Pair<T, List<EpisodeAction>>>.chunkedByActionCount(
  * sentences, so the two contexts that need them — a failed pass and a failed push — can each supply
  * their own frame instead of duplicating a message per failure per caller.
  *
- * Neither half ever contains a URL or a header: `docs/UI.md` §11 puts the technical detail in the
+ * Neither half ever contains a URL or a header: `docs/UI.adoc` §11 puts the technical detail in the
  * entry's collapsed half, and that half is the exception's own message.
  */
 private fun GpodderFailure.reason(): String =
@@ -123,10 +123,10 @@ private fun GpodderException.plainMessage(): String =
 /**
  * Runs one full sync pass in the exact order CLAUDE.md section 5 mandates: pull subscriptions
  * (full) -> push unsynced ledger rows -> pull episode actions since last timestamp -> reconcile ->
- * persist new timestamps. See `docs/architecture.md` section 6 for the sequence diagram this
+ * persist new timestamps. See `docs/architecture.adoc` section 6 for the sequence diagram this
  * mirrors.
  *
- * Depends only on `:core:model` ports (never Room or Retrofit directly -- `docs/architecture.md`
+ * Depends only on `:core:model` ports (never Room or Retrofit directly -- `docs/architecture.adoc`
  * section 2's ports-and-adapters rule), so it's constructed here with plain interfaces and tested
  * with hand-written in-memory fakes, not a real database or `MockWebServer`.
  *
@@ -243,7 +243,7 @@ class SyncOrchestrator(
      * hours used to leave no trace a user could see, which is why issue #60 had to be diagnosed by
      * reading source instead of by reading the app.
      *
-     * Plain sentence first, technical half separate (`docs/UI.md` §11). The exception's own message
+     * Plain sentence first, technical half separate (`docs/UI.adoc` §11). The exception's own message
      * is [detail] and never the headline — "unable to resolve host" is not a sentence the user asked
      * for. Credentials are stripped by the store, not here ([LogRepository.record]).
      *

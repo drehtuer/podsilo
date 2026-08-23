@@ -40,17 +40,17 @@ import java.util.concurrent.TimeUnit
 private const val PROGRESS_INTERVAL_MS = 1_000L
 private const val BACKOFF_SECONDS = 30L
 
-/** Terminal ledger states (`docs/architecture.md` §9) — none of them may be re-entered by a download. */
+/** Terminal ledger states (`docs/architecture.adoc` §9) — none of them may be re-entered by a download. */
 private val TERMINAL_STATES =
     setOf(LedgerState.DOWNLOADED, LedgerState.SKIPPED, LedgerState.HANDLED_REMOTELY)
 
 /**
- * The plain-language half of a failed download (`docs/UI.md` §11: the sentence the user reads comes
+ * The plain-language half of a failed download (`docs/UI.adoc` §11: the sentence the user reads comes
  * first, the technical half is separate and collapsed).
  *
  * Each one names the *next step* where there is one, because a log entry the user can act on is the
  * whole reason S8 exists. `FOLDER_UNAVAILABLE` deliberately does not say "retry": retrying cannot
- * work until the folder is chosen again (`docs/architecture.md` §11).
+ * work until the folder is chosen again (`docs/architecture.adoc` §11).
  */
 private fun ErrorCause.sentence(): String =
     when (this) {
@@ -69,7 +69,7 @@ private fun ErrorCause.sentence(): String =
  * Downloads one episode, then durably records it (CLAUDE.md §5's mark-on-download: **ledger row
  * first, POST second, never the other way round**). The POST itself is not made here — the row is
  * written with `syncedToServer = false` and [SyncTrigger] asks for a sync pass, so exactly one
- * piece of code ever talks to the GPodder API (`docs/architecture.md` §10).
+ * piece of code ever talks to the GPodder API (`docs/architecture.adoc` §10).
  *
  * The pipeline it drives is [EpisodeDownloader]; this class owns only the WorkManager contract, the
  * ledger transitions, and the foreground notification.
@@ -220,7 +220,7 @@ class DownloadWorker
          * **Every attempt, not only the last.** The row shows the current state and the log shows
          * the history, and the DAO collapses repeats onto one entry with a count — which is what
          * turns "it failed three times overnight" from an inference into a `×3` the user can read
-         * (`docs/UI.md` §11). Logging only the final attempt would lose exactly that.
+         * (`docs/UI.adoc` §11). Logging only the final attempt would lose exactly that.
          *
          * A download that fails because the folder is gone or the disk is full is a **storage**
          * problem the user fixes elsewhere, so it is filed under that category rather than under
@@ -262,7 +262,7 @@ class DownloadWorker
         /**
          * Publishes byte progress for the UI, in the **same throttled tick** as the notification.
          *
-         * That shared tick is the point, not an economy: `docs/UI.md` §B7 requires the
+         * That shared tick is the point, not an economy: `docs/UI.adoc` §B7 requires the
          * notification, the episode row, S1's aggregate and S7 never to disagree, and the surest way
          * to guarantee that is for one clock to drive them all. This is the only publisher; nothing
          * persists a percentage, so after process death there is simply no progress to read and the
@@ -308,7 +308,7 @@ class DownloadWorker
         /**
          * Ledger rows carry denormalised `feedUrl`/`enclosureUrl`/`durationSeconds` snapshots so the
          * outbox can still build a valid action after the episode row is pruned
-         * (`docs/architecture.md` §4). `syncedToServer` is always `false` on a local write — only a
+         * (`docs/architecture.adoc` §4). `syncedToServer` is always `false` on a local write — only a
          * confirmed 2xx flips it, and only the sync pass may do that.
          */
         @Suppress("LongParameterList")

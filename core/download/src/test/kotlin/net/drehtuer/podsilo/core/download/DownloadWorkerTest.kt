@@ -41,7 +41,7 @@ private const val NOW_MILLIS = 1_784_019_600_000
 /**
  * [DownloadWorker]'s ledger contract: the states it writes, in what order, and what it refuses to
  * do. Robolectric supplies the Android `Context` WorkManager needs; there is no emulator involved
- * (CLAUDE.md §4). The SAF write is [FakeDownloadTarget] (`docs/architecture.md` §11).
+ * (CLAUDE.md §4). The SAF write is [FakeDownloadTarget] (`docs/architecture.adoc` §11).
  */
 @RunWith(RobolectricTestRunner::class)
 class DownloadWorkerTest {
@@ -340,7 +340,7 @@ class DownloadWorkerTest {
     /**
      * Every attempt records, not only the last: the DAO collapses repeats into one entry with a
      * count, and that count is the only way a user can tell "it failed once" from "it has been
-     * failing all night" (`docs/UI.md` §11).
+     * failing all night" (`docs/UI.adoc` §11).
      */
     @Test
     fun `each attempt records, so the store can collapse them into a count`() =
@@ -364,7 +364,7 @@ class DownloadWorkerTest {
     /**
      * A lost folder is a storage problem the user fixes elsewhere, so it is filed under `STORAGE`
      * and its sentence names the fix rather than offering a retry that cannot work
-     * (`docs/architecture.md` §11).
+     * (`docs/architecture.adoc` §11).
      */
     @Test
     fun `a lost download folder is a storage entry that names the fix`() =

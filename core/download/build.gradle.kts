@@ -3,8 +3,8 @@
 // Android library: WorkManager, the SAF write, and the foreground-service notification all need
 // Android APIs. The parts that don't — the HTTP download into the app cache, the tag rewriting, and
 // the pipeline that sequences them — are plain-JVM classes sitting behind the DownloadTarget port
-// (`docs/architecture.md` §11), so they are unit-testable with MockWebServer and a temp directory, with no
-// emulator. See docs/architecture.md §8/§11 for why tagging must happen before the SAF copy.
+// (`docs/architecture.adoc` §11), so they are unit-testable with MockWebServer and a temp directory, with no
+// emulator. See docs/architecture.adoc §8/§11 for why tagging must happen before the SAF copy.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.ksp)

@@ -16,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The undo window (issue #49, `docs/UI.md` §12.3).
+ * The undo window (issue #49, `docs/UI.adoc` §12.3).
  *
  * Its own class because the behaviour is its own: everything here is about *when* a decision becomes
  * durable, and every test moves virtual time. The rest of S2's behaviour lives in
@@ -30,7 +30,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class EpisodeListUndoTest : EpisodeListTestHarness() {
     /**
-     * The heart of UI.md §12.3. A swipe writes **nothing** until its window elapses — not a ledger row,
+     * The heart of UI.adoc §12.3. A swipe writes **nothing** until its window elapses — not a ledger row,
      * not an outbox entry, no work. That is what makes undo honest: a skip becomes a `PLAY` action
      * in an append-only log with no retraction, so the only reliably reversible state is one where
      * the row was never written.

@@ -21,7 +21,7 @@ style:
 #
 # So: ktlintCheck is the single authority on formatting, and detekt's duplicate copies of those
 # rules are off. Everything detekt uniquely contributes (complexity, correctness, naming, its own
-# MaxLineLength) stays on. See docs/dev-environment.md §8.6 — this friction recurred in every tier
+# MaxLineLength) stays on. See docs/dev-environment.adoc §8.6 — this friction recurred in every tier
 # before it was settled here.
 formatting:
   Indentation:

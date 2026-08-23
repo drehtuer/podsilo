@@ -29,7 +29,7 @@ import net.drehtuer.podsilo.core.ui.PodsiloIcon
 import net.drehtuer.podsilo.core.ui.PodsiloIcons
 
 /**
- * S5 (`docs/UI.md` §8). One field, and **no password anywhere** — the whole point of Login Flow v2
+ * S5 (`docs/UI.adoc` §8). One field, and **no password anywhere** — the whole point of Login Flow v2
  * is that the user signs in on their own Nextcloud, in a browser, and the app only ever holds the
  * app password that comes back.
  */
@@ -127,7 +127,7 @@ internal val ConnectUiState.busyLabel: String?
             is ConnectUiState.Phase.ConfirmingAccount -> null
         }
 
-/** Plain language, one sentence, never a stack trace — the table in `docs/UI.md` §8. */
+/** Plain language, one sentence, never a stack trace — the table in `docs/UI.adoc` §8. */
 internal val ConnectError.message: String
     get() =
         when (this) {
@@ -192,7 +192,7 @@ private fun ConnectBody(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 // Input the user can fix, not a condition the app is in — swapping these
-                // two makes a typo look like a system fault (docs/UI.md §18).
+                // two makes a typo look like a system fault (docs/UI.adoc §18).
                 PodsiloIcon(
                     PodsiloIcons.InputError,
                     contentDescription = null,
@@ -209,7 +209,7 @@ private fun ConnectBody(
             // Shown after *Use a different account*, next to the address field the user is about to
             // resubmit — because the useful instruction is what to do in the browser tab that just
             // opened, and repeating the request from here without logging out returns the same
-            // account (`docs/UI.md` §8).
+            // account (`docs/UI.adoc` §8).
             Text(
                 "Log out of Nextcloud in the browser that just opened, then request authorization " +
                     "again to sign in as someone else.",

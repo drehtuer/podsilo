@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import net.drehtuer.podsilo.core.model.port.ThemePreference
 
 /**
- * One seed colour, two schemes, **dynamic colour deliberately off** (`docs/UI.md` §12.7).
+ * One seed colour, two schemes, **dynamic colour deliberately off** (`docs/UI.adoc` §12.7).
  *
  * Material You would make the app look different on every device, which means neither scheme could
  * actually be verified — and this project has no device to verify on at all yet, so a palette that
@@ -38,7 +38,7 @@ private val PodsiloLightScheme =
         onSurface = Color(0xFF14110F),
         surfaceVariant = Color(0xFFEDEAE5),
         // Greyed-out rows use this role rather than an opacity, which would drop the title below
-        // the 4.5:1 contrast floor (docs/UI.md §12.7).
+        // the 4.5:1 contrast floor (docs/UI.adoc §12.7).
         onSurfaceVariant = Color(0xFF57514B),
         background = Color(0xFFFAF9F7),
         onBackground = Color(0xFF14110F),

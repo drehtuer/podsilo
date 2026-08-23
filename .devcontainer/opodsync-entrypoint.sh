@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # ✅ VERIFIED (2026-07-31): runs on first boot, seeds the test user, and Apache
-# comes up serving the gpoddersync API. See docs/journal.md.
+# comes up serving the gpoddersync API. See docs/journal.adoc.
 #
 # Writes opodsync's config on first boot and seeds the test user, so integration
 # tests get working credentials without a human clicking through /register.php.

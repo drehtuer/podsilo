@@ -8,7 +8,7 @@ import net.drehtuer.podsilo.core.model.Feed
 /**
  * Port for the local mirror of the server's subscription list. Implemented in `:core:database`
  * (Room), consumed by `:core:sync`'s `SyncOrchestrator` and `:feature:episodes`'s view models —
- * see `docs/architecture.md` §2 for why this interface lives in Android-free `:core:model` rather
+ * see `docs/architecture.adoc` §2 for why this interface lives in Android-free `:core:model` rather
  * than the Room module.
  */
 interface FeedRepository {

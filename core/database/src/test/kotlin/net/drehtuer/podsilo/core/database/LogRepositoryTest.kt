@@ -207,7 +207,7 @@ class LogRepositoryTest {
         }
 
     /**
-     * `docs/UI.md` §11: *"Never contains the app password, the Basic-auth header, or full URLs with
+     * `docs/UI.adoc` §11: *"Never contains the app password, the Basic-auth header, or full URLs with
      * credentials"*.
      *
      * This used to be a weaker test whose comment said the store "cannot scrub what it is handed"

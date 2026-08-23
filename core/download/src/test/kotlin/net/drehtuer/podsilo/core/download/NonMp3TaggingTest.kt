@@ -26,7 +26,7 @@ import java.nio.file.Files
  * ### How the fixtures were made
  *
  * With ffmpeg, once, on 2026-08-14; the results are committed so nothing in the dev container has to
- * grow an encoder to run these (`docs/backlog.md` said "a few tiny committed fixtures would close it
+ * grow an encoder to run these (`docs/backlog.adoc` said "a few tiny committed fixtures would close it
  * permanently", and this is that). Each is 0.3 s of digital silence and under 4 KB:
  *
  * ```
@@ -167,7 +167,7 @@ class NonMp3TaggingTest(
 
     /**
      * The rule that must not vary by container: a cover the publisher shipped is never replaced
-     * (`docs/architecture.md` §11).
+     * (`docs/architecture.adoc` §11).
      */
     @Test
     fun `artwork the publisher already embedded is never replaced`() {

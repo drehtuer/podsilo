@@ -81,6 +81,6 @@ private fun Episode.toSkippedRow(now: Long): EpisodeLedgerRow =
         lastError = null,
         writtenFileName = null,
         // Snapshotted so the outbox can encode the PLAY action's total/position even if the episode
-        // row is pruned before the push (`docs/architecture.md` §4 and 0002).
+        // row is pruned before the push (`docs/architecture.adoc` §4 and 0002).
         durationSeconds = durationMs?.let { (it / MILLIS_PER_SECOND).toInt() },
     )

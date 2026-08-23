@@ -28,7 +28,7 @@ import org.junit.runner.RunWith
 private const val PULL_DISTANCE_PX = 1_000f
 
 /**
- * **S1 against `docs/UI.md` §4, on a real Compose runtime.**
+ * **S1 against `docs/UI.adoc` §4, on a real Compose runtime.**
  *
  * The same assertions exist under Robolectric, and that is deliberate rather than duplication: three
  * of the bugs found on the author's phone this week were things a Robolectric render agreed with and
@@ -36,7 +36,7 @@ private const val PULL_DISTANCE_PX = 1_000f
  * classpath. A conformance claim about the UI is worth making where the UI actually runs.
  *
  * Each test names the clause of the design document it enforces. If one fails, either the screen
- * drifted or the document did — and the document is canonical (`docs/UI.md`), so the screen moves.
+ * drifted or the document did — and the document is canonical (`docs/UI.adoc`), so the screen moves.
  */
 @RunWith(AndroidJUnit4::class)
 class PodcastListConformanceTest {

@@ -42,7 +42,7 @@ import net.drehtuer.podsilo.core.ui.RowPadding
 import java.time.Instant
 
 /**
- * S4 — settings (`docs/UI.md` §7). A plain scrolling list of grouped rows, reached from S1's gear.
+ * S4 — settings (`docs/UI.adoc` §7). A plain scrolling list of grouped rows, reached from S1's gear.
  *
  * **No Save button**: every control commits on change, so this renders [state] and emits [onEvent]
  * with nothing held locally. The one thing that does not commit immediately is the bulk *mark as
@@ -94,7 +94,7 @@ fun SettingsScreen(
 }
 
 /**
- * Backup and restore of the local database (`docs/UI.md` §7).
+ * Backup and restore of the local database (`docs/UI.adoc` §7).
  *
  * The subtitles name what is actually at stake. Most of the database can be rebuilt — feeds come
  * from Nextcloud, episodes from the RSS — but the ledger is the app's own memory of what has been
@@ -155,7 +155,7 @@ private fun NextcloudGroup(
             onClick = { onEvent(SettingsEvent.LastSyncClicked) },
         )
         // The two directional passes sit under *Last sync*, which already answers "when did this
-        // happen" — so "make it happen, in this direction" belongs beside it (`docs/UI.md` §7).
+        // happen" — so "make it happen, in this direction" belongs beside it (`docs/UI.adoc` §7).
         // Absent entirely when no account is connected, rather than disabled: there is nothing to
         // apply and nowhere to send.
         SettingsRow(
@@ -191,7 +191,7 @@ private fun NextcloudGroup(
 
 /**
  * "10 min ago" alone cannot distinguish "nothing to do" from "three things stuck", which is exactly
- * what a user checking this row wants to know (`docs/UI.md` §7).
+ * what a user checking this row wants to know (`docs/UI.adoc` §7).
  */
 internal fun lastSyncLine(
     nextcloud: NextcloudUi,
@@ -365,7 +365,7 @@ private fun AboutGroup(
     onEvent: (SettingsEvent) -> Unit,
 ) {
     GroupHeader("ABOUT")
-    // `docs/UI.md` §C4.3: the horizontal lockup, flush left on the surface ground, no card and no
+    // `docs/UI.adoc` §C4.3: the horizontal lockup, flush left on the surface ground, no card and no
     // frame. One of only three in-app placements of the mark, and the only one that is purely the
     // app saying what it is.
     PodsiloLockup(modifier = Modifier.padding(horizontal = RowPadding, vertical = LogoGap))

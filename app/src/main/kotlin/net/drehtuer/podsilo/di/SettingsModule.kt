@@ -30,7 +30,7 @@ object SettingsModule {
         @ApplicationContext context: Context,
     ): DataStore<Preferences> = createSettingsDataStore(context)
 
-    /** The real Keystore binding — untested on the JVM by design (`docs/architecture.md` §2). */
+    /** The real Keystore binding — untested on the JVM by design (`docs/architecture.adoc` §2). */
     @Provides
     @Singleton
     fun provideAppPasswordCipher(): AppPasswordCipher = KeystoreAppPasswordCipher()

@@ -19,7 +19,7 @@ import org.junit.Test
  * CLAUDE.md §5/§7 item 7: the subscription mirror is one-way, and the ledger must outlive the feed.
  * When a feed disappears from the server list its cached episodes are pruned but its ledger rows
  * are kept, so a later re-subscribe does not re-expose the back catalogue as "new" and does not
- * re-download it. The whole no-cascade-FK design of the ledger table (`docs/architecture.md` §4)
+ * re-download it. The whole no-cascade-FK design of the ledger table (`docs/architecture.adoc` §4)
  * exists to make this test pass.
  */
 class SubscriptionMirroringTest : RoomTestBase() {

@@ -111,7 +111,7 @@ abstract class BindingsModule {
 
     /**
      * The screens ask "is there a network" before starting a refresh, so an offline pull can answer
-     * instantly rather than timing out against every feed (`docs/UI.md` §12.10).
+     * instantly rather than timing out against every feed (`docs/UI.adoc` §12.10).
      */
     @Binds
     abstract fun bindConnectivityMonitor(monitor: AndroidConnectivityMonitor): ConnectivityMonitor

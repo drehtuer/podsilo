@@ -87,7 +87,7 @@ class TriageWriter(
     /**
      * Marks [episodes] `QUEUED` so the list reflects the decision immediately, before any worker
      * runs. The download itself is enqueued by the caller through `WorkScheduler` — this class never
-     * touches WorkManager (`docs/UI.md` §B0.2).
+     * touches WorkManager (`docs/UI.adoc` §B0.2).
      *
      * **No sync is requested here, and that is not an omission.** `QUEUED` has no outbound action —
      * `toOutboundActions` returns nothing for it, because "I intend to download this" is local state
@@ -129,7 +129,7 @@ class TriageWriter(
             lastError = null,
             writtenFileName = writtenFileName,
             // Snapshotted at write time so the outbox can still build a valid action if the episode
-            // row is pruned before the push (`docs/architecture.md` §4).
+            // row is pruned before the push (`docs/architecture.adoc` §4).
             durationSeconds = durationMs?.let { (it / MILLIS_PER_SECOND).toInt() },
         )
 }

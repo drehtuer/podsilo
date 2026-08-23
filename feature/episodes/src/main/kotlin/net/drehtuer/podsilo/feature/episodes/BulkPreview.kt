@@ -12,7 +12,7 @@ data class FeedBreakdown(
 
 /**
  * What a bulk action *would* do, rendered by the confirmation dialog before anything is written
- * (`docs/UI.md` §5, `docs/decisions/0014`).
+ * (`docs/UI.adoc` §5, `docs/decisions/0014`).
  *
  * The dialog is the safeguard that made bulk download acceptable at all, so this type exists to
  * make "name the count before you write" structural: `DownloadAllRequested` produces a preview and

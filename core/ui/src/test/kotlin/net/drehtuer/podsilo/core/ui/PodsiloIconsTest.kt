@@ -10,7 +10,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * The allow-list in `docs/UI.md` §18, checked rather than trusted.
+ * The allow-list in `docs/UI.adoc` §18, checked rather than trusted.
  *
  * Every icon resolves to a real drawable — the artifact ships `VectorDrawable` XML rather than
  * `ImageVector`s, so a typo'd name is a `0` at runtime and an invisible icon, not a compile error.
@@ -57,7 +57,7 @@ class PodsiloIconsTest {
     @Test
     fun `the allow-list has exactly the icons §18 names`() {
         // 26 rows in the table. A new affordance means adding a row there before adding a glyph.
-        // Was 27 until `server` lost its only call site to the brand lockup (`docs/UI.md` §C4.2).
+        // Was 27 until `server` lost its only call site to the brand lockup (`docs/UI.adoc` §C4.2).
         assertEquals(26, all.size)
     }
 

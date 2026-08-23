@@ -5,7 +5,7 @@ package net.drehtuer.podsilo.core.model.port
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Port for the error log (S8, `docs/UI.md` §11), implemented in `:core:database` over an
+ * Port for the error log (S8, `docs/UI.adoc` §11), implemented in `:core:database` over an
  * `error_log` table.
  *
  * This exists because everything that fails in Podsilo is currently returned as a value

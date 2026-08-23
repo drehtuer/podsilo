@@ -3,10 +3,10 @@
 package net.drehtuer.podsilo.feature.episodes
 
 /**
- * S3 — the episode detail sheet (`docs/UI.md` §B4).
+ * S3 — the episode detail sheet (`docs/UI.adoc` §B4).
  *
  * A **read step inside triage**, reachable for every episode regardless of state, including the
- * de-emphasised ones (`docs/UI.md` §6). It carries the same [EpisodeUi] the row does — so the sheet
+ * de-emphasised ones (`docs/UI.adoc` §6). It carries the same [EpisodeUi] the row does — so the sheet
  * and the row it opened from cannot offer different actions — plus the two things a row has no space
  * for: the full description and where the file went.
  *
@@ -21,7 +21,7 @@ data class EpisodeDetailUiState(
     val descriptionHtml: String,
     val deliveredTo: String? = null,
 ) {
-    /** `null` → no browser row at all, rather than a dead tap (`docs/UI.md` §6). */
+    /** `null` → no browser row at all, rather than a dead tap (`docs/UI.adoc` §6). */
     val episodePageUrl: String? get() = episode.episodePageUrl
 }
 
@@ -46,7 +46,7 @@ sealed interface EpisodeDetailEvent {
 sealed interface EpisodeDetailEffect {
     /**
      * Handed to a Custom Tab by the host. **Not navigation**: the sheet stays open behind it,
-     * because leaving to read show notes is not a triage decision (`docs/UI.md` §6).
+     * because leaving to read show notes is not a triage decision (`docs/UI.adoc` §6).
      */
     data class OpenUrl(
         val url: String,
@@ -57,7 +57,7 @@ sealed interface EpisodeDetailEffect {
         val url: String,
     ) : EpisodeDetailEffect
 
-    /** Deciding closes the sheet (`docs/UI.md` §6); dismissal is the host's to perform. */
+    /** Deciding closes the sheet (`docs/UI.adoc` §6); dismissal is the host's to perform. */
     data object Close : EpisodeDetailEffect
 
     data object OpenErrorLog : EpisodeDetailEffect

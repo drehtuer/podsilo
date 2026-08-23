@@ -10,7 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * S2's feed-error banner (`docs/UI.md` §5) — a state field that was set by nobody and read by
+ * S2's feed-error banner (`docs/UI.adoc` §5) — a state field that was set by nobody and read by
  * nobody, so a feed that would not load was silent on the screen that lists it.
  *
  * Its own class because the rule has real content: the banner shows an error **newer than the last

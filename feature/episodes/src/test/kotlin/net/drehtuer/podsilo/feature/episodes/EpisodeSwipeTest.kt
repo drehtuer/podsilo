@@ -24,7 +24,7 @@ import java.time.ZoneOffset
 private const val SWIPE_MS = 400L
 
 /**
- * The swipe gesture (`docs/UI.md` §5, §12.1).
+ * The swipe gesture (`docs/UI.adoc` §5, §12.1).
  *
  * `SwipeCommitted` was declared, handled by the view model, and emitted by nothing — the third
  * affordance in this project specified and wired at both ends with no gesture in between, after

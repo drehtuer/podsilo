@@ -6,7 +6,7 @@ package net.drehtuer.podsilo.core.model
  * "The one table that must never be lost" (CLAUDE.md §5) — the durable record of what has already
  * been handled for an episode, keyed by [episodeKey] and outliving the disposable [Episode] cache
  * row it was created from (a feed disappearing from the server deletes its [Episode] rows but
- * never its [EpisodeLedgerRow]s, see `docs/architecture.md` §5's subscription-mirroring rule).
+ * never its [EpisodeLedgerRow]s, see `docs/architecture.adoc` §5's subscription-mirroring rule).
  *
  * [feedUrl], [enclosureUrl], and [durationSeconds] are denormalised here (not looked up via
  * [Episode] at push time) so that a POST retry after a feed is unsubscribed can still build a
@@ -21,7 +21,7 @@ package net.drehtuer.podsilo.core.model
  * @property syncedToServer The outbox flag: `false` on every local write, flipped to `true` only
  *   on a confirmed 2xx POST. `getUnsynced()` is `WHERE syncedToServer = 0`.
  * @property lastErrorCause Classified by whoever produced the failure, not re-derived from
- *   [lastError]'s wording. A screen needs it to honour `docs/UI.md` §12.11: a `FOLDER_UNAVAILABLE`
+ *   [lastError]'s wording. A screen needs it to honour `docs/UI.adoc` §12.11: a `FOLDER_UNAVAILABLE`
  *   row must offer *Choose folder*, never a bare *Retry*, and string-matching a message to work that
  *   out would fail silently in the unsafe direction the first time the wording changed.
  * @property lastErrorRetryable The pipeline's own verdict on whether another attempt could help.

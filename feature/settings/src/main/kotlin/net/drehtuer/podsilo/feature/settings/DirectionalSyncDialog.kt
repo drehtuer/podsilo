@@ -16,7 +16,7 @@ import androidx.compose.runtime.Composable
  *
  * **The pull names none**, and that is a deliberate limitation rather than an oversight. The number
  * worth showing would be *how many of these change anything here*, which is only knowable after
- * fetching the log — and a view model does not touch the network (`docs/UI.md` §B0.3). Saying what
+ * fetching the log — and a view model does not touch the network (`docs/UI.adoc` §B0.3). Saying what
  * the operation can and cannot do is the honest substitute, and it is a shorter promise than the
  * push's: the pull only ever marks episodes handled.
  */

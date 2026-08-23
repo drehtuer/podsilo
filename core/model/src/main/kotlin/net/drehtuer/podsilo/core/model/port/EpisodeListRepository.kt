@@ -14,7 +14,7 @@ import net.drehtuer.podsilo.core.model.EpisodeLedgerRow
  * durable "already handled" record and its outbox, this one owns the joins the UI renders. Keeping
  * every query in this interface together is the point — they must share one definition of
  * "undecided", or a count badge could promise a different number than the list it opens shows
- * (`docs/UI.md` §12.5).
+ * (`docs/UI.adoc` §12.5).
  */
 interface EpisodeListRepository {
     /**
@@ -99,7 +99,7 @@ interface EpisodeListRepository {
      *
      * Returns [Episode]s rather than keys because the caller has to build ledger rows from them, and
      * a row needs the feed URL, enclosure URL and duration snapshotted at write time
-     * (`docs/architecture.md` §4). It deliberately does not write anything itself: *what* state to write
+     * (`docs/architecture.adoc` §4). It deliberately does not write anything itself: *what* state to write
      * is the caller's decision — `SKIPPED` for the mark-old rule, `QUEUED` for *Download all*.
      */
     suspend fun undecided(scope: BulkScope): List<Episode>

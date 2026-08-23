@@ -21,7 +21,7 @@ import net.drehtuer.podsilo.core.ui.MinTouchTarget
 import net.drehtuer.podsilo.core.ui.RowPadding
 
 /**
- * The first-run checklist (`docs/UI.md` §4). Steps are shown in order with a live ✓/○; step 3 is
+ * The first-run checklist (`docs/UI.adoc` §4). Steps are shown in order with a live ✓/○; step 3 is
  * explicitly optional, which is why it never keeps the card open.
  */
 @Composable

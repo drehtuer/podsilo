@@ -21,7 +21,7 @@ import net.drehtuer.podsilo.core.model.port.LogRepository
 private const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * S8 (`docs/UI.md` §B6b).
+ * S8 (`docs/UI.adoc` §B6b).
  *
  * Nothing here leaves the device unless the user taps Copy or Share — no telemetry, per README.
  */

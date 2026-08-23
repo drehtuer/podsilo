@@ -24,7 +24,7 @@ import java.time.ZoneOffset
  * on every attempt for four hours was indistinguishable from one that never ran (issue #60).
  *
  * These assert the *contract* of the entries, not their wording: a category, a plain sentence that
- * is not the exception's own text, and the technical half kept separate (`docs/UI.md` §11).
+ * is not the exception's own text, and the technical half kept separate (`docs/UI.adoc` §11).
  */
 class SyncFailureLoggingTest {
     private val fixedClock: Clock = Clock.fixed(Instant.parse("2026-08-13T10:00:00Z"), ZoneOffset.UTC)
@@ -48,7 +48,7 @@ class SyncFailureLoggingTest {
             val outcome = orchestrator(FakeGpodderClient()).sync()
 
             assertEquals(SyncOutcome.Success, outcome)
-            assertTrue("a failure log is not a journal (`docs/UI.md` §11)", log.recorded.isEmpty())
+            assertTrue("a failure log is not a journal (`docs/UI.adoc` §11)", log.recorded.isEmpty())
         }
 
     @Test

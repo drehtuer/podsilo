@@ -117,7 +117,7 @@ class SafDownloadTarget(
  * which the caller handles identically. Anything else is a real bug and propagates.
  *
  * Nothing is swallowed: every branch carries its message into a [DownloadFolderUnavailableException]
- * inside a `Result`, which the pipeline reports as a non-retryable failure (`docs/architecture.md` §11).
+ * inside a `Result`, which the pipeline reports as a non-retryable failure (`docs/architecture.adoc` §11).
  */
 private inline fun <T> runCatchingSaf(block: () -> T): Result<T> =
     try {

@@ -17,7 +17,7 @@ import org.robolectric.RobolectricTestRunner
  * Exercises the full bytes -> [ParsedFeed] pipeline against static fixtures in
  * `src/test/resources/feeds/` -- no network call anywhere in this class (CLAUDE.md section 7 item
  * 2). Robolectric is required for rssparser's Android target to resolve an
- * `org.xmlpull.v1.XmlPullParserFactory` implementation -- see `docs/architecture.md` §7.
+ * `org.xmlpull.v1.XmlPullParserFactory` implementation -- see `docs/architecture.adoc` §7.
  */
 @RunWith(RobolectricTestRunner::class)
 class FeedXmlParserTest {
@@ -152,7 +152,7 @@ class FeedXmlParserTest {
     fun `bytes fetched over HTTP feed straight into the parser -- the two layers compose`() =
         runBlocking {
             // Lives here rather than in FeedFetcherTest because it drives rssparser, which needs the
-            // Robolectric runner (`docs/architecture.md` §7). Proves FeedFetcher hands back bytes the parser
+            // Robolectric runner (`docs/architecture.adoc` §7). Proves FeedFetcher hands back bytes the parser
             // accepts unmodified — no intermediate decoding step is missing between the two layers.
             val server = MockWebServer()
             server.start()

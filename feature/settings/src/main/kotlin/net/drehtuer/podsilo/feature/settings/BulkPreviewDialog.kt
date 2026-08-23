@@ -45,7 +45,7 @@ internal fun BulkPreviewDialog(
                 )
                 Text(
                     // Stated plainly rather than as a warning: sharing triage state across clients
-                    // is the point of the app, not a side effect (docs/UI.md §7).
+                    // is the point of the app, not a side effect (docs/UI.adoc §7).
                     "Played state is sent to Nextcloud, so your other clients see it too.",
                     style = MaterialTheme.typography.bodySmall,
                 )

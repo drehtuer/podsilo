@@ -12,7 +12,7 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * S1's checklist example goes through the real engine, so a preview that looks right means downloads
- * will be named right (`docs/UI.md` §4). A regression test because the first run on a device showed
+ * will be named right (`docs/UI.adoc` §4). A regression test because the first run on a device showed
  * the "—" fallback instead of a filename.
  */
 @RunWith(RobolectricTestRunner::class) // The fallback path logs, and android.util.Log is not mocked.

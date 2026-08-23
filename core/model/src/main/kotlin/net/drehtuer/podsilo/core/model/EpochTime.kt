@@ -7,7 +7,7 @@ import java.time.Instant
 
 /**
  * The single conversion between the `Long` epoch numbers every stored type uses and the
- * `java.time` values the UI renders (`docs/architecture.md` §5).
+ * `java.time` values the UI renders (`docs/architecture.adoc` §5).
  *
  * Storage keeps `Long`s — no Room type converters, no migration. UI state classes carry [Instant]
  * and [Duration], which is free at this project's `minSdk` and is already the time vocabulary of
@@ -44,7 +44,7 @@ object EpochTime {
     /**
      * `Episode.durationMs` as a [Duration]. Null in, null out: `itunes:duration` is unreliable and
      * a missing duration renders as no duration at all, never as a fabricated or zero one
-     * (`docs/UI.md` §5).
+     * (`docs/UI.adoc` §5).
      */
     fun durationOfMillis(millis: Long?): Duration? = millis?.let(Duration::ofMillis)
 }

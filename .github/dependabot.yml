@@ -21,7 +21,7 @@
 #     php:8.3-apache). Both are rolling tags that already receive patches on
 #     `docker pull`, so the only PR Dependabot could open is the major/minor jump
 #     — 24.04 -> 26.04 — which is exactly the change the LTS pin exists to
-#     prevent. Dev-container images also ship in nothing (docs/dev-environment.md).
+#     prevent. Dev-container images also ship in nothing (docs/dev-environment.adoc).
 #   - Dev container features: devcontainer.json declares none, on purpose.
 #   - The Gradle wrapper. Dependabot does not update gradle-wrapper.properties in
 #     any ecosystem; `./gradlew wrapper --gradle-version=x.y` stays a manual step.

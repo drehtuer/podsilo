@@ -11,7 +11,7 @@ import androidx.compose.ui.res.painterResource
 import com.composables.icons.lucide.R as LucideR
 
 /**
- * The icon allow-list from `docs/UI.md` §18, as code.
+ * The icon allow-list from `docs/UI.adoc` §18, as code.
  *
  * **An icon not named here has no call site.** That is the rule the doc states, and putting the
  * mapping in one object is what makes it enforceable: adding an affordance means adding a property
@@ -20,10 +20,10 @@ import com.composables.icons.lucide.R as LucideR
  * Lucide only, one weight everywhere. Never mixed with Material Symbols: two icon families in one
  * app read as an unfinished migration.
  *
- * **What the artifact actually ships** (`docs/UI.md` §18 assumed otherwise, and is amended):
+ * **What the artifact actually ships** (`docs/UI.adoc` §18 assumed otherwise, and is amended):
  * `com.composables:icons-lucide-android` is a pack of **`VectorDrawable` XML resources**, not
  * `ImageVector` objects — its `classes.jar` is empty. So these are drawable ids resolved with
- * `painterResource`, which is why they are `Int`s and not `ImageVector`s. Everything UI.md §18
+ * `painterResource`, which is why they are `Int`s and not `ImageVector`s. Everything UI.adoc §18
  * decided still holds; only the call site differs.
  */
 object PodsiloIcons {
@@ -65,7 +65,7 @@ object PodsiloIcons {
      * **Handled elsewhere** — the state the user did not create here.
      *
      * Deliberately not [Check]: rendering it as the same ✓ as a download this device performed would
-     * claim a decision the user did not make, and the affordances differ (`docs/UI.md` §12.6).
+     * claim a decision the user did not make, and the affordances differ (`docs/UI.adoc` §12.6).
      */
     @DrawableRes val HandledRemotely: Int = LucideR.drawable.lucide_ic_cloud_check
 
@@ -96,7 +96,7 @@ object PodsiloIcons {
     @DrawableRes val Offline: Int = LucideR.drawable.lucide_ic_wifi_off
 
     // `server` was here, for S1's not-configured empty state. That state now leads with the brand
-    // lockup instead (`docs/UI.md` §C4.2), leaving the glyph with no call site — and this object is
+    // lockup instead (`docs/UI.adoc` §C4.2), leaving the glyph with no call site — and this object is
     // an allow-list, not an inventory, so an entry nobody renders is an invitation to find it a job.
     // The brand mark is deliberately *not* added in its place: it is not a glyph. See PodsiloLogo.kt.
 
@@ -125,7 +125,7 @@ object PodsiloIcons {
  * [contentDescription] is **required and nullable on purpose**: `null` is the correct answer for an
  * icon beside its own label, and stating it at every call site is what stops a decorative icon from
  * being announced twice and an icon-only control from being announced not at all
- * (`docs/UI.md` §12.12).
+ * (`docs/UI.adoc` §12.12).
  */
 @Composable
 fun PodsiloIcon(

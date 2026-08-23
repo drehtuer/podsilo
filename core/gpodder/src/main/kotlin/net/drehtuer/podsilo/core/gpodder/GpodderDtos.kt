@@ -36,7 +36,7 @@ internal data class EpisodeActionPageDto(
  *   `null` when mapping to the domain type.
  * @property timestamp ISO-8601. `nextcloud-gpodder` emits an offset (PHP `format("c")` ->
  *   `2021-10-06T11:49:23+00:00`), `opodsync` emits a trailing `Z`, and the (stale) API README
- *   shows a bare local-time form. All three are parsed -- see `docs/architecture.md` §6.
+ *   shows a bare local-time form. All three are parsed -- see `docs/architecture.adoc` §6.
  */
 @Serializable
 internal data class EpisodeActionDto(

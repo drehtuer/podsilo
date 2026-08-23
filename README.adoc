@@ -1,0 +1,154 @@
+= Podsilo
+:idprefix:
+:idseparator: -
+
+image:https://github.com/drehtuer/podsilo/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsilo/actions/workflows/ci.yml]
+image:https://github.com/drehtuer/podsilo/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main[CodeQL,link=https://github.com/drehtuer/podsilo/security/code-scanning]
+image:https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver[Release,link=https://github.com/drehtuer/podsilo/releases/latest]
+link:LICENSE[image:https://img.shields.io/badge/licence-GPL--3.0--or--later-blue[Licence: GPL-3.0-or-later\]]
+
+The *CI* badge covers eight checks -- yamllint, shellcheck, asciidoctor, ktlint, detekt, Android
+lint, the Tier 1 unit tests and both APK builds -- and the whole workflow is one job, so a green badge
+means all eight passed and a red one means at least one did not. The first three lint the languages
+Gradle cannot see:
+the YAML that carries the release signing and the dependency policy, and the bash scripts that set up
+the container and drive a real phone. Rules live in `.yamllint.yml` and `.shellcheckrc`, and the dev
+container carries both tools, so the same two commands run locally.
+
+Android lint is the sixth, and it asks a different question from the two Kotlin
+linters: they read the code as text and as a syntax tree, it knows the platform -- API levels,
+manifest merging, SAF, WorkManager. It joined once it was green in every module, which took removing
+one false positive it could not have resolved on its own (`core/download/build.gradle.kts` says
+which, and names the two tests that assert the same thing for real).
+
+The badge deliberately says nothing about the device tests: those live in `src/androidTest/` and no
+hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
+why an emulator is not added there).
+
+The *CodeQL* badge is GitHub code scanning, on default setup rather than a workflow file in this
+repository -- which is why its badge URL points at `github-code-scanning/codeql` and not at
+`.github/workflows/`. It analyses `java-kotlin` and `actions` on every push and pull request, plus
+weekly. Green means the analysis ran, *not* that it found nothing; the alert count lives behind the
+badge on the https://github.com/drehtuer/podsilo/security/code-scanning[code scanning page].
+
+The repository's other security checks -- *Dependabot* alerts and security updates, *secret
+scanning* and its push protection -- have no badge, and cannot have one. Their state is private to
+the repository even though the code is public, so GitHub publishes no endpoint for them and no
+third-party badge service can read them either. xref:SECURITY.adoc[`SECURITY.md`] records what they cover.
+
+An Android *podcast catcher* that downloads episodes into a folder you control -- and deliberately
+does not play them.
+
+Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
+consumed by whatever audio player you actually like.
+
+____
+*Status: https://github.com/drehtuer/podsilo/releases/latest[v0.7.0 released] -- the app works
+end to end, and this release is about being able to take a decision back.* Subscription
+mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
+are built and tested (819 JVM tests, green), and all eight screens in `docs/UI.adoc` render and are
+reachable. `podsilo-0.7.0.apk` is a signed, minified release build; sideload it on your own device.
+
+*Activity now lists what you decided, not just what is downloading.* _Mark as played_ holds its
+decision for five seconds and is then silent, so a mis-swipe was unrecoverable in practice -- not
+because the state could not be changed back, but because there was no way to find out _which_
+episode it was. S7's new *Recent actions* group is that list, with _Mark as unplayed_ beside each
+decision it can still take back.
+
+*Two things that made the app feel broken are gone.* A swipe meant for the system -- back from
+either screen edge, or the app-switch drag -- no longer lands on an episode row and marks it played.
+And the episode list no longer freezes during a download: its rows were being re-projected on the
+main thread once a second for the length of every download, and on every triage decision.
+
+*A bad address now says what is wrong with it.* A space in the server address used to report as
+"can't reach that address" -- the same words a real network failure gets -- which sends you to look
+at your network for a typo. It is now named while you type, before anything is contacted.
+
+*Verified on real hardware against a real Nextcloud* (2026-08-23, Pixel 10a / Android 17): the
+device test set is *61 tests, 0 failed, 0 skipped*, and the two fixes above were driven on the
+phone that reported them -- an edge swipe now goes to the system, and a real download measured
+*3 % janky frames* while scrolling a 2,468-episode library. See
+xref:docs/dev-environment.adoc[`docs/dev-environment.adoc`] §6.
+____
+
+== The idea
+
+Podsilo follows the podcast subscriptions stored in a self-hosted *Nextcloud* instance (via the
+https://github.com/thrillfall/nextcloud-gpodder[gpoddersync] app) and lists their episodes for
+manual triage. For each new episode you choose *download* or *skip* -- nothing is ever downloaded
+automatically, and nothing is downloaded twice.
+
+That last part is the app's central job. Every download emits a `DOWNLOAD` action and every skip
+emits a `PLAY` action back to the server, so an episode you have handled here never shows up as new
+again -- not on this device, and not in RePod or AntennaPod on another one.
+
+Downloaded files are renamed and re-tagged to a configurable template
+(`Der Podcast/20260714_Warum-Hamburg-immer-regnet.mp3`), because the filenames in someone else's
+player are the entire user experience of a download. Feeds are inconsistent about this; Podsilo
+isn't.
+
+== What it is not
+
+* *Not a player.* No playback, no playlists, no speed control.
+* *Not a feed manager.* The subscription list is read-only -- you add and remove feeds in Nextcloud.
+There is no add-feed UI and never will be.
+* *Not automatic.* Nothing is ever downloaded that you didn't ask for. No auto-download rules, no
+background triage, nothing queued by a sync or a refresh. You can tell it to fetch a whole
+podcast's worth of undecided episodes in one go -- that's a command you issue, not a rule that runs
+behind you. Sync works the same way: there is no periodic pass, so state moves between the phone
+and Nextcloud when you pull to refresh, press _Sync now_, or make a decision -- never on a timer.
+* *Not a file manager.* Once a file lands in your folder it belongs to you and your player.
+Podsilo does not delete it, track it, or care whether it still exists.
+
+Personal project, single user, no cloud service, no telemetry, no ads.
+
+== Technologies
+
+Kotlin, Jetpack Compose and Material 3 on the surface; Room, WorkManager, DataStore, Hilt and
+Retrofit/OkHttp underneath. Feeds are parsed with
+https://github.com/prof18/RSS-Parser[rssparser], audio tags rewritten with the Android-compatible
+https://github.com/Kaned1as/jaudiotagger[jaudiotagger fork], and downloads written through the
+Storage Access Framework so you can point them at an SD card. Both library choices deviate from the
+first pick, and xref:docs/architecture.adoc[`docs/architecture.adoc`] §7 and §11 say why -- as does the
+decision to add no date-time library at all.
+
+The codebase is split into small modules (`:core:model`, `:core:feed`, `:core:naming`,
+`:core:download`, `:core:gpodder`, `:core:sync`, `:feature:*`) so the interesting logic -- sync
+reconciliation and filename generation above all -- is plain-JVM testable without an emulator.
+
+A guiding rule: *use existing libraries, don't invent replacements.* No hand-rolled XML parser, no
+hand-written ID3 frames, no bespoke retry logic.
+
+== Development
+
+Development happens in a Docker dev container (JDK 17 + Android SDK) on Windows/WSL2. Tests come in
+three tiers: JVM unit tests as the default and main workload, a headless emulator in the container
+for instrumented runs, and a real device -- over USB or wireless debugging -- driven from the container
+for everything a device has to answer for. Sync is tested against a disposable
+https://codeberg.org/kd2/opodsync[opodsync] server, never against a real Nextcloud.
+
+Setup instructions are in xref:docs/dev-environment.adoc[`docs/dev-environment.adoc`], which is also honest
+about which tiers have actually been run -- all three have, and its status table says what each run
+proved and what is still unverified. The module design, schema and sync semantics are in
+xref:docs/architecture.adoc[`docs/architecture.adoc`]; the whole of the UI -- the screen design, the Compose
+seam it binds to, and the brand mark -- is in xref:docs/UI.adoc[`docs/UI.adoc`].
+
+Five documents, and that is deliberate: `architecture.adoc` and `UI.adoc` are the two references,
+xref:docs/backlog.adoc[`docs/backlog.adoc`] holds what is not being built,
+xref:docs/third-party.adoc[`docs/third-party.adoc`] tracks licences, and
+xref:docs/journal.adoc[`docs/journal.adoc`] keeps a running log -- this project doubles as an experiment in
+agent-driven development, so the process is recorded alongside the result.
+link:docs/decisions/[`docs/decisions/`] keeps only the decisions that still constrain the code and
+cannot be re-derived from the two references; everything else was folded into the section that
+governs it.
+
+Two further markdown files sit outside `docs/` because they are addressed to the agent rather than
+to a reader: xref:.claude/CLAUDE.adoc[`.claude/CLAUDE.md`] is the standing brief every session starts
+from -- scope, the non-goals, the mandated libraries, the definition of done -- and
+xref:.claude/skills/run-podsilo/SKILL.adoc[`.claude/skills/run-podsilo/SKILL.md`] documents the driver
+that boots the headless emulator, builds and installs the app, seeds it with podcasts, and taps
+through it by on-screen text.
+
+== Licence
+
+GPL-3.0-or-later.

@@ -41,7 +41,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * S8 — the error log (`docs/UI.md` §11).
+ * S8 — the error log (`docs/UI.adoc` §11).
  *
  * Read-only and device-local. Every entry leads with a **plain-language sentence**; the technical
  * half is collapsed behind *show technical detail* and is what gets pasted into a bug report.
@@ -67,7 +67,7 @@ fun ErrorLogScreen(
                 },
                 actions = {
                     // Disabled, not hidden, when the log is empty — the affordance stays where the
-                    // user learned it (docs/UI.md §11).
+                    // user learned it (docs/UI.adoc §11).
                     IconButton(
                         onClick = { onEvent(ErrorLogEvent.CopyAllClicked) },
                         enabled = state.canClear,
@@ -182,11 +182,11 @@ private fun EntryRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // A user-fixable input problem, or a condition the app is in — never interchangeable
-            // (docs/UI.md §18).
+            // (docs/UI.adoc §18).
             PodsiloIcon(entry.category.icon, contentDescription = null)
             Text(entry.header(zone), style = MaterialTheme.typography.labelMedium)
         }
-        // The plain sentence first: it is what the user reads (docs/UI.md §11).
+        // The plain sentence first: it is what the user reads (docs/UI.adoc §11).
         Text(entry.message, style = MaterialTheme.typography.bodyMedium)
         entry.subtitle()?.let {
             Text(
@@ -246,7 +246,7 @@ private val ENTRY_FORMAT = DateTimeFormatter.ofPattern("dd MMM HH:mm")
 private val SHORT_FORMAT = DateTimeFormatter.ofPattern("dd MMM HH:mm")
 
 /**
- * Clearing always confirms (`docs/UI.md` §11): the dialog names the count and says the log is
+ * Clearing always confirms (`docs/UI.adoc` §11): the dialog names the count and says the log is
  * device-local, because there is no copy anywhere else and this is not undoable.
  */
 @Composable

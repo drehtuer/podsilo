@@ -3,7 +3,7 @@
 package net.drehtuer.podsilo.feature.settings
 
 /**
- * S5 — the Nextcloud connection dialog (`docs/UI.md` §B5).
+ * S5 — the Nextcloud connection dialog (`docs/UI.adoc` §B5).
  *
  * @property host what the user typed, **without a scheme**: the field renders a fixed `https://`
  *   prefix, and a pasted scheme is stripped rather than rejected.
@@ -24,7 +24,7 @@ data class ConnectUiState(
 
         data object RequestingFlow : Phase
 
-        /** The field is read-only and Cancel aborts the poll (`docs/UI.md` §8). */
+        /** The field is read-only and Cancel aborts the poll (`docs/UI.adoc` §8). */
         data object AwaitingAuthorization : Phase
 
         /** The authenticated `GET /subscriptions`. Success is not claimed before this returns 200. */
@@ -54,7 +54,7 @@ data class ConnectUiState(
     val confirming: Phase.ConfirmingAccount? get() = phase as? Phase.ConfirmingAccount
 }
 
-/** Each maps to one plain-language sentence — never a stack trace (`docs/UI.md` §8). */
+/** Each maps to one plain-language sentence — never a stack trace (`docs/UI.adoc` §8). */
 enum class ConnectError {
     /**
      * The address contains a space — its own case because it is the one typo a phone keyboard makes
@@ -106,7 +106,7 @@ sealed interface ConnectEvent {
 }
 
 sealed interface ConnectEffect {
-    /** A Custom Tab, opened by the host — `docs/architecture.md` §2 keeps `:core:gpodder` Android-free. */
+    /** A Custom Tab, opened by the host — `docs/architecture.adoc` §2 keeps `:core:gpodder` Android-free. */
     data class OpenBrowser(
         val url: String,
     ) : ConnectEffect

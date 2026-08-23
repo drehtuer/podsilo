@@ -21,7 +21,7 @@ interface EpisodeLedgerDao {
     /**
      * One transaction and one emission for a bulk triage write. `@Upsert` on a list is already
      * transactional in Room; the port's contract is that observers see the whole batch at once, not
-     * 412 intermediate list states (`docs/UI.md` §7).
+     * 412 intermediate list states (`docs/UI.adoc` §7).
      */
     @Upsert
     suspend fun upsertAll(rows: List<EpisodeLedgerEntity>)

@@ -91,7 +91,7 @@ class EpisodeDetailViewModelTest {
     fun `the sheet opens for a skipped episode too, and offers download anyway`() =
         runTest {
             // "Reachable for every episode regardless of state, including greyed-out ones"
-            // (docs/UI.md §6) — an explicit requirement, so it gets an explicit test.
+            // (docs/UI.adoc §6) — an explicit requirement, so it gets an explicit test.
             episodes.seed(sampleEpisode())
             ledger.seedRow(ledgerRow("e1", state = LedgerState.SKIPPED))
 
@@ -162,7 +162,7 @@ class EpisodeDetailViewModelTest {
         }
 
     /**
-     * `docs/UI.md` §B7's first row, which nothing in the app could satisfy before issue
+     * `docs/UI.adoc` §B7's first row, which nothing in the app could satisfy before issue
      * #47: `DownloadWorker` never published progress and no screen observed any, so a running
      * download drew the indeterminate bar from start to finish.
      */
@@ -250,7 +250,7 @@ class EpisodeDetailViewModelTest {
                 assertEquals(false, written.syncedToServer)
 
                 assertEquals(EpisodeDetailEffect.ShowMessage(SnackbarText.BulkApplied(1)), awaitItem())
-                // Deciding closes the sheet (docs/UI.md §6).
+                // Deciding closes the sheet (docs/UI.adoc §6).
                 assertEquals(EpisodeDetailEffect.Close, awaitItem())
             }
         }
@@ -259,7 +259,7 @@ class EpisodeDetailViewModelTest {
     fun `opening the episode page does not close the sheet`() =
         runTest {
             // Leaving to read show notes is not a triage decision, and coming back must not cost the
-            // user their place (docs/UI.md §6).
+            // user their place (docs/UI.adoc §6).
             episodes.seed(sampleEpisode(link = "https://example.org/episodes/1"))
             val viewModel = viewModel()
             viewModel.state.test { awaitItem() ?: awaitItem() }

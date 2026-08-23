@@ -26,7 +26,7 @@ private const val MAX_ATTEMPTS = 5
 /**
  * The thin `CoroutineWorker` around `:core:sync`'s [SyncOrchestrator]. It lives in `:app` rather
  * than `:core:sync` for one reason: `androidx.work` is an Android dependency and `:core:sync` must
- * stay plain-JVM testable (`docs/architecture.md` §2). Everything interesting — order of
+ * stay plain-JVM testable (`docs/architecture.adoc` §2). Everything interesting — order of
  * operations, reconciliation, the outbox — is in the orchestrator and tested without Android.
  */
 @HiltWorker

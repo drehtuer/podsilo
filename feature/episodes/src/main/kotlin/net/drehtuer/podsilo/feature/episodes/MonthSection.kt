@@ -11,7 +11,7 @@ data class YearMonth(
 )
 
 /**
- * One sticky header and the run of rows under it (`docs/UI.md` §5).
+ * One sticky header and the run of rows under it (`docs/UI.adoc` §5).
  *
  * @property label `null` is the trailing *Date unknown* group. Undated episodes are still fully
  *   triageable, so they get a group rather than being hidden or given an invented date.
