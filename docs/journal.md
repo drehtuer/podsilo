@@ -3,6 +3,14 @@
 Running log of agent-driven work sessions: what was attempted, what worked, what didn't, and what
 needed human correction. Newest entries at the bottom.
 
+**Entries name files as they were at the time, and several no longer exist.** `TODO.md` and
+`HANDOVER.md` were retired once their work landed; `docs/UI_interface.md` and `docs/logo.md` became
+Parts B and C of `docs/UI.md`; 14 of the 21 ADRs were folded into the sections that govern them
+(2026-08-13, commit `7a9545a` — `docs/architecture.md` §12 lists where each rule now lives, and
+`docs/TODO.md` followed on 2026-08-14 in `4ea470a`). Those citations were correct when they were
+written and are deliberately left alone: a log edited to match the present is not a log. Anything
+cited here can be recovered from this repository's history.
+
 ---
 
 ## 2026-07-30 — Dev container skeleton
@@ -5334,3 +5342,93 @@ download came out as `… (2).mp3`. The collision suffixing was right; the clean
 
 `./gradlew test` green, exit 0. No app code changed — the driver is agent tooling and nothing in the
 app depends on it.
+
+---
+
+## 2026-08-22 — the documents' own links, and what a finished tracker still claims
+
+**Attempted:** two things the author asked in one go — check that every markdown file in the
+repository is reachable, and fix documents that still point at files which no longer exist. Then a
+question rather than an instruction: can the documentation be compacted?
+
+### Reachability
+
+Every `.md` outside `build/` was checked for an inbound markdown *link*, not a mention. Three had
+none: `docs/journal.md`, `.claude/CLAUDE.md` and `.claude/skills/run-podsilo/SKILL.md`. The journal
+was the interesting one — the README's own "five documents" sentence names it in backticks, so it
+read as covered while being unreachable by clicking. All three are now linked from the README; the
+two under `.claude/` got their own short paragraph, because they are addressed to the agent rather
+than to a reader and lumping them in with `docs/` would have made the "five documents" claim false.
+
+The 13 ADRs were already reachable through `architecture.md` §12, and `third-party.md` through
+`SECURITY.md`. Nothing was orphaned in `docs/decisions/`.
+
+### Dangling references
+
+Less than feared, and concentrated in one place. `docs/UI.md` still cited `TODO 4b` / `TODO 4c` as
+requirement sources, and its §B9 still *recommended* where S1/S7/S8 should live — a recommendation
+the code took eleven days ago. Fixed to say what was built. The `Tier 4a/4b/4c` vocabulary appears
+18 times across the two references and had no definition anywhere once `docs/TODO.md` was retired;
+architecture.md §13 now defines it in three lines rather than 18 edits pretending it never existed.
+
+`docs/journal.md` was **not** rewritten. It cites `TODO.md`, `HANDOVER.md`, `UI_interface.md`,
+`logo.md` and 14 deleted ADRs throughout, and the August 13 consolidation had already ruled on this:
+a log edited to match the present is not a log. What it lacked was a reader landing at line 1 knowing
+that — the disclaimer sat 3,900 lines in, inside the entry that caused it. It is now in the header,
+with the two commits that moved things.
+
+### The thing a finished tracker keeps claiming
+
+`architecture.md` §13 is the build-order tracker, and every box in it has been ticked for a week. It
+still said `SafDownloadTarget` was unrun, that the foreground-service notification "has never been
+displayed", and — in bold, as the section's closing sentence — that **nothing has ever run against a
+real Nextcloud and no episode has been downloaded by the running app**. All three were false, two of
+them since 2026-08-02, and `dev-environment.md` §1 has recorded the contrary the whole time.
+
+This is exactly the fault the August 13 consolidation fixed once, in the same section, and it came
+back within nine days. The reason is structural rather than careless: §13 kept its own status prose
+next to a register that keeps the same status. So the fix is not just to correct the sentences but to
+stop keeping the second copy — §13 now points at `dev-environment.md` §1 and says why, naming the
+error it produced. Same for the Tier 1 test count, which was live in three documents at two different
+values (README 796, architecture 502, dev-environment 502). Verified by running it: **796 tests, 0
+failures, 3 skipped**, and dev-environment §1 is now the single row that carries the number.
+
+`./gradlew ktlintCheck detekt test` green, exit 0. No code changed.
+
+### The compaction, which the author approved
+
+Roughly 240 lines across `UI.md` §13/§14/§15/§B8 and `architecture.md` §12 were design-*process*
+artifacts: coverage checklists that passed, gap lists whose gaps are filled, and a redirect table for
+ADRs whose readers had been repointed in the same commit that deleted them. §14 was the clearest
+case — it restated ADRs 0012/0013/0014 and then said, in writing, that the ADR wins where the two
+differ. A documented tiebreak is a drift that has already been conceded.
+
+Asked, because these are also the two canonical references and the provenance of why the UI has
+eight screens; the author chose the fuller cut. What went, and what was kept in each:
+
+- **§13** (43 → 15 lines). The 40-row coverage table is gone; the conclusion it existed to reach —
+  eight screens against CLAUDE.md §10's original two destinations, and which three are `[gap]` and
+  why — is now prose.
+- **§14** (93 → 40). Index table kept, three restatements replaced by pointers. The subsection
+  headings `14.1/14.2/14.3` were **deliberately kept**, because `EpisodeListViewModel.kt`, its test
+  and ADRs 0012/0013/0014 all cite those anchors; deleting them would have dangled eight references
+  in code to save four lines. What stayed in each is the half that is a *UI* rule rather than a
+  decision — the mandatory counted preview dialog, "already in your folder" being information and not
+  an error, *Download all* being uncapped but warned.
+- **§15** (26 → 20) and **§B8** (36 → 25). Both were "everything is built" indexes. Kept: the four
+  rows of §15 that constrain the UI rather than describe it (the 1 Hz progress throttle, `WorkScheduler`
+  not `WorkManager`, **Choose folder** instead of **Retry**, no new port method for the guard), and
+  §B8's three built-vs-sketch deltas and the redaction rule.
+- **architecture §12** (14-row redirect table → 5 lines pointing at `git log`).
+
+One error of my own, caught before it landed: the §13 replacement first claimed six of the eight
+screens were "added rather than requested". §2's table says three. The six is relative to CLAUDE.md's
+original *two destinations*, which is a different baseline — exactly the kind of number that reads as
+authoritative because it is bold and is wrong because it was re-derived from memory instead of from
+the table two screens above it.
+
+A pre-existing dangling anchor turned up on the way (`architecture.md`'s ToC pointed at
+`#12-decision-record--resolved-and-still-open`, a heading renamed at some point) and is fixed.
+
+No code changed in this session; `./gradlew ktlintCheck detekt test` was run green (exit 0) and
+everything after it was markdown.
