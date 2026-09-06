@@ -115,7 +115,7 @@ jobs:
         run: git ls-files -z '*.adoc' | xargs -0 -r asciidoctor --failure-level=WARN -o /dev/null
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
