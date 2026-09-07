@@ -10,6 +10,18 @@ plugins {
     alias(libs.plugins.detekt) apply false
 }
 
+// One entry point for coverage across a build with two kinds of module. Each module writes its own
+// JaCoCo XML report and Codecov merges the twelve on upload — nothing here parses an `.exec` file,
+// merges execution data, or computes a percentage by hand (CLAUDE.md §3).
+//
+// Registered here, *before* `subprojects { }`, so that each module can attach its own report task
+// below as the plugin that owns that task is applied.
+val coverage =
+    tasks.register("coverage") {
+        group = "verification"
+        description = "Runs the Tier 1 unit tests in every module and writes a JaCoCo XML report for each."
+    }
+
 // ktlint + detekt apply to every module, including the still-empty stubs, so
 // `./gradlew ktlintCheck detekt` (CLAUDE.md §7/§8) has something to check as
 // soon as source lands in any of them.
@@ -71,5 +83,95 @@ subprojects {
                     .sorted()
                     .joinToString("\n")
             }.optional(true)
+    }
+
+    // The two module types reach coverage by different routes, because they have to.
+    //
+    // The four pure-JVM modules (:core:model, :core:naming, :core:sync, :core:gpodder) use Gradle's
+    // own `jacoco` plugin, whose `jacocoTestReport` task already knows where `test` put its
+    // execution data and class files.
+    //
+    // The eight Android modules cannot use it: their unit tests run against a mocked android.jar
+    // through AGP's own test task, and the classes under test are transformed on the way in, so a
+    // hand-written JacocoReport pointed at `build/classes` reports coverage of the wrong bytecode.
+    // `enableUnitTestCoverage` is the supported way in — AGP wires the agent into the test task and
+    // registers `createDebugUnitTestCoverageReport` itself.
+    //
+    // Only the debug build type is instrumented. Release is R8-minified, and line coverage of
+    // renamed and inlined classes says nothing useful.
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        apply(plugin = "jacoco")
+
+        extensions.configure<JacocoPluginExtension> {
+            toolVersion = rootProject.libs.versions.jacoco.get()
+        }
+
+        val report =
+            tasks.named<JacocoReport>("jacocoTestReport") {
+                // The jacoco plugin does NOT wire this up itself: without it the report task runs
+                // against whatever `.exec` happens to be lying around, which on a clean checkout is
+                // nothing at all — an empty report rather than a failure.
+                dependsOn(tasks.named("test"))
+                reports {
+                    // XML is what Codecov reads and is not optional. HTML is kept on so that
+                    // `./gradlew :core:sync:jacocoTestReport` is also useful on its own, which is how
+                    // the Android modules behave — AGP's report task writes both — and having the two
+                    // halves of the build disagree about that would be a needless surprise.
+                    xml.required.set(true)
+                    html.required.set(true)
+                }
+            }
+
+        coverage.configure { dependsOn(report) }
+    }
+
+    // WITHOUT THIS, EVERY ROBOLECTRIC TEST IN THIS REPOSITORY COUNTS FOR NOTHING.
+    //
+    // Robolectric runs the class under test inside its own sandbox class loader, which defines the
+    // class with no code-source location. JaCoCo's agent skips such classes by default, so the
+    // execution data comes back with no entry for them at all — not a mismatch, an absence. Measured
+    // before this was added: :core:database 0 % of 2629 lines and :core:ui 8 %, both of which test
+    // exclusively through Robolectric, while :core:datastore (no Robolectric) reported 60 %.
+    //
+    // `jdk.internal.*` has to be excluded once no-location classes are included, or the agent tries
+    // to instrument the JDK's own reflection classes and the test JVM dies on startup.
+    //
+    // Hung off `withPlugin("jacoco")` rather than written as a bare `tasks.withType<Test>` here, and
+    // that is not stylistic. This block runs while the *root* project is evaluated, before any module
+    // is; the extension itself is added by the `jacoco` plugin's own `withType(Test)` action, and
+    // actions run at task-realisation time in registration order. Registered here directly, ours runs
+    // first, finds no extension yet and silently does nothing — which is exactly what happened on the
+    // first attempt. Waiting for the plugin puts our action after the one that creates what it
+    // configures. The plugin arrives either way: applied below for the JVM modules, and by AGP for
+    // the Android ones (verified — `pluginManager.hasPlugin("jacoco")` is true in :core:database).
+    pluginManager.withPlugin("jacoco") {
+        tasks.withType<Test>().configureEach {
+            extensions.configure<JacocoTaskExtension>("jacoco") {
+                isIncludeNoLocationClasses = true
+                excludes = listOf("jdk.internal.*")
+            }
+        }
+    }
+
+    // Split by plugin id rather than configured through `CommonExtension<...>`: the generic arity of
+    // that interface has changed between AGP majors, and these two named interfaces have not.
+    plugins.withId("com.android.library") {
+        extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+            buildTypes.getByName("debug") { enableUnitTestCoverage = true }
+            testCoverage.jacocoVersion = rootProject.libs.versions.jacoco.get()
+        }
+        // Resolved out here on purpose: inside `coverage.configure` the receiver is the root task,
+        // so `$path` there would read `:coverage` rather than this module's path.
+        val reportTaskPath = "$path:createDebugUnitTestCoverageReport"
+        coverage.configure { dependsOn(reportTaskPath) }
+    }
+
+    plugins.withId("com.android.application") {
+        extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
+            buildTypes.getByName("debug") { enableUnitTestCoverage = true }
+            testCoverage.jacocoVersion = rootProject.libs.versions.jacoco.get()
+        }
+        val reportTaskPath = "$path:createDebugUnitTestCoverageReport"
+        coverage.configure { dependsOn(reportTaskPath) }
     }
 }

@@ -31,6 +31,14 @@
 #
 # No time/date dependency is pinned, deliberately: java.time is free at
 # minSdk 33 and already used across four modules — decisions/0016.
+#
+# jacoco is not a dependency of anything — it is the coverage tool version, read
+# twice by build.gradle.kts: as `toolVersion` for the pure-JVM modules' `jacoco`
+# plugin, and as `testCoverage.jacocoVersion` for the Android ones. It lives here
+# so those two cannot drift apart, and so the version is written in the same place
+# as every other (§3). Note that Dependabot will NOT bump it: no `[libraries]` or
+# `[plugins]` entry references this ref, and an unreferenced version is invisible
+# to the gradle ecosystem. Bumping it is a manual, occasional job.
 [versions]
 agp = "9.4.0"
 kotlin = "2.4.10"
@@ -62,6 +70,7 @@ androidxTestEspresso = "3.7.0"
 navigationCompose = "2.10.0"
 lifecycleCompose = "2.9.4"
 ktlintGradle = "14.2.0"
+jacoco = "0.8.15"
 detekt = "1.23.8"
 
 [libraries]

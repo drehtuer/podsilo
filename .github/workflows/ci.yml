@@ -9,6 +9,11 @@
 # three cheapest come first and need no JDK. One job rather than seven means the badge answers one
 # question — "is main healthy" — and the step that failed is one click away.
 #
+# The unit-test step also measures coverage and uploads it to Codecov, which is
+# where the coverage badge in README.adoc gets its number. That is a report, not a
+# ninth check: nothing here fails on a coverage threshold (codecov.yml keeps both
+# statuses informational), only on the upload not happening at all.
+#
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
 # dev-environment.adoc §6), and it exists precisely to check the things a
@@ -139,8 +144,47 @@ jobs:
       - name: Android lint
         run: ./gradlew lint
 
-      - name: Unit tests (Tier 1)
-        run: ./gradlew test
+      # `coverage`, not `test`. The root task (build.gradle.kts) runs exactly the
+      # same Tier 1 suite and additionally writes one JaCoCo XML report per module;
+      # running `test` as well here would just run all of it twice.
+      - name: Unit tests (Tier 1) with coverage
+        run: ./gradlew coverage
+
+      # The report path differs by module type — Gradle's jacoco plugin writes one
+      # place, AGP's coverage task another — so the list is discovered rather than
+      # written down, and a module added later is covered without editing this file.
+      #
+      # An empty list is a hard failure. Codecov accepts an upload of nothing quite
+      # happily, and the visible result is a badge that keeps showing last week's
+      # number instead of going red.
+      - name: Collect coverage reports
+        id: coverage
+        run: |
+          files=$(find . \
+              \( -path '*/build/reports/jacoco/test/jacocoTestReport.xml' \
+              -o -path '*/build/reports/coverage/test/debug/report.xml' \) \
+              -print | sort | paste -sd,)
+          if [ -z "$files" ]; then
+              echo "::error::No JaCoCo reports found — the coverage task produced nothing to upload."
+              exit 1
+          fi
+          echo "$files" | tr ',' '\n'
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+      # `disable_search` so the only thing uploaded is the list above: left to search,
+      # the CLI walks the whole tree and also finds JaCoCo's own bundled report fixtures
+      # under build/tmp, which are not this project's coverage.
+      #
+      # `fail_ci_if_error` is deliberate, and the same argument as the release step
+      # further down: a silent skip leaves a badge that looks current and isn't. If
+      # Codecov itself is down, re-run the job.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ steps.coverage.outputs.files }}
+          disable_search: true
+          fail_ci_if_error: true
 
       # The keystore never exists in the repository. It is written from a secret
       # into the runner's workspace for the length of the job, and the workspace

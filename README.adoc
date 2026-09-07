@@ -3,6 +3,7 @@
 :idseparator: -
 
 image:https://github.com/drehtuer/podsilo/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsilo/actions/workflows/ci.yml]
+image:https://codecov.io/gh/drehtuer/podsilo/branch/main/graph/badge.svg[Coverage,link=https://codecov.io/gh/drehtuer/podsilo]
 image:https://github.com/drehtuer/podsilo/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main[CodeQL,link=https://github.com/drehtuer/podsilo/security/code-scanning]
 image:https://github.com/drehtuer/podsilo/actions/workflows/docs.yml/badge.svg?branch=main[Docs,link=https://drehtuer.github.io/podsilo]
 image:https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver[Release,link=https://github.com/drehtuer/podsilo/releases/latest]
@@ -25,6 +26,19 @@ which, and names the two tests that assert the same thing for real).
 The badge deliberately says nothing about the device tests: those live in `src/androidTest/` and no
 hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
 why an emulator is not added there).
+
+The *Coverage* badge is the line coverage of the Tier 1 unit tests, measured by JaCoCo during that
+same CI run and uploaded to https://codecov.io/gh/drehtuer/podsilo[Codecov]. It is a report, not a
+ninth check -- `codecov.yml` keeps both of Codecov's status checks informational, so no pull request
+is ever failed for moving the number. There is no target to hit either: this project's testing
+priorities are ranked in `CLAUDE.adoc` §7, sync reconciliation first and Compose smoke tests last,
+and one repository-wide percentage cannot tell those apart. What it is good for is the trend, and
+for spotting a module that has quietly stopped being tested.
+
+Two things worth knowing before reading the number. It covers *unit tests only* -- the device tests
+are excluded for the same reason the CI badge ignores them. And it counts Kotlin's generated members:
+`:core:model` is almost entirely data classes, so its ~33 % is mostly ``copy``/``equals``/``hashCode``
+that nothing calls on purpose, not untested logic.
 
 The *Docs* badge is the documentation site at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo].
 GitHub Pages can only build Jekyll, and these documents are AsciiDoc assembled by Antora, so
