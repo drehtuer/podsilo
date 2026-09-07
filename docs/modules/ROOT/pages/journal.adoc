@@ -6219,3 +6219,55 @@ only ever looked at `.adoc`. Both of the file's relative links are now absolute 
 site, one to the file on GitHub — which is what they have to be for a document that is rendered in two
 places.
 
+
+== 2026-09-07 (coverage) — the measurement that reported nothing
+
+*Attempted:* code coverage for the Tier 1 unit tests, uploaded to Codecov, with a percentage badge in
+`README.adoc`. The author had already set the token as a repository secret.
+
+*What worked, structurally.* Twelve modules split cleanly in two. The four pure-JVM ones take Gradle's
+`jacoco` plugin and its `jacocoTestReport`; the eight Android ones take AGP's
+`enableUnitTestCoverage = true`, which registers `createDebugUnitTestCoverageReport` itself. Neither
+side needed a hand-written `JacocoReport` task, an `.exec` merge, or a percentage computed in Gradle —
+which was the thing to avoid (CLAUDE.md §3). A root `coverage` task runs both, and CI collects the
+twelve XML reports with `find` rather than a written-down list, so a thirteenth module is covered
+without editing the workflow. `decisions/0028` records the shape.
+
+*What did not work, and is the actual content of this entry.* The first green run reported *28.4 %*,
+and 28 % is a perfectly believable number for an Android project — which is exactly why it was nearly
+accepted. Two rows in the per-module breakdown did not fit: `:core:database` at *0 % of 2629 lines*,
+and `:core:ui` at 7.6 %. Both are tested exclusively through Robolectric. `:core:datastore`, which
+uses none, sat at a sensible 60 %.
+
+Reading the raw execution data settled it in one command: `:core:database`'s 91 KB `.exec` contained
+*no class name from this project at all* — the classes it had recorded were Gradle's, ASM's, and
+Robolectric's own. Not a discarded mismatch; the agent had never seen them. Robolectric loads the
+class under test in a sandbox class loader that defines it with no code-source location, and JaCoCo
+skips no-location classes by default. One flag (`isIncludeNoLocationClasses`, plus a mandatory
+`jdk.internal.*` exclusion, or the test JVM dies on startup) took the same unchanged test suite from
+28.4 % to *77.2 %*.
+
+*And then it failed a second time, silently.* The flag was first written as a bare
+`tasks.withType<Test>().configureEach` in the root `subprojects { }` block, the whole suite was re-run,
+and every number came back byte-identical. That block is evaluated while the root project is, before
+any module; the `jacoco` plugin adds the extension from its own `withType(Test)` action; actions run
+at realisation time in registration order. Ours ran first, found no extension, and the null-safe call
+swallowed it. Hanging it off `pluginManager.withPlugin("jacoco")` fixed it. Two rounds of "the number
+did not move" for two different reasons, neither of which produced an error.
+
+*Lesson, and it is the same one this project keeps paying for:* a measurement that silently reports
+nothing is indistinguishable from a measurement that reports a low number, and the plausible one is
+more dangerous than a crash. The habit that caught it was not suspicion of Robolectric — it was
+printing the per-module breakdown instead of the total. `:core:database` at *exactly* 0.0 % of 2629
+lines is not a coverage result; it is an absence of data wearing one. A single aggregate figure would
+have hidden it perfectly, which is worth remembering the next time one number looks like enough.
+
+*Deliberately not done:* no coverage threshold and no failing status check. Both Codecov statuses are
+`informational`. CLAUDE.md §7 ranks what matters — reconciliation first, Compose smoke tests last —
+and one repository-wide percentage cannot express that ranking, so a gate on it would fail pull
+requests for reasons nobody intends to act on. CI does fail on one thing: finding no reports to
+upload, because Codecov accepts an upload of nothing and leaves the badge showing last week's number.
+
+*Verified:* `./gradlew ktlintCheck detekt coverage` green in the dev container, 77.2 % line coverage
+across the twelve modules. The Codecov upload itself is *unverified* — it can only run on GitHub
+Actions, so the first push is what proves the token, the action version and the report paths.

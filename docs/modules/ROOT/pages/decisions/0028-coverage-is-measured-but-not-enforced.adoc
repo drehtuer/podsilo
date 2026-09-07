@@ -1,0 +1,91 @@
+= 0028 -- Coverage is measured, not enforced -- and Robolectric nearly made it a lie
+// SPDX-License-Identifier: GPL-3.0-or-later
+:idprefix:
+:idseparator: -
+
+*Date:* 2026-09-07
+*Status:* accepted
+*Affects:* `build.gradle.kts`, `codecov.yml`, `.github/workflows/ci.yml`, `README.adoc`
+
+== What was asked for
+
+A code coverage number for the Tier 1 unit tests, published to Codecov, with a percentage badge in
+the README.
+
+== How it is measured
+
+Twelve modules, two mechanisms, because they are two kinds of Gradle project:
+
+* The four *pure-JVM* modules (`:core:model`, `:core:naming`, `:core:sync`, `:core:gpodder`) use
+Gradle's own `jacoco` plugin and its `jacocoTestReport` task.
+* The eight *Android* modules cannot: their unit tests run against a mocked `android.jar` through
+AGP's own test task, so a hand-written `JacocoReport` pointed at `build/classes` would be reporting
+on the wrong bytecode. `enableUnitTestCoverage = true` on the debug build type is the supported
+route, and AGP then registers `createDebugUnitTestCoverageReport` itself.
+
+Neither path parses an `.exec` file, merges execution data, or computes a percentage in Gradle
+(CLAUDE.md §3). A root `coverage` task runs both families; CI collects the twelve XML reports by
+`find` -- so a module added later is included without editing the workflow -- and Codecov merges them.
+
+Only the *debug* build type is instrumented. Release is R8-minified, and line coverage of renamed and
+inlined classes says nothing.
+
+== The finding: Robolectric tests were counting for nothing
+
+The first working run reported *28.4 %*. Two modules stood out: `:core:database` at *0 % of 2629
+lines* and `:core:ui` at *7.6 %* -- both of which are tested exclusively through Robolectric -- while
+`:core:datastore`, which uses no Robolectric at all, reported a plausible 60 %.
+
+Inspecting the execution data showed the cause. The `.exec` file for `:core:database` was 91 KB and
+contained *not one* class name from this project; the classes it did record were Gradle's, ASM's and
+Robolectric's own. So this was not JaCoCo discarding a mismatched class -- the agent had never seen
+those classes at all.
+
+Robolectric loads the class under test in its own sandbox class loader, which defines it with *no
+code-source location*. JaCoCo's agent skips such classes by default. The fix is one flag:
+
+[,kotlin]
+----
+extensions.configure<JacocoTaskExtension>("jacoco") {
+    isIncludeNoLocationClasses = true
+    excludes = listOf("jdk.internal.*")
+}
+----
+
+`jdk.internal.*` is not optional once no-location classes are included: without it the agent tries to
+instrument the JDK's own reflection classes and the test JVM fails on startup.
+
+*Where it is registered matters as much as what it says.* The first attempt put this in a bare
+`tasks.withType<Test>().configureEach` inside the root `subprojects { }` block, and it silently did
+nothing -- the number did not move at all. That block is evaluated while the *root* project is, before
+any module; the extension itself is added by the `jacoco` plugin's own `withType(Test)` action; and
+those actions run at realisation time in registration order. Ours ran first, found no extension, and
+the `?.` swallowed it. Hanging the whole thing off `pluginManager.withPlugin("jacoco")` puts our
+action after the one that creates what it configures.
+
+With the flag applied, the same test suite reports *77.2 %*. Nothing about the tests changed.
+
+The general lesson is the one this repository keeps relearning: *a measurement that silently reports
+nothing looks exactly like a measurement that reports a low number.* A plausible-looking 28 % is a
+worse outcome than a crash would have been.
+
+== Why nothing fails on the number
+
+Both Codecov status checks are `informational`, and there is no threshold anywhere.
+
+CLAUDE.md §7 ranks what matters: sync reconciliation first, feed parsing second, the Compose smoke
+tests last. A single repository-wide percentage cannot express that ordering, so a gate built on one
+would either be set low enough to be meaningless or would start failing pull requests for reasons
+nobody intends to act on -- and a check that gets ignored teaches everyone to ignore the checks
+beside it. The badge is a trend line and a way to notice a module that has quietly stopped being
+tested. That is the whole intended value.
+
+The one thing CI *does* fail on is finding no reports to upload. Codecov accepts an upload of nothing
+without complaint, and the visible result would be a badge still showing last week's number.
+
+== What the number does not say
+
+* *Unit tests only.* Everything under `src/androidTest/` is excluded, for the same reason the CI badge
+ignores it (`decisions/0017`, `.github/workflows/ci.yml`).
+* *Generated members count.* `:core:model` is almost entirely data classes, so its ~33 % is largely
+``copy``/``equals``/``hashCode`` that nothing calls deliberately, rather than untested logic.
