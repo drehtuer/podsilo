@@ -428,6 +428,24 @@ run reach the same verdict:
 | `git ls-files -z '*.adoc' \\| xargs -0 -r asciidoctor --failure-level=WARN -o /dev/null`
 |===
 
+[CAUTION]
+====
+*Green asciidoctor does not mean the site will build.* The two run different engines with different
+settings, and one gap has already reached `main`: a literal dollar-brace sequence in prose reads as an
+AsciiDoc attribute reference, and Antora treats a missing attribute as a warning while the Ruby CLI
+above silently skips it. The file linted clean and the site build failed on it.
+
+So the command above is a *syntax* check, not a site check. Anything touching a page under `docs/`
+wants `./scripts/build-docs.sh` first -- the same command CI runs, and the only one that sees
+unresolved ``xref``s, nav gaps, refused diagrams and missing attributes. Write a literal brace as an
+inline passthrough:
+
+[,asciidoc]
+----
+`+${localWorkspaceFolder}+`
+----
+====
+
 === The documentation site
 
 The documents are an https://antora.org/[Antora] component, which is why they live at

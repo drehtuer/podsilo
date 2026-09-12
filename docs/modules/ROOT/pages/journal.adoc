@@ -6300,7 +6300,7 @@ the second segment is the Antora component name, not a missed replacement.
 Section 9 of this file says a log edited to match the present is not a log; GitHub redirects the old
 slug permanently, so the citation still resolves.
 * `.devcontainer/devcontainer.json` still mounts the tree at `/workspaces/podsilo`. That is a path
-inside the container, bound from `${localWorkspaceFolder}` whatever the host directory is called, and
+inside the container, bound from `+${localWorkspaceFolder}+` whatever the host directory is called, and
 changing it would orphan the existing container and its named volumes for no gain.
 
 *The redirect is a grace period, not a fix.* GitHub forwards the old slug until someone creates a new
@@ -6461,3 +6461,37 @@ defensible, but it makes a secret list where two entries called `…KEY_PASSWORD
 different consequences if leaked. The documented value is therefore written out in full in §10's
 table, so the distinction is visible to whoever reads it next rather than living in one person's
 memory.
+
+
+== 2026-09-12 (docs build) — the lint was green and the site was broken
+
+*What happened:* the repo-rename journal entry written earlier today explains that
+`.devcontainer/devcontainer.json` binds the workspace from a dollar-brace VS Code variable. Written
+literally inside backticks, AsciiDoc reads that as an attribute reference. Antora is configured to
+warn on a missing attribute and `scripts/build-docs.sh` runs it with `--log-failure-level=warn`, so
+the Docs workflow failed on the first push to `main` after the merge.
+
+*The part worth recording is not the escaping — it is that every check I ran was green.*
+`git ls-files -z "*.adoc" | xargs -0 asciidoctor --failure-level=WARN` passed, and that is the
+command this repository documents as the AsciiDoc check. It passes because the Ruby CLI defaults to
+`attribute-missing=skip`, while Antora's JavaScript Asciidoctor is configured to warn. Two engines,
+two settings, one of them not the one CI runs. Adding `-a attribute-missing=warn` to the Ruby command
+does not close the gap either — tried, and it still exited 0 on the same file.
+
+So the only check that sees this class is the site build itself. It was available the whole time --
+`./scripts/build-docs.sh`, with Kroki up in compose -- and I did not run it because the change "`was
+only a journal entry`". That is the reasoning to distrust: a journal entry is a page in the site like
+any other.
+
+*Verified by reproduction, not assumption.* With the fix, `build-docs.sh` exits 0; with the same
+file stashed back to its broken state, it exits 1 and names `+skipping reference to missing
+attribute: localworkspacefolder+`. Both directions run, because "`the build passes now`" on its own
+does not establish that the edit is what changed it.
+
+*Noted, not built:* `docs.yml` triggers on `push: branches: [main]` only, so the site build first
+runs *after* a merge -- which is precisely how this reached `main` with every pull-request check
+green. Adding `pull_request:` is three lines, but `deploy` would then need guarding with
+`if: github.event_name == 'push'`, and getting that wrong either publishes from a branch or stops
+publishing altogether. That belongs in its own change, so it went to `backlog.adoc`.
+`dev-environment.adoc` now carries a caution next to the asciidoctor command saying plainly that it
+is a syntax check and not a site check.
