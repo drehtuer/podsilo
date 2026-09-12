@@ -23,10 +23,16 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Keystores — never commit signing material
+# Signing material — never committed. Everything lives in one directory now
+# (keystore/): the release .jks, the debug .jks, and the keystore.properties
+# that holds the passwords for both. Ignoring the directory rather than the file
+# types is what makes that a rule instead of a habit — a key dropped in there
+# under any name is covered.
+keystore/
+# The patterns below are kept as a backstop for signing material that lands
+# anywhere else, which is the mistake worth catching.
 *.jks
 *.keystore
-# ...nor the passwords that open them (app/build.gradle.kts reads this file)
 keystore.properties
 
 # Secrets

@@ -75,17 +75,22 @@ android {
     }
 
     /**
-     * Release signing, when the key is available.
+     * Signing for both variants, each when its key is available.
      *
-     * The keystore is **never** in the repository (CLAUDE.md §9). It comes from `keystore.properties`
-     * locally or the matching environment variables on CI, and when neither is present the release
-     * variant simply builds unsigned rather than failing — an unsigned release APK is still a useful
-     * artifact to inspect, it just cannot be installed. `dev-environment.adoc` §9 has the
-     * `keytool` invocation and the CI secret names.
+     * No signing material is **ever** in the repository (CLAUDE.md §9). It all lives in `keystore/`,
+     * which `.gitignore` covers as a directory: the two `.jks` files and the single
+     * `keystore.properties` that holds the credentials for both. On CI the same values arrive as
+     * environment variables instead.
+     *
+     * Neither variant fails when its key is missing, but they degrade differently. *Release* builds
+     * unsigned — still a useful artifact to inspect, it just cannot be installed. *Debug* falls back
+     * to AGP's own `~/.android/debug.keystore`, which is the behaviour this project had before a
+     * debug key existed. `dev-environment.adoc` §10 has both `keytool` invocations and the CI secret
+     * names.
      */
     signingConfigs {
         val keystoreProperties =
-            file("../keystore.properties").takeIf { it.exists() }?.let { propertiesFile ->
+            file("../keystore/keystore.properties").takeIf { it.exists() }?.let { propertiesFile ->
                 Properties().apply { propertiesFile.inputStream().use { load(it) } }
             }
 
@@ -122,6 +127,36 @@ android {
                     enableV2Signing = true
                     enableV3Signing = true
                 }
+        }
+
+        // A debug key of our own, so that every debug APK of this app carries the SAME signature
+        // wherever it was built. AGP's default `~/.android/debug.keystore` is generated per machine,
+        // which is why a CI-built debug APK could never be upgraded in place by a locally built one
+        // — the install fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE and the only way out is an
+        // uninstall, taking the ledger, the login and the SAF grant with it (dev-environment.adoc
+        // §10). One shared key removes that failure between any two machines that have it.
+        //
+        // `getByName`, not `create`: AGP has already registered a `debug` config pointing at its own
+        // generated keystore, and this replaces where it points. When the file is absent that
+        // default is left exactly as it was, so a checkout without `keystore/` builds and installs
+        // debug APKs the way it always did.
+        //
+        // NOTE THAT THIS KEY IS NOT A SECRET and is not treated as one: it is the Android debug
+        // convention (alias `androiddebugkey`, password `android`), it signs nothing anyone installs
+        // from a release, and Android's own default debug keystore uses the same well-known values.
+        // It lives under the ignored `keystore/` only because that is where signing material goes.
+        val debugStoreFile = setting("debugStoreFile", "PODSILO_DEBUG_KEYSTORE_FILE")?.let { rootProject.file(it) }
+        if (debugStoreFile != null && debugStoreFile.exists()) {
+            getByName("debug") {
+                // `this.`, because the release block's `val storeFile` above shadows the receiver's
+                // property of the same name — the same reason the release config qualifies it.
+                this.storeFile = debugStoreFile
+                storePassword = setting("debugStorePassword", "PODSILO_DEBUG_KEYSTORE_PASSWORD")
+                keyAlias = setting("debugKeyAlias", "PODSILO_DEBUG_KEY_ALIAS")
+                keyPassword = setting("debugKeyPassword", "PODSILO_DEBUG_KEY_PASSWORD") ?: storePassword
+            }
+        } else {
+            logger.info("No debug keystore configured; debug builds use AGP's generated ~/.android/debug.keystore.")
         }
     }
 

@@ -6379,3 +6379,85 @@ badges at once — until then both badges will render an error, which is expecte
 
 *Left for the author:* the now-unused `CODECOV_TOKEN` secret. Deleting a secret is not something to do
 on someone's behalf.
+
+
+== 2026-09-12 (signing) — one folder for the keys, and a debug key that is the same everywhere
+
+*Attempted:* move the release keystore and its credentials into a `keystore/` directory, ignore that
+directory, and add a signing key for the debug build.
+
+*The move is the boring half, and it had exactly one way to go wrong quietly.* `keystore.properties`
+is read by `app/build.gradle.kts` at a hard-coded relative path, and `storeFile` inside it is another
+relative path; get either wrong and the build does not fail — it logs at `info` and produces an
+*unsigned* release APK, because building unsigned rather than failing is the deliberate behaviour
+when no key is configured. A silent downgrade, in other words, of the same family as the Codecov
+upload that accepted nothing five days ago. So the check was not "`does it build`" but
+`apksigner verify --print-certs` on the actual artifact: `CN=Podsilo` still on the release APK, which
+is the only evidence that the path change landed.
+
+*The debug key is the half worth having.* AGP signs debug builds with `~/.android/debug.keystore`,
+which is generated *per machine* — so two debug APKs of the same commit, built in the dev container
+and on the host, can never replace one another; the install fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` and the only way through is an uninstall that takes the ledger,
+the login and the SAF grant with it. §10 had already documented that as a one-way door, diagnosed on
+the Pixel 10a. A key kept with the project removes it between any two machines that hold the key.
+
+It uses Android's own debug convention — alias `androiddebugkey`, password `android` — and the
+documentation says in as many words that *this key is not a secret*. That matters because it lives
+under an ignored directory next to a key that very much is, and the next person to look will
+reasonably assume both are sensitive. Writing down which one is not is cheaper than having someone
+treat a throwaway as irreplaceable.
+
+*One Kotlin trap worth recording.* `getByName("debug") { storeFile = debugStoreFile }` does not
+compile: the release block above declares `val storeFile`, which shadows the receiver's property
+inside the lambda, and the error is `'val' cannot be reassigned` pointing at a line that is not
+assigning to a `val` at all. `this.storeFile` fixes it — which is exactly why the release config had
+already qualified its own. A comment now says so in both places.
+
+*Two consequences, one paid immediately and one declined.*
+
+* *The first debug install after this is a forced uninstall*, on every device already holding a debug
+build — including the Tier 2 emulator. It is paid once, and it is the point. `dev-environment.adoc`
+§10 carries the warning next to the `keytool` invocation rather than only here.
+* *CI is deliberately not given the debug key.* `keystore/` is ignored, so a runner falls back to
+AGP's generated keystore exactly as before, and a CI-built debug APK remains a one-way door against
+every local build. Carrying the `.jks` as a fourth secret would fix that, but the value of a shared
+debug key is that *your own* machines agree, and §10 already tells you not to sideload the debug APK
+from a release page.
+
+*Noted, not built:* `run-podsilo`'s `driver.py` installs with `adb install -r -t` and has no fallback
+for a signature mismatch, so the skill will fail once on any emulator holding an older debug build.
+The fix is small but deletes app data, which makes it a decision rather than a tidy-up — it went to
+`backlog.adoc` (CLAUDE.md §9) instead of being slipped in alongside a signing change.
+
+*No ADR for this one.* `dev-environment.adoc` §10 now carries the layout, both `keytool`
+invocations, the not-a-secret statement, the uninstall warning and the reason CI is excluded. A
+`decisions/` entry would have restated it a second time in a second place, which is the drift those
+files exist to prevent.
+
+*Verified:* `ktlintCheck detekt assembleDebug assembleRelease` green in the dev container, and both
+APKs checked with `apksigner verify --print-certs` — debug now `CN=Podsilo Debug` where it used to be
+`CN=Android Debug`, release still `CN=Podsilo`. `git check-ignore` confirms all three files under
+`keystore/` are ignored by the new directory rule. *Unverified:* an actual install over an existing
+debug build — the uninstall-first requirement above is inferred from Android's documented signature
+rule and from this project's own 2026-08-09 diagnosis, not observed today.
+
+*Reversed the same day, at the author's request.* The paragraph above declines to give CI the debug
+key; the author asked for signed debug builds on CI and added the four `PODSILO_DEBUG_*` secrets, so
+the workflow now decodes the debug keystore beside the release one and passes both to
+`assembleDebug assembleRelease`. The reasoning that was declined was never that it would not work --
+it was that the benefit looked narrow. It is not: it retires the "`one-way door`" that
+`dev-environment.adoc` §10 has carried since 2026-08-09, because the debug APK on a release page
+now upgrades in place from a local build and vice versa. That section is rewritten rather than
+deleted, since it is still exactly what happens if the secret goes missing or a fork builds without
+it.
+
+Two details worth keeping. *The two keys fail differently and neither fails the build* — a missing
+release key yields an unsigned APK that cannot be installed, a missing debug key falls back to AGP's
+generated one and installs fine — so the decode steps look alike but their warnings say different
+things. And *three of the four new secrets are not secret*: the alias and both passwords are the
+published Android convention. They are stored as secrets for symmetry with the release key, which is
+defensible, but it makes a secret list where two entries called `…KEY_PASSWORD` have completely
+different consequences if leaked. The documented value is therefore written out in full in §10's
+table, so the distinction is visible to whoever reads it next rather than living in one person's
+memory.

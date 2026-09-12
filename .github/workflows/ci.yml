@@ -26,8 +26,11 @@
 #
 # ARTIFACTS
 #
-# Both variants are built. `podsilo-<version>-debug.apk` is installable as-is
-# (AGP signs it with the debug keystore) and is the sideload build.
+# Both variants are built. `podsilo-<version>-debug.apk` is installable as-is,
+# signed with the project's shared debug key (`PODSILO_DEBUG_KEYSTORE_BASE64`)
+# so that it can be upgraded in place by a locally built debug APK and vice
+# versa — which was impossible while AGP signed it with the runner's own
+# generated keystore. See dev-environment.adoc §10.
 # `podsilo-<version>.apk` is the real release: R8-minified and resource-shrunk,
 # roughly a twelfth the size, and **signed only when the keystore secrets are
 # configured** — see dev-environment.adoc §9. Without them it still builds,
@@ -188,6 +191,41 @@ jobs:
           args: >
             -Dsonar.projectVersion=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
+      # The debug key, decoded the same way as the release key below and for the
+      # same reason — but note the two fail differently, and neither fails the
+      # build. Without this, AGP falls back to the runner's own generated
+      # `~/.android/debug.keystore`, which still produces an installable APK;
+      # it just cannot be upgraded in place by a debug build from anywhere else.
+      # A missing release key produces an *unsigned* APK, which cannot be
+      # installed at all. So this step warns and continues, exactly as that one
+      # does.
+      #
+      # The debug key is not a secret in the way the release key is — it is the
+      # Android convention (alias `androiddebugkey`, password `android`) and
+      # signs nothing anyone installs from a release. It is carried as a secret
+      # for symmetry with the release key, not because the value is sensitive;
+      # dev-environment.adoc §10 says so where someone reading `keystore/` will
+      # find it.
+      - name: Decode debug keystore
+        id: debug-keystore
+        env:
+          KEYSTORE: ${{ secrets.PODSILO_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          jks="$RUNNER_TEMP/podsilo-debug.jks"
+          if [ -z "$KEYSTORE" ]; then
+              echo "No debug keystore secret configured — AGP's generated debug key will be used."
+              exit 0
+          fi
+
+          if ! printf '%s' "$KEYSTORE" | tr -d '[:space:]' | base64 -d > "$jks" 2>/dev/null || [ ! -s "$jks" ]; then
+              rm -f "$jks"
+              echo "::warning::PODSILO_DEBUG_KEYSTORE_BASE64 could not be decoded — falling back to AGP's generated debug key. Regenerate with: base64 -w0 keystore/podsilo-debug.jks"
+              exit 0
+          fi
+
+          echo "Decoded debug keystore: $(wc -c < "$jks") bytes"
+          echo "path=$jks" >> "$GITHUB_OUTPUT"
+
       # The keystore never exists in the repository. It is written from a secret
       # into the runner's workspace for the length of the job, and the workspace
       # is discarded with the runner. `PODSILO_KEYSTORE_BASE64` is the .jks
@@ -229,6 +267,10 @@ jobs:
           PODSILO_KEYSTORE_PASSWORD: ${{ secrets.PODSILO_KEYSTORE_PASSWORD }}
           PODSILO_KEY_ALIAS: ${{ secrets.PODSILO_KEY_ALIAS }}
           PODSILO_KEY_PASSWORD: ${{ secrets.PODSILO_KEY_PASSWORD }}
+          PODSILO_DEBUG_KEYSTORE_FILE: ${{ steps.debug-keystore.outputs.path }}
+          PODSILO_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.PODSILO_DEBUG_KEYSTORE_PASSWORD }}
+          PODSILO_DEBUG_KEY_ALIAS: ${{ secrets.PODSILO_DEBUG_KEY_ALIAS }}
+          PODSILO_DEBUG_KEY_PASSWORD: ${{ secrets.PODSILO_DEBUG_KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease
 
       # The R8 mapping goes with them. A stack trace from a minified build is
