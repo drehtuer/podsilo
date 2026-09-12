@@ -6313,3 +6313,69 @@ SDK — the run needs the `vsc-podsilo-*` image with the `podsilo-android-sdk` a
 volumes), plus `yamllint .` and the `asciidoctor --failure-level=WARN` sweep over every `.adoc`. The
 two yamllint line-length warnings in `ci.yml` predate this change. *Unverified:* the badges and the
 Pages URL, which can only be confirmed once this lands on `main` and the site redeploys.
+
+
+== 2026-09-12 (SonarQube) — the same reports, read by something that answers two questions
+
+*Attempted:* replace Codecov with SonarQube Cloud for coverage; delete the Codecov configuration and
+badge; add separate line and branch coverage badges. `SONAR_TOKEN` was already in the repository
+secrets.
+
+*The measurement did not move, and that was the point.* `./gradlew coverage` still writes the same
+twelve JaCoCo XML reports by the same two mechanisms, and the Robolectric `isIncludeNoLocationClasses`
+fix from 2026-09-07 is untouched. All that changed is the consumer: `sonar-project.properties` names
+the two report globs and the `SonarSource/sonarqube-scan-action` step replaces the `find`-and-upload
+pair. `decisions/0028` is amended rather than superseded, because its actual decision — coverage is
+measured, not enforced — survives the vendor change intact.
+
+*Two lookups worth recording, because both would have been easy to get wrong by assuming.*
+
+`gh secret list` showed `SONAR_TOKEN` and *no* `SONAR_HOST_URL`, which is what settles SonarQube Cloud
+over a self-hosted server without having to ask. And `api/components/search?organization=drehtuer`
+returned the project already created, as `drehtuer_podsiloApp`, answering anonymously — which is the
+other fact the badges depend on, since a private project would not serve its measures to shields.io.
+Two `curl`s in place of two questions.
+
+*The badge endpoint does not do what was asked, and the check for that was cheap.* SonarQube's own
+`api/project_badges/measure` looks like the obvious way to render "`line coverage`" and "`branch
+coverage`". It is not: `api/webservices/list` gives its `metric` parameter as a fixed allow-list of
+fourteen values, and while `coverage` is on it, `line_coverage` and `branch_coverage` are not. Asking
+the API to describe itself took one command and replaced a guess that would have shipped two badges
+rendering an error image. The two are shields.io `dynamic/json` badges against
+`api/measures/component` instead — the same shape a sibling repository of the author's already uses,
+so this is a pattern being reused rather than invented (CLAUDE.md §3).
+
+*Why two numbers and not one.* Line coverage says a line ran; branch coverage says both sides of a
+decision ran. For `:core:sync` — the module §7 ranks first — a suite that walks the happy path of
+every reconciliation rule and never takes a conflict branch is exactly the failure this project
+should be able to see, and SonarQube's combined `coverage` metric averages it away. That is the same
+lesson as 2026-09-07's, one level up: *an aggregate hides the thing you built the measurement to
+find.* A single figure nearly hid `:core:database` at 0 %; a single figure would also hide untested
+branches behind well-covered lines.
+
+*The one piece of setup that is not a file.* SonarQube's automatic analysis and its CI scanner are
+mutually exclusive — with autoscan on, the scan CI runs is rejected outright — and autoscan is also
+incapable of reading a coverage report, so it had to go off. The author switched it off in the web
+UI; `api/settings/values?keys=sonar.autoscan.enabled` confirms `false` against an instance default of
+`true`. That is a dependency of the build that no checkout can show you, so it is written into
+`sonar-project.properties` along with the command that checks it. The habit worth keeping: when a
+green build depends on a setting in someone else's web UI, the repository should at least be able to
+*tell you the setting exists*.
+
+*Two things deliberately not adopted, both of which the tool offers and neither of which was asked
+for.* No `-Dsonar.qualitygate.wait=true`, so a red gate cannot fail CI — turning it on would have
+reversed `decisions/0028` as a side effect of changing vendors. And no `sonar.coverage.exclusions`:
+excluding anything now would move the number away from the 77.2 % Codecov last reported for a reason
+that has nothing to do with the tests, which ruins the only thing the badge is for. Both are noted in
+the ADR so that adopting either later is a decision rather than a drift.
+
+*Verified:* `./gradlew ktlintCheck detekt test` green in the dev container, plus `yamllint .`, the
+`asciidoctor --failure-level=WARN` sweep, and a check that the `.properties` file's report globs match
+files that `coverage` actually produces. The shields.io badge URLs were confirmed to render real
+numbers against the author's already-analysed sibling project. *Unverified, and it can only be
+verified by pushing:* the scan itself. Podsilo's SonarCloud project has no analysis yet
+(`measures: []`), so the first CI run is what proves the token, the action, the report paths and the
+badges at once — until then both badges will render an error, which is expected and not a mistake.
+
+*Left for the author:* the now-unused `CODECOV_TOKEN` secret. Deleting a secret is not something to do
+on someone's behalf.

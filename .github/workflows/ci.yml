@@ -9,10 +9,11 @@
 # three cheapest come first and need no JDK. One job rather than seven means the badge answers one
 # question — "is main healthy" — and the step that failed is one click away.
 #
-# The unit-test step also measures coverage and uploads it to Codecov, which is
-# where the coverage badge in README.adoc gets its number. That is a report, not a
-# ninth check: nothing here fails on a coverage threshold (codecov.yml keeps both
-# statuses informational), only on the upload not happening at all.
+# The unit-test step also measures coverage, and a SonarQube Cloud scan then
+# ingests the JaCoCo XML — that is where the two coverage badges in README.adoc
+# get their numbers. It is a report, not a ninth check: there is no
+# `sonar.qualitygate.wait`, so a red gate or a dropped percentage never fails
+# this workflow. See decisions/0028; sonar-project.properties is the config.
 #
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
@@ -80,11 +81,20 @@ jobs:
     # the release); push/pull_request runs never exercise that permission.
     permissions:
       contents: write
+      # SonarQube decorates the pull request with its findings.
+      pull-requests: write
+    # At job level so the `if:` on the scan step can see it — a step's own `env:`
+    # is not in scope for that step's own condition.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
           # versionCode is `git rev-list --count HEAD` (app/build.gradle.kts). The
-          # default shallow clone would make every build number 1.
+          # default shallow clone would make every build number 1. SonarQube
+          # needs the same full history for a second reason: it attributes issues
+          # to a commit and an author, and works out what "new code" means from
+          # the dates — against a shallow clone every line reads as new.
           fetch-depth: 0
 
       # Repository hygiene for the two languages Gradle cannot see: YAML (this
@@ -150,41 +160,33 @@ jobs:
       - name: Unit tests (Tier 1) with coverage
         run: ./gradlew coverage
 
-      # The report path differs by module type — Gradle's jacoco plugin writes one
-      # place, AGP's coverage task another — so the list is discovered rather than
-      # written down, and a module added later is covered without editing this file.
+      # Runs after `coverage` so the JaCoCo XML and the JUnit results already
+      # exist; sonar-project.properties names the paths rather than passing them
+      # here, so the same scan can be reproduced locally.
       #
-      # An empty list is a hard failure. Codecov accepts an upload of nothing quite
-      # happily, and the visible result is a badge that keeps showing last week's
-      # number instead of going red.
-      - name: Collect coverage reports
-        id: coverage
-        run: |
-          files=$(find . \
-              \( -path '*/build/reports/jacoco/test/jacocoTestReport.xml' \
-              -o -path '*/build/reports/coverage/test/debug/report.xml' \) \
-              -print | sort | paste -sd,)
-          if [ -z "$files" ]; then
-              echo "::error::No JaCoCo reports found — the coverage task produced nothing to upload."
-              exit 1
-          fi
-          echo "$files" | tr ',' '\n'
-          echo "files=$files" >> "$GITHUB_OUTPUT"
-
-      # `disable_search` so the only thing uploaded is the list above: left to search,
-      # the CLI walks the whole tree and also finds JaCoCo's own bundled report fixtures
-      # under build/tmp, which are not this project's coverage.
+      # Skipped when the token is absent, which is what a pull request from a
+      # fork looks like — a missing secret should not read as a failed build.
+      # SONAR_TOKEN is set at job level because a step's own `env:` block is not
+      # in scope for that step's own `if:` (the same trap the keystore step
+      # below documents).
       #
-      # `fail_ci_if_error` is deliberate, and the same argument as the release step
-      # further down: a silent skip leaves a badge that looks current and isn't. If
-      # Codecov itself is down, re-run the job.
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+      # Deliberately NO `-Dsonar.qualitygate.wait=true`. Coverage here is
+      # measured and not enforced (decisions/0028): CLAUDE.md §7 ranks what
+      # matters — reconciliation first, Compose smoke tests last — and one
+      # repository-wide percentage cannot express that ranking, so a gate on it
+      # would fail pull requests for reasons nobody intends to act on.
+      #
+      # Unlike the Codecov step this replaced, there is no "fail if the upload
+      # found nothing" guard, because there is nothing to guard: the scanner
+      # fails by itself when `sonar.coverage.jacoco.xmlReportPaths` matches no
+      # file, rather than accepting an upload of nothing and leaving the badge
+      # showing last week's number.
+      - name: SonarQube scan
+        if: ${{ !cancelled() && env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v8
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ steps.coverage.outputs.files }}
-          disable_search: true
-          fail_ci_if_error: true
+          args: >
+            -Dsonar.projectVersion=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
 
       # The keystore never exists in the repository. It is written from a secret
       # into the runner's workspace for the length of the job, and the workspace
