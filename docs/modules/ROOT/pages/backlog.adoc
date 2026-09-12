@@ -70,6 +70,14 @@ holding a previously-signed debug build. The fix is to catch that one failure, `
 retry; it is a handful of lines, but it deletes app data, so it wants a deliberate decision about
 whether the driver should do that silently rather than being slipped in alongside a signing change.
 
+* *`docs.yml` should build on pull requests, not only on pushes to `main`.* Its trigger is
+`push: branches: [main]`, so the site build -- the only check that catches an unresolved `xref:`, a
+nav gap or a missing attribute -- first runs *after* a merge. That is exactly how the
+`localworkspacefolder` break of 2026-09-12 reached `main` with every pull-request check green. Adding
+`pull_request:` is three lines; the reason it is here rather than done is that `deploy` would then
+need guarding with `if: github.event_name == 'push'`, and getting that wrong publishes from a branch
+or stops publishing altogether. Worth doing deliberately, not as a footnote to a fix.
+
 == Declined, with reasons
 
 * *An "alternative log in using app password" form.* Nextcloud offers one on its own flow page, and
