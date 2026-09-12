@@ -6495,3 +6495,41 @@ green. Adding `pull_request:` is three lines, but `deploy` would then need guard
 publishing altogether. That belongs in its own change, so it went to `backlog.adoc`.
 `dev-environment.adoc` now carries a caution next to the asciidoctor command saying plainly that it
 is a syntax check and not a site check.
+
+
+== 2026-09-12 (release) — 0.7.1, and what a release means when nothing shipped
+
+*Attempted:* cut v0.7.1.
+
+*The bump itself is one line* -- `versionName` in `app/build.gradle.kts` is the only place a human
+chooses a number, and `versionCode` is `git rev-list --count HEAD`, so nothing else needs editing.
+This is the first release where the README is not also edited: the status block that every previous
+bump rewrote was removed earlier today, deliberately, because release-specific prose in a file that
+describes the project goes stale the moment a release does. The Release badge points at the current
+one instead. Do not reintroduce it at the next bump.
+
+*What is honestly in it.* Almost everything done since v0.7.0 does not reach the APK -- the repository
+rename, the Codecov-to-SonarQube switch, the `keystore/` move, the debug signing key, four README
+edits. Checking rather than assuming: `git diff v0.7.0..main -- '*/src/**'` reports 181 files and
+*545 insertions against 545 deletions*, and that symmetry is the tell. It is a 1:1 substitution --
+872 of those lines are `docs/UI.md` becoming `UI.adoc` and similar, in comments and KDoc, from the
+AsciiDoc conversion. Filtering the comment lines out leaves exactly two real changes: a test
+assertion message, and `PODSILO_REPOSITORY_URL`.
+
+So the release is: *the About screen's "`Source code`" link now points at the renamed repository*
+(it would have redirected until someone else claimed the old slug), plus Coil 3.5.0 → 3.6.2,
+navigation-compose 2.9.8 → 2.10.0 and OkHttp 5.4.0 → 5.5.0, which do ship. That is a patch release
+and is described as one. The temptation with a fortnight of visible activity behind it is to write
+release notes about the activity; the notes describe what a user gets, which is one fixed link and
+three dependency bumps.
+
+*The one behaviour change that is not in the APK at all:* the debug APK attached to the release is
+now signed with the project debug key rather than the runner's generated one, so for the first time
+it can be upgraded in place by a locally built debug build. `dev-environment.adoc` §10 still says
+sideload the release APK -- that advice is unchanged, because debug and release remain different keys.
+
+*Verified:* `ktlintCheck detekt test` green, and `assembleRelease` produces `podsilo-0.7.1.apk`
+signed `CN=Podsilo` -- the name is derived from `versionName`, so building it is what proves the bump
+took. *Unverified:* nothing has been installed on a phone from this build; the app code is unchanged
+from v0.7.0 apart from the one string, which is why that is acceptable here and would not be for a
+feature release.
