@@ -2,6 +2,13 @@
 :idprefix:
 :idseparator: -
 
+// The icon form, not either lockup: the lockups carry live Archivo `<text>`, and `UI.adoc` §C2
+// requires that to be outlined before the asset leaves the app — README is named in that rule, and
+// Archivo is not in this repository. The icon also carries its own accent ground (§C5 allows the
+// mark on the accent field), so it stays legible on GitHub's light and dark themes alike, which a
+// two-colour mark on transparency would not.
+image::assets/logos/podsilo-icon.svg[Podsilo,96]
+
 image:https://github.com/drehtuer/podsiloApp/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsiloApp/actions/workflows/ci.yml]
 image:https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsonarcloud.io%2Fapi%2Fmeasures%2Fcomponent%3Fcomponent%3Ddrehtuer_podsiloApp%26metricKeys%3Dline_coverage&query=%24.component.measures%5B0%5D.value&suffix=%25&label=lines&color=4c1[Line coverage,link=https://sonarcloud.io/component_measures?id=drehtuer_podsiloApp&metric=line_coverage]
 image:https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsonarcloud.io%2Fapi%2Fmeasures%2Fcomponent%3Fcomponent%3Ddrehtuer_podsiloApp%26metricKeys%3Dbranch_coverage&query=%24.component.measures%5B0%5D.value&suffix=%25&label=branches&color=4c1[Branch coverage,link=https://sonarcloud.io/component_measures?id=drehtuer_podsiloApp&metric=branch_coverage]
