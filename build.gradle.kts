@@ -11,8 +11,8 @@ plugins {
 }
 
 // One entry point for coverage across a build with two kinds of module. Each module writes its own
-// JaCoCo XML report and Codecov merges the twelve on upload — nothing here parses an `.exec` file,
-// merges execution data, or computes a percentage by hand (CLAUDE.md §3).
+// JaCoCo XML report and the SonarQube scan merges the twelve when it ingests them — nothing here
+// parses an `.exec` file, merges execution data, or computes a percentage by hand (CLAUDE.md §3).
 //
 // Registered here, *before* `subprojects { }`, so that each module can attach its own report task
 // below as the plugin that owns that task is applied.
@@ -113,10 +113,11 @@ subprojects {
                 // nothing at all — an empty report rather than a failure.
                 dependsOn(tasks.named("test"))
                 reports {
-                    // XML is what Codecov reads and is not optional. HTML is kept on so that
-                    // `./gradlew :core:sync:jacocoTestReport` is also useful on its own, which is how
-                    // the Android modules behave — AGP's report task writes both — and having the two
-                    // halves of the build disagree about that would be a needless surprise.
+                    // XML is what SonarQube reads (sonar-project.properties names the glob) and is
+                    // not optional. HTML is kept on so that `./gradlew :core:sync:jacocoTestReport`
+                    // is also useful on its own, which is how the Android modules behave — AGP's
+                    // report task writes both — and having the two halves of the build disagree
+                    // about that would be a needless surprise.
                     xml.required.set(true)
                     html.required.set(true)
                 }

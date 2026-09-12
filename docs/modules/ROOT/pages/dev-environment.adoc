@@ -151,7 +151,7 @@ below differ enormously in how well-proven they are.
 
 | *The documentation site, deployed*
 | ✅ *Verified*
-| 2026-08-23, first push to `main` after #107: `deploy` green in 10s and the site answers at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo] -- 20 pages in the sitemap, and the diagrams are served as site assets, so nothing points at the build-time Kroki
+| 2026-08-23, first push to `main` after #107: `deploy` green in 10s and the site answers at https://drehtuer.github.io/podsiloApp[drehtuer.github.io/podsiloApp] -- 20 pages in the sitemap, and the diagrams are served as site assets, so nothing points at the build-time Kroki
 |===
 
 *In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
@@ -169,8 +169,8 @@ Assuming the <<3-host-prerequisites-windows-wsl2-docker,host prerequisites>> are
 
 [,bash]
 ----
-git clone https://github.com/drehtuer/podsilo.git
-cd podsilo
+git clone https://github.com/drehtuer/podsiloApp.git
+cd podsiloApp
 code .          # then: "Reopen in Container" when VS Code offers it
 ----
 
@@ -397,8 +397,9 @@ individual step here has worked at some point, but the whole sequence end-to-end
 has not been timed or re-proven in one go. Expect a first run to spend a long time downloading the
 Gradle distribution, the AGP/Kotlin toolchain, and Robolectric's `android-all` jar (~150 MB).
 
-`./gradlew assembleDebug` additionally produces an installable debug APK (AGP auto-signs it with the
-debug keystore; there is no release signing config).
+`./gradlew assembleDebug` additionally produces an installable debug APK. It is signed with the
+project's own debug key when `keystore/` is present, and with AGP's generated
+`~/.android/debug.keystore` when it is not -- see <<10-builds-versioning-and-release-signing,§10>>.
 
 === YAML and shell linting
 
@@ -503,7 +504,7 @@ Three things follow from choosing Antora, and the first is a real cost:
   inside the zip (`~/.cache/antora/ui/*.zip`).
 
 *Publishing is `.github/workflows/docs.yml`*, and the site is at
-https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo]. Pages' own build step only knows
+https://drehtuer.github.io/podsiloApp[drehtuer.github.io/podsiloApp]. Pages' own build step only knows
 Jekyll, so AsciiDoc has to arrive as a finished artifact: the workflow installs the same two npm
 packages the container carries, runs Kroki as a pair of service containers, builds, and uploads
 `build/site/` for `deploy-pages`. Three things about it are worth knowing before touching it:
@@ -1340,34 +1341,89 @@ than creating a second one. What you must never do is publish before the assets 
 If a release is ever published before CI attaches, the job *fails loudly* rather than warning -- the
 silent skip is what let v0.5.0 go out with green checks and no APKs.
 
+=== Where signing material lives
+
+*Everything is in `keystore/`, and none of it is committed.* `.gitignore` ignores that directory
+outright, so a key dropped in there under any name is covered; the older `*.jks` and
+`keystore.properties` patterns are kept as a backstop for material that lands somewhere else.
+
+----
+keystore/
+  podsilo-release.jks     the real signing key — irreplaceable, back it up
+  podsilo-debug.jks       the shared debug key — regenerable, not a secret
+  keystore.properties     credentials for both
+----
+
 === Creating a release keystore
 
-*The keystore is yours and is never committed* -- `.gitignore` covers `*.jks` and
-`keystore.properties`. Generate one once and keep it safe: losing it means no future build can
-upgrade an installed app in place, because Android identifies an app by its signature.
+*The keystore is yours and is never committed.* Generate one once and keep it safe: losing it means
+no future build can upgrade an installed app in place, because Android identifies an app by its
+signature.
 
 [,bash]
 ----
 keytool -genkeypair -v \
-  -keystore podsilo-release.jks \
+  -keystore keystore/podsilo-release.jks \
   -alias podsilo \
   -keyalg RSA -keysize 4096 -validity 10000 \
   -dname "CN=Podsilo, O=drehtuer, C=DE"
 ----
 
-Then, in the repository root, create `keystore.properties`:
+=== Creating the debug keystore
+
+AGP's default debug keystore is *generated per machine*, which is the entire cause of
+<<a-ci-built-debug-apk-is-a-one-way-door,the one-way door below>>: two debug APKs of the same commit,
+built on two machines, cannot replace one another. A debug key kept with the project fixes that
+between any two machines that have it.
+
+*This key is not a secret, and is deliberately not treated as one.* It uses Android's own debug
+convention -- alias `androiddebugkey`, password `android` -- which is exactly what
+`~/.android/debug.keystore` uses. Nothing anyone installs from a release is signed with it. It sits
+under the ignored `keystore/` only because that is where signing material goes; regenerate it freely,
+accepting that everyone sharing it has to uninstall once.
+
+[,bash]
+----
+keytool -genkeypair -v \
+  -keystore keystore/podsilo-debug.jks \
+  -alias androiddebugkey \
+  -keyalg RSA -keysize 4096 -validity 10000 \
+  -storepass android -keypass android \
+  -dname "CN=Podsilo Debug, O=drehtuer, C=DE"
+----
+
+=== `keystore/keystore.properties`
+
+One file, credentials for both keys. Paths are relative to the repository root, so the same file
+works from the dev container and the host -- they do not agree on absolute paths.
 
 [,properties]
 ----
-storeFile=/absolute/path/to/podsilo-release.jks
+storeFile=keystore/podsilo-release.jks
 storePassword=…
 keyAlias=podsilo
 keyPassword=…
+
+debugStoreFile=keystore/podsilo-debug.jks
+debugStorePassword=android
+debugKeyAlias=androiddebugkey
+debugKeyPassword=android
 ----
 
-`./gradlew assembleRelease` now produces a signed APK. Without the file (or the environment variables
-below) the release build still succeeds, unsigned -- deliberately, so a release build can be inspected
-without holding the key.
+`./gradlew assembleRelease` now produces a signed APK, and `assembleDebug` one signed with the shared
+debug key. *Neither variant fails when its key is missing, but they degrade differently:* release
+builds unsigned -- deliberately, so it can be inspected without holding the key -- while debug falls
+back to AGP's generated keystore, which is what this project did before a debug key existed.
+
+[WARNING]
+====
+*Introducing the debug key is a one-time uninstall.* An existing debug install was signed with AGP's
+per-machine keystore, so the first build signed with `podsilo-debug.jks` will be refused with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `adb uninstall net.drehtuer.podsilo` first -- *which erases the
+episode ledger, the Nextcloud login and the SAF folder grant.* Export a backup from Settings
+(`UI.adoc` §7) before doing it. This is paid once, and is the whole point: after it, debug builds
+from any machine holding the key interchange freely.
+====
 
 === Signing on CI
 
@@ -1387,9 +1443,31 @@ The workflow reads the same values from environment variables, populated from re
 
 | `PODSILO_KEY_PASSWORD`
 | `keyPassword`
+
+| `PODSILO_DEBUG_KEYSTORE_BASE64`
+| `base64 -w0 keystore/podsilo-debug.jks`
+
+| `PODSILO_DEBUG_KEYSTORE_PASSWORD`
+| `android`
+
+| `PODSILO_DEBUG_KEY_ALIAS`
+| `androiddebugkey`
+
+| `PODSILO_DEBUG_KEY_PASSWORD`
+| `android`
 |===
 
-The keystore is decoded into `$RUNNER_TEMP` for the length of the job and dies with the runner.
+Both keystores are decoded into `$RUNNER_TEMP` for the length of the job and die with the runner.
+
+*The four `PODSILO_DEBUG_*` values are carried as secrets for symmetry, not because they are
+sensitive.* Only the first has to be: the alias and both passwords are the published Android debug
+convention, and are written out in full above precisely so that nobody reading the secret list
+mistakes them for the release credentials. Rotating them protects nothing.
+
+*The two keys fail differently, and neither fails the build.* A missing or undecodable release key
+produces an *unsigned* release APK, which cannot be installed and which the release job then refuses
+to attach. A missing or undecodable debug key falls back to AGP's generated keystore -- still
+installable, just not interchangeable with a debug build from anywhere else.
 
 ____
 *Generate the base64 in WSL, not in PowerShell, and check for stray line endings.* The workflow
@@ -1408,11 +1486,18 @@ asset, never the build.
 the APK for a signature block and refuses to attach an unsigned one -- a file that downloads like a
 real build and then refuses to install is worse than a missing file.
 
-=== A CI-built debug APK is a one-way door
+=== A CI-built debug APK was a one-way door, and no longer is
 
-Worth knowing before you sideload one. AGP signs debug builds with `~/.android/debug.keystore`, which
-is *generated per machine* -- so the `podsilo-<version>-debug.apk` attached to a GitHub Release
-carries the _runner's_ keystore, not yours and not this container's:
+*Fixed on 2026-09-12 by giving CI the project debug key* (`PODSILO_DEBUG_KEYSTORE_BASE64`, above).
+A debug APK from a GitHub Release now carries the same signature as one built in this container or on
+the host, so the three interchange in place. The section is kept because the failure it describes is
+what you will see if that secret is ever removed, mis-encoded, or absent on a fork -- and because it
+is the reason the debug key exists at all.
+
+What it used to do, and still does without the secret: AGP signs debug builds with
+`~/.android/debug.keystore`, which is *generated per machine* -- so the
+`podsilo-<version>-debug.apk` attached to a GitHub Release carried the _runner's_ keystore, not yours
+and not this container's:
 
  $ apksigner verify --print-certs installed.apk
  V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
@@ -1427,9 +1512,13 @@ signatures do not match newer version; ignoring!
 ----
 
 The only way out is `adb uninstall`, which takes the ledger, the login and the folder grant with it.
-*So sideload the release APK, not the debug one*, unless you specifically need a debuggable build
-and accept that the next update wipes the app. Diagnosed on the Pixel 10a on 2026-08-09, after both a
-local debug _and_ a correctly release-signed build were refused.
+Diagnosed on the Pixel 10a on 2026-08-09, after both a local debug _and_ a correctly release-signed
+build were refused.
+
+*What still holds after the fix:* debug and release are signed with different keys and always will
+be, so <<installing-a-release-build-over-a-debug-one,moving between the two variants>> is still an
+uninstall. What changed is only that *debug-to-debug* now works from any source holding the key --
+the container, the host, or a release page.
 
 === `adb install` hangs over usbip, but `adb push` doesn't
 

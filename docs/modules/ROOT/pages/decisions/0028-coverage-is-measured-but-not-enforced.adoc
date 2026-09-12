@@ -5,7 +5,16 @@
 
 *Date:* 2026-09-07
 *Status:* accepted
-*Affects:* `build.gradle.kts`, `codecov.yml`, `.github/workflows/ci.yml`, `README.adoc`
+*Affects:* `build.gradle.kts`, `sonar-project.properties`, `.github/workflows/ci.yml`, `README.adoc`
+
+[NOTE]
+====
+*Amended 2026-09-12: the reporting service is SonarQube Cloud, not Codecov.* `codecov.yml` is
+deleted and the single Codecov badge is replaced by two, for line and branch coverage. Everything
+below about *how* coverage is measured -- two mechanisms for two kinds of module, the Robolectric
+class-loader trap, and why nothing fails on the number -- is unchanged and still current; only the
+thing that reads the reports is different. See "`The move to SonarQube Cloud`" at the end.
+====
 
 == What was asked for
 
@@ -89,3 +98,57 @@ without complaint, and the visible result would be a badge still showing last we
 ignores it (`decisions/0017`, `.github/workflows/ci.yml`).
 * *Generated members count.* `:core:model` is almost entirely data classes, so its ~33 % is largely
 ``copy``/``equals``/``hashCode`` that nothing calls deliberately, rather than untested logic.
+
+== The move to SonarQube Cloud (2026-09-12)
+
+The author switched the coverage service to SonarQube Cloud and asked for line and branch coverage
+as separate badges. The measurement did not change: the same `./gradlew coverage`, the same twelve
+JaCoCo XML reports, the same two mechanisms. What changed is who reads them.
+
+*What this bought.* Codecov was given twelve reports and asked for one percentage. SonarQube is given
+the same twelve and reports *line* and *branch* coverage separately, which is the distinction worth
+having here. Line coverage says a line ran; branch coverage says both sides of a decision ran. A
+suite that exercises the happy path of every reconciliation rule and never once takes the conflict
+branch scores well on the first and badly on the second -- and for `:core:sync`, the module CLAUDE.md
+§7 ranks first, that gap is exactly what a coverage number should be surfacing. One combined figure
+hides it, which is the same failure mode as the repository-wide aggregate that nearly hid
+`:core:database` reporting 0 %.
+
+*One setting that is not in this repository.* SonarQube offers two analysis modes -- automatic
+analysis, which it runs itself from the repository, and a CI scanner -- and they are *mutually
+exclusive*: with automatic analysis on, a scanner run is rejected rather than merged. Automatic
+analysis also cannot ingest a coverage report at all, which makes the choice for us. So the project
+has autoscan switched off (`sonar.autoscan.enabled=false`, overriding an instance default of `true`),
+and that lives in the SonarCloud web UI where a clean checkout cannot reproduce it. It is written
+down in `sonar-project.properties`, with the `api/settings/values` call that checks it, because a
+setting the build depends on and the repository cannot see is exactly the kind of thing that gets
+rediscovered by a confusing failure two years later.
+
+*Two badge mechanisms, for a boring reason.* The quality-gate badge and the combined `coverage` badge
+come from SonarQube's own `api/project_badges/measure`. That endpoint's `metric` parameter has a
+fixed allow-list -- `coverage`, `alert_status`, `ncloc`, the ratings -- and `line_coverage` and
+`branch_coverage` are *not* on it (verified against `api/webservices/list` before writing the
+badges). So the two coverage badges are shields.io `dynamic/json` badges reading
+`api/measures/component` directly. That works without a token only because the SonarCloud project is
+public; if it is ever made private, both badges go blank and the fix is the combined `coverage` badge
+plus a note, not a token in the URL.
+
+*What deliberately did not change.*
+
+* *No quality gate.* The scan passes no `-Dsonar.qualitygate.wait=true`, so a red gate never fails
+CI. The argument above -- that one repository-wide percentage cannot express §7's ranking -- applies
+unchanged to a Sonar gate, and adopting one by default would have reversed this ADR's decision as a
+side effect of changing vendors. Turning it on is a one-line change if the author ever wants it.
+* *No `sonar.coverage.exclusions`.* Codecov measured every main source file and reported 77.2 %.
+Excluding anything now would move the number for a reason unrelated to the tests and put a step in
+the graph that means nothing.
+* *The "`no reports`" guard is gone, and nothing replaced it.* CI used to fail when `find` matched no
+JaCoCo XML, because Codecov accepts an upload of nothing and leaves the badge showing last week's
+figure. The scanner fails by itself when `sonar.coverage.jacoco.xmlReportPaths` matches no file, so
+the guard had nothing left to guard.
+
+*One thing the scan does that Codecov did not:* it is a static analysis of the whole repository, not
+only a coverage sink. `sonar.sources=.` means the Gradle scripts, the workflows, the `Dockerfile` and
+the Python under `.claude/skills/` are analysed too. That is a deliberate keep -- those ship with the
+project and can all be wrong -- but it does mean the first scan will raise findings that have nothing
+to do with this change. None of them can fail a build.

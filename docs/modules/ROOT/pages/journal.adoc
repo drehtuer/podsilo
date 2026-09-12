@@ -6271,3 +6271,193 @@ upload, because Codecov accepts an upload of nothing and leaves the badge showin
 *Verified:* `./gradlew ktlintCheck detekt coverage` green in the dev container, 77.2 % line coverage
 across the twelve modules. The Codecov upload itself is *unverified* — it can only run on GitHub
 Actions, so the first push is what proves the token, the action version and the report paths.
+
+
+== 2026-09-12 (repo rename) — `drehtuer/podsilo` became `drehtuer/podsiloApp`
+
+*Attempted:* the author renamed the GitHub repository to `podsiloApp`; adapt every reference to the
+new slug.
+
+*What the rename does and does not touch.* The distinction that made this a five-minute job rather
+than a sweep through 12 modules: *the project is still called Podsilo.* Only the repository slug
+changed. So the Kotlin package `net.drehtuer.podsilo`, the Antora component `podsilo::`, the APK and
+artifact names (`podsilo-*.apk`, `podsilo-apks`), the `PODSILO_*` CI secrets, the on-device database
+file, the `run-podsilo` skill and the `PODSILO_REPOSITORY_URL` constant's *name* all stay exactly as
+they were. What changed is a URL prefix, in three shapes — `github.com/drehtuer/podsilo`,
+`codecov.io/gh/drehtuer/podsilo` and the Pages host `drehtuer.github.io/podsilo` — which is why the
+rewrite was anchored on those prefixes with a `(?!App)` guard rather than on the word "podsilo".
+A blind `podsilo` → `podsiloApp` substitution would have renamed the package.
+
+Eleven URLs across six files: the five README badges and their prose, two links in `SECURITY.md`, the
+Antora playbook's `site.url`, the docs-site index, the clone command in `dev-environment.adoc` (and
+the `cd` after it), and the About screen's source-code pointer. `git remote set-url` too. Note
+`SECURITY.md`'s third-party link is now `drehtuer.github.io/podsiloApp/podsilo/third-party.html` —
+the second segment is the Antora component name, not a missed replacement.
+
+*Deliberately not changed.* Two things:
+
+* `journal.adoc`'s 2026-08-30 entry quotes the About screen as it read that day, old URL and all.
+Section 9 of this file says a log edited to match the present is not a log; GitHub redirects the old
+slug permanently, so the citation still resolves.
+* `.devcontainer/devcontainer.json` still mounts the tree at `/workspaces/podsilo`. That is a path
+inside the container, bound from `${localWorkspaceFolder}` whatever the host directory is called, and
+changing it would orphan the existing container and its named volumes for no gain.
+
+*The redirect is a grace period, not a fix.* GitHub forwards the old slug until someone creates a new
+repository at `drehtuer/podsilo`, at which point every unfixed link silently points at a stranger's
+project. The badge SVGs would have been the visible symptom — they fetch by slug and would have kept
+rendering, from the wrong repository.
+
+*Verified:* `./gradlew ktlintCheck detekt test` green in the dev container (the host has no Android
+SDK — the run needs the `vsc-podsilo-*` image with the `podsilo-android-sdk` and `podsilo-gradle`
+volumes), plus `yamllint .` and the `asciidoctor --failure-level=WARN` sweep over every `.adoc`. The
+two yamllint line-length warnings in `ci.yml` predate this change. *Unverified:* the badges and the
+Pages URL, which can only be confirmed once this lands on `main` and the site redeploys.
+
+
+== 2026-09-12 (SonarQube) — the same reports, read by something that answers two questions
+
+*Attempted:* replace Codecov with SonarQube Cloud for coverage; delete the Codecov configuration and
+badge; add separate line and branch coverage badges. `SONAR_TOKEN` was already in the repository
+secrets.
+
+*The measurement did not move, and that was the point.* `./gradlew coverage` still writes the same
+twelve JaCoCo XML reports by the same two mechanisms, and the Robolectric `isIncludeNoLocationClasses`
+fix from 2026-09-07 is untouched. All that changed is the consumer: `sonar-project.properties` names
+the two report globs and the `SonarSource/sonarqube-scan-action` step replaces the `find`-and-upload
+pair. `decisions/0028` is amended rather than superseded, because its actual decision — coverage is
+measured, not enforced — survives the vendor change intact.
+
+*Two lookups worth recording, because both would have been easy to get wrong by assuming.*
+
+`gh secret list` showed `SONAR_TOKEN` and *no* `SONAR_HOST_URL`, which is what settles SonarQube Cloud
+over a self-hosted server without having to ask. And `api/components/search?organization=drehtuer`
+returned the project already created, as `drehtuer_podsiloApp`, answering anonymously — which is the
+other fact the badges depend on, since a private project would not serve its measures to shields.io.
+Two `curl`s in place of two questions.
+
+*The badge endpoint does not do what was asked, and the check for that was cheap.* SonarQube's own
+`api/project_badges/measure` looks like the obvious way to render "`line coverage`" and "`branch
+coverage`". It is not: `api/webservices/list` gives its `metric` parameter as a fixed allow-list of
+fourteen values, and while `coverage` is on it, `line_coverage` and `branch_coverage` are not. Asking
+the API to describe itself took one command and replaced a guess that would have shipped two badges
+rendering an error image. The two are shields.io `dynamic/json` badges against
+`api/measures/component` instead — the same shape a sibling repository of the author's already uses,
+so this is a pattern being reused rather than invented (CLAUDE.md §3).
+
+*Why two numbers and not one.* Line coverage says a line ran; branch coverage says both sides of a
+decision ran. For `:core:sync` — the module §7 ranks first — a suite that walks the happy path of
+every reconciliation rule and never takes a conflict branch is exactly the failure this project
+should be able to see, and SonarQube's combined `coverage` metric averages it away. That is the same
+lesson as 2026-09-07's, one level up: *an aggregate hides the thing you built the measurement to
+find.* A single figure nearly hid `:core:database` at 0 %; a single figure would also hide untested
+branches behind well-covered lines.
+
+*The one piece of setup that is not a file.* SonarQube's automatic analysis and its CI scanner are
+mutually exclusive — with autoscan on, the scan CI runs is rejected outright — and autoscan is also
+incapable of reading a coverage report, so it had to go off. The author switched it off in the web
+UI; `api/settings/values?keys=sonar.autoscan.enabled` confirms `false` against an instance default of
+`true`. That is a dependency of the build that no checkout can show you, so it is written into
+`sonar-project.properties` along with the command that checks it. The habit worth keeping: when a
+green build depends on a setting in someone else's web UI, the repository should at least be able to
+*tell you the setting exists*.
+
+*Two things deliberately not adopted, both of which the tool offers and neither of which was asked
+for.* No `-Dsonar.qualitygate.wait=true`, so a red gate cannot fail CI — turning it on would have
+reversed `decisions/0028` as a side effect of changing vendors. And no `sonar.coverage.exclusions`:
+excluding anything now would move the number away from the 77.2 % Codecov last reported for a reason
+that has nothing to do with the tests, which ruins the only thing the badge is for. Both are noted in
+the ADR so that adopting either later is a decision rather than a drift.
+
+*Verified:* `./gradlew ktlintCheck detekt test` green in the dev container, plus `yamllint .`, the
+`asciidoctor --failure-level=WARN` sweep, and a check that the `.properties` file's report globs match
+files that `coverage` actually produces. The shields.io badge URLs were confirmed to render real
+numbers against the author's already-analysed sibling project. *Unverified, and it can only be
+verified by pushing:* the scan itself. Podsilo's SonarCloud project has no analysis yet
+(`measures: []`), so the first CI run is what proves the token, the action, the report paths and the
+badges at once — until then both badges will render an error, which is expected and not a mistake.
+
+*Left for the author:* the now-unused `CODECOV_TOKEN` secret. Deleting a secret is not something to do
+on someone's behalf.
+
+
+== 2026-09-12 (signing) — one folder for the keys, and a debug key that is the same everywhere
+
+*Attempted:* move the release keystore and its credentials into a `keystore/` directory, ignore that
+directory, and add a signing key for the debug build.
+
+*The move is the boring half, and it had exactly one way to go wrong quietly.* `keystore.properties`
+is read by `app/build.gradle.kts` at a hard-coded relative path, and `storeFile` inside it is another
+relative path; get either wrong and the build does not fail — it logs at `info` and produces an
+*unsigned* release APK, because building unsigned rather than failing is the deliberate behaviour
+when no key is configured. A silent downgrade, in other words, of the same family as the Codecov
+upload that accepted nothing five days ago. So the check was not "`does it build`" but
+`apksigner verify --print-certs` on the actual artifact: `CN=Podsilo` still on the release APK, which
+is the only evidence that the path change landed.
+
+*The debug key is the half worth having.* AGP signs debug builds with `~/.android/debug.keystore`,
+which is generated *per machine* — so two debug APKs of the same commit, built in the dev container
+and on the host, can never replace one another; the install fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` and the only way through is an uninstall that takes the ledger,
+the login and the SAF grant with it. §10 had already documented that as a one-way door, diagnosed on
+the Pixel 10a. A key kept with the project removes it between any two machines that hold the key.
+
+It uses Android's own debug convention — alias `androiddebugkey`, password `android` — and the
+documentation says in as many words that *this key is not a secret*. That matters because it lives
+under an ignored directory next to a key that very much is, and the next person to look will
+reasonably assume both are sensitive. Writing down which one is not is cheaper than having someone
+treat a throwaway as irreplaceable.
+
+*One Kotlin trap worth recording.* `getByName("debug") { storeFile = debugStoreFile }` does not
+compile: the release block above declares `val storeFile`, which shadows the receiver's property
+inside the lambda, and the error is `'val' cannot be reassigned` pointing at a line that is not
+assigning to a `val` at all. `this.storeFile` fixes it — which is exactly why the release config had
+already qualified its own. A comment now says so in both places.
+
+*Two consequences, one paid immediately and one declined.*
+
+* *The first debug install after this is a forced uninstall*, on every device already holding a debug
+build — including the Tier 2 emulator. It is paid once, and it is the point. `dev-environment.adoc`
+§10 carries the warning next to the `keytool` invocation rather than only here.
+* *CI is deliberately not given the debug key.* `keystore/` is ignored, so a runner falls back to
+AGP's generated keystore exactly as before, and a CI-built debug APK remains a one-way door against
+every local build. Carrying the `.jks` as a fourth secret would fix that, but the value of a shared
+debug key is that *your own* machines agree, and §10 already tells you not to sideload the debug APK
+from a release page.
+
+*Noted, not built:* `run-podsilo`'s `driver.py` installs with `adb install -r -t` and has no fallback
+for a signature mismatch, so the skill will fail once on any emulator holding an older debug build.
+The fix is small but deletes app data, which makes it a decision rather than a tidy-up — it went to
+`backlog.adoc` (CLAUDE.md §9) instead of being slipped in alongside a signing change.
+
+*No ADR for this one.* `dev-environment.adoc` §10 now carries the layout, both `keytool`
+invocations, the not-a-secret statement, the uninstall warning and the reason CI is excluded. A
+`decisions/` entry would have restated it a second time in a second place, which is the drift those
+files exist to prevent.
+
+*Verified:* `ktlintCheck detekt assembleDebug assembleRelease` green in the dev container, and both
+APKs checked with `apksigner verify --print-certs` — debug now `CN=Podsilo Debug` where it used to be
+`CN=Android Debug`, release still `CN=Podsilo`. `git check-ignore` confirms all three files under
+`keystore/` are ignored by the new directory rule. *Unverified:* an actual install over an existing
+debug build — the uninstall-first requirement above is inferred from Android's documented signature
+rule and from this project's own 2026-08-09 diagnosis, not observed today.
+
+*Reversed the same day, at the author's request.* The paragraph above declines to give CI the debug
+key; the author asked for signed debug builds on CI and added the four `PODSILO_DEBUG_*` secrets, so
+the workflow now decodes the debug keystore beside the release one and passes both to
+`assembleDebug assembleRelease`. The reasoning that was declined was never that it would not work --
+it was that the benefit looked narrow. It is not: it retires the "`one-way door`" that
+`dev-environment.adoc` §10 has carried since 2026-08-09, because the debug APK on a release page
+now upgrades in place from a local build and vice versa. That section is rewritten rather than
+deleted, since it is still exactly what happens if the secret goes missing or a fork builds without
+it.
+
+Two details worth keeping. *The two keys fail differently and neither fails the build* — a missing
+release key yields an unsigned APK that cannot be installed, a missing debug key falls back to AGP's
+generated one and installs fine — so the decode steps look alike but their warnings say different
+things. And *three of the four new secrets are not secret*: the alias and both passwords are the
+published Android convention. They are stored as secrets for symmetry with the release key, which is
+defensible, but it makes a secret list where two entries called `…KEY_PASSWORD` have completely
+different consequences if leaked. The documented value is therefore written out in full in §10's
+table, so the distinction is visible to whoever reads it next rather than living in one person's
+memory.

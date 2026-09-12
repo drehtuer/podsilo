@@ -2,11 +2,19 @@
 :idprefix:
 :idseparator: -
 
-image:https://github.com/drehtuer/podsilo/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsilo/actions/workflows/ci.yml]
-image:https://codecov.io/gh/drehtuer/podsilo/branch/main/graph/badge.svg[Coverage,link=https://codecov.io/gh/drehtuer/podsilo]
-image:https://github.com/drehtuer/podsilo/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main[CodeQL,link=https://github.com/drehtuer/podsilo/security/code-scanning]
-image:https://github.com/drehtuer/podsilo/actions/workflows/docs.yml/badge.svg?branch=main[Docs,link=https://drehtuer.github.io/podsilo]
-image:https://img.shields.io/github/v/release/drehtuer/podsilo?sort=semver[Release,link=https://github.com/drehtuer/podsilo/releases/latest]
+// The icon form, not either lockup: the lockups carry live Archivo `<text>`, and `UI.adoc` §C2
+// requires that to be outlined before the asset leaves the app — README is named in that rule, and
+// Archivo is not in this repository. The icon also carries its own accent ground (§C5 allows the
+// mark on the accent field), so it stays legible on GitHub's light and dark themes alike, which a
+// two-colour mark on transparency would not.
+image::assets/logos/podsilo-icon.svg[Podsilo,96]
+
+image:https://github.com/drehtuer/podsiloApp/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsiloApp/actions/workflows/ci.yml]
+image:https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsonarcloud.io%2Fapi%2Fmeasures%2Fcomponent%3Fcomponent%3Ddrehtuer_podsiloApp%26metricKeys%3Dline_coverage&query=%24.component.measures%5B0%5D.value&suffix=%25&label=lines&color=4c1[Line coverage,link=https://sonarcloud.io/component_measures?id=drehtuer_podsiloApp&metric=line_coverage]
+image:https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsonarcloud.io%2Fapi%2Fmeasures%2Fcomponent%3Fcomponent%3Ddrehtuer_podsiloApp%26metricKeys%3Dbranch_coverage&query=%24.component.measures%5B0%5D.value&suffix=%25&label=branches&color=4c1[Branch coverage,link=https://sonarcloud.io/component_measures?id=drehtuer_podsiloApp&metric=branch_coverage]
+image:https://github.com/drehtuer/podsiloApp/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main[CodeQL,link=https://github.com/drehtuer/podsiloApp/security/code-scanning]
+image:https://github.com/drehtuer/podsiloApp/actions/workflows/docs.yml/badge.svg?branch=main[Docs,link=https://drehtuer.github.io/podsiloApp]
+image:https://img.shields.io/github/v/release/drehtuer/podsiloApp?sort=semver[Release,link=https://github.com/drehtuer/podsiloApp/releases/latest]
 link:LICENSE[image:https://img.shields.io/badge/licence-GPL--3.0--or--later-blue[Licence: GPL-3.0-or-later\]]
 
 The *CI* badge covers eight checks -- yamllint, shellcheck, asciidoctor, ktlint, detekt, Android
@@ -27,20 +35,29 @@ The badge deliberately says nothing about the device tests: those live in `src/a
 hosted runner has a device to run them on (see `.github/workflows/ci.yml`, which explains at length
 why an emulator is not added there).
 
-The *Coverage* badge is the line coverage of the Tier 1 unit tests, measured by JaCoCo during that
-same CI run and uploaded to https://codecov.io/gh/drehtuer/podsilo[Codecov]. It is a report, not a
-ninth check -- `codecov.yml` keeps both of Codecov's status checks informational, so no pull request
-is ever failed for moving the number. There is no target to hit either: this project's testing
+The *lines* and *branches* badges are the coverage of the Tier 1 unit tests, measured by JaCoCo
+during that same CI run and analysed by
+https://sonarcloud.io/project/overview?id=drehtuer_podsiloApp[SonarQube Cloud]. They are a report,
+not a ninth check: CI passes no `sonar.qualitygate.wait`, so a red quality gate or a dropped
+percentage never fails a pull request. There is no target to hit either -- this project's testing
 priorities are ranked in `CLAUDE.adoc` §7, sync reconciliation first and Compose smoke tests last,
-and one repository-wide percentage cannot tell those apart. What it is good for is the trend, and
+and one repository-wide percentage cannot tell those apart. What they are good for is the trend, and
 for spotting a module that has quietly stopped being tested.
 
-Two things worth knowing before reading the number. It covers *unit tests only* -- the device tests
-are excluded for the same reason the CI badge ignores them. And it counts Kotlin's generated members:
-`:core:model` is almost entirely data classes, so its ~33 % is mostly ``copy``/``equals``/``hashCode``
-that nothing calls on purpose, not untested logic.
+*Two numbers rather than one, because they fail differently.* Line coverage says a line ran; branch
+coverage says both sides of a decision ran. A suite that walks the happy path of every reconciliation
+rule and never once takes the conflict branch scores well on the first and badly on the second, and
+for `:core:sync` that gap is precisely the thing worth seeing. SonarQube's own combined `coverage`
+metric folds the two together, which is why it is not the badge here. The two are rendered through
+shields.io because SonarQube's native badge endpoint offers only that combined figure -- its
+`api/project_badges/measure` accepts `coverage` and neither `line_coverage` nor `branch_coverage`.
 
-The *Docs* badge is the documentation site at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo].
+Two things worth knowing before reading either number. They cover *unit tests only* -- the device
+tests are excluded for the same reason the CI badge ignores them. And they count Kotlin's generated
+members: `:core:model` is almost entirely data classes, so its ~33 % is mostly
+``copy``/``equals``/``hashCode`` that nothing calls on purpose, not untested logic.
+
+The *Docs* badge is the documentation site at https://drehtuer.github.io/podsiloApp[drehtuer.github.io/podsiloApp].
 GitHub Pages can only build Jekyll, and these documents are AsciiDoc assembled by Antora, so
 `.github/workflows/docs.yml` builds the site itself -- diagrams and all, against a Kroki service --
 and hands the finished artifact to Pages. It also fails on an unresolved `xref:`, which is the one
@@ -50,7 +67,7 @@ The *CodeQL* badge is GitHub code scanning, on default setup rather than a workf
 repository -- which is why its badge URL points at `github-code-scanning/codeql` and not at
 `.github/workflows/`. It analyses `java-kotlin` and `actions` on every push and pull request, plus
 weekly. Green means the analysis ran, *not* that it found nothing; the alert count lives behind the
-badge on the https://github.com/drehtuer/podsilo/security/code-scanning[code scanning page].
+badge on the https://github.com/drehtuer/podsiloApp/security/code-scanning[code scanning page].
 
 The repository's other security checks -- *Dependabot* alerts and security updates, *secret
 scanning* and its push protection -- have no badge, and cannot have one. Their state is private to
@@ -64,7 +81,7 @@ Think of it as a silo: episodes flow in from your feeds, pool in a folder you pi
 consumed by whatever audio player you actually like.
 
 ____
-*Status: https://github.com/drehtuer/podsilo/releases/latest[v0.7.0 released] -- the app works
+*Status: https://github.com/drehtuer/podsiloApp/releases/latest[v0.7.0 released] -- the app works
 end to end, and this release is about being able to take a decision back.* Subscription
 mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
 are built and tested (819 JVM tests, green), and all eight screens in `docs/UI.adoc` render and are
@@ -169,7 +186,7 @@ siblings. `./scripts/build-docs.sh` builds the site into `build/site/`. One cons
 worth knowing before clicking a link in here: pages reference each other with Antora's `xref:` macro,
 which GitHub's file view does not resolve, so cross-references work on the built site and not while
 browsing the repository. That site is published at
-https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo] on every push to `main` that touches
+https://drehtuer.github.io/podsiloApp[drehtuer.github.io/podsiloApp] on every push to `main` that touches
 the documentation, and it is the better place to read any of this: the links resolve and the 26
 Mermaid diagrams are rendered.
 

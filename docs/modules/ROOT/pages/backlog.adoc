@@ -63,6 +63,13 @@ stands, Podsilo cannot be submitted to Play.
 commit differ. F-Droid does not require reproducibility, but it forecloses the verified-build
 badge, and the timestamp is the only obstacle.
 
+* *`run-podsilo`'s installer should fall back to uninstall-and-retry.* `driver.py`'s `install`
+runs `adb install -r -t`, which cannot get past `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — and the debug
+signing key added on 2026-09-12 makes exactly that happen once on any emulator or device still
+holding a previously-signed debug build. The fix is to catch that one failure, `adb uninstall`, and
+retry; it is a handful of lines, but it deletes app data, so it wants a deliberate decision about
+whether the driver should do that silently rather than being slipped in alongside a signing change.
+
 == Declined, with reasons
 
 * *An "alternative log in using app password" form.* Nextcloud offers one on its own flow page, and

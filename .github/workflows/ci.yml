@@ -9,10 +9,11 @@
 # three cheapest come first and need no JDK. One job rather than seven means the badge answers one
 # question — "is main healthy" — and the step that failed is one click away.
 #
-# The unit-test step also measures coverage and uploads it to Codecov, which is
-# where the coverage badge in README.adoc gets its number. That is a report, not a
-# ninth check: nothing here fails on a coverage threshold (codecov.yml keeps both
-# statuses informational), only on the upload not happening at all.
+# The unit-test step also measures coverage, and a SonarQube Cloud scan then
+# ingests the JaCoCo XML — that is where the two coverage badges in README.adoc
+# get their numbers. It is a report, not a ninth check: there is no
+# `sonar.qualitygate.wait`, so a red gate or a dropped percentage never fails
+# this workflow. See decisions/0028; sonar-project.properties is the config.
 #
 # DO NOT ADD `connectedAndroidTest` TO THIS WORKFLOW. Everything under
 # `src/androidTest/` is the device test set (`./scripts/device-test.sh`,
@@ -25,8 +26,11 @@
 #
 # ARTIFACTS
 #
-# Both variants are built. `podsilo-<version>-debug.apk` is installable as-is
-# (AGP signs it with the debug keystore) and is the sideload build.
+# Both variants are built. `podsilo-<version>-debug.apk` is installable as-is,
+# signed with the project's shared debug key (`PODSILO_DEBUG_KEYSTORE_BASE64`)
+# so that it can be upgraded in place by a locally built debug APK and vice
+# versa — which was impossible while AGP signed it with the runner's own
+# generated keystore. See dev-environment.adoc §10.
 # `podsilo-<version>.apk` is the real release: R8-minified and resource-shrunk,
 # roughly a twelfth the size, and **signed only when the keystore secrets are
 # configured** — see dev-environment.adoc §9. Without them it still builds,
@@ -80,11 +84,20 @@ jobs:
     # the release); push/pull_request runs never exercise that permission.
     permissions:
       contents: write
+      # SonarQube decorates the pull request with its findings.
+      pull-requests: write
+    # At job level so the `if:` on the scan step can see it — a step's own `env:`
+    # is not in scope for that step's own condition.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
           # versionCode is `git rev-list --count HEAD` (app/build.gradle.kts). The
-          # default shallow clone would make every build number 1.
+          # default shallow clone would make every build number 1. SonarQube
+          # needs the same full history for a second reason: it attributes issues
+          # to a commit and an author, and works out what "new code" means from
+          # the dates — against a shallow clone every line reads as new.
           fetch-depth: 0
 
       # Repository hygiene for the two languages Gradle cannot see: YAML (this
@@ -150,41 +163,68 @@ jobs:
       - name: Unit tests (Tier 1) with coverage
         run: ./gradlew coverage
 
-      # The report path differs by module type — Gradle's jacoco plugin writes one
-      # place, AGP's coverage task another — so the list is discovered rather than
-      # written down, and a module added later is covered without editing this file.
+      # Runs after `coverage` so the JaCoCo XML and the JUnit results already
+      # exist; sonar-project.properties names the paths rather than passing them
+      # here, so the same scan can be reproduced locally.
       #
-      # An empty list is a hard failure. Codecov accepts an upload of nothing quite
-      # happily, and the visible result is a badge that keeps showing last week's
-      # number instead of going red.
-      - name: Collect coverage reports
-        id: coverage
-        run: |
-          files=$(find . \
-              \( -path '*/build/reports/jacoco/test/jacocoTestReport.xml' \
-              -o -path '*/build/reports/coverage/test/debug/report.xml' \) \
-              -print | sort | paste -sd,)
-          if [ -z "$files" ]; then
-              echo "::error::No JaCoCo reports found — the coverage task produced nothing to upload."
-              exit 1
-          fi
-          echo "$files" | tr ',' '\n'
-          echo "files=$files" >> "$GITHUB_OUTPUT"
-
-      # `disable_search` so the only thing uploaded is the list above: left to search,
-      # the CLI walks the whole tree and also finds JaCoCo's own bundled report fixtures
-      # under build/tmp, which are not this project's coverage.
+      # Skipped when the token is absent, which is what a pull request from a
+      # fork looks like — a missing secret should not read as a failed build.
+      # SONAR_TOKEN is set at job level because a step's own `env:` block is not
+      # in scope for that step's own `if:` (the same trap the keystore step
+      # below documents).
       #
-      # `fail_ci_if_error` is deliberate, and the same argument as the release step
-      # further down: a silent skip leaves a badge that looks current and isn't. If
-      # Codecov itself is down, re-run the job.
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+      # Deliberately NO `-Dsonar.qualitygate.wait=true`. Coverage here is
+      # measured and not enforced (decisions/0028): CLAUDE.md §7 ranks what
+      # matters — reconciliation first, Compose smoke tests last — and one
+      # repository-wide percentage cannot express that ranking, so a gate on it
+      # would fail pull requests for reasons nobody intends to act on.
+      #
+      # Unlike the Codecov step this replaced, there is no "fail if the upload
+      # found nothing" guard, because there is nothing to guard: the scanner
+      # fails by itself when `sonar.coverage.jacoco.xmlReportPaths` matches no
+      # file, rather than accepting an upload of nothing and leaving the badge
+      # showing last week's number.
+      - name: SonarQube scan
+        if: ${{ !cancelled() && env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v8
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ steps.coverage.outputs.files }}
-          disable_search: true
-          fail_ci_if_error: true
+          args: >
+            -Dsonar.projectVersion=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+
+      # The debug key, decoded the same way as the release key below and for the
+      # same reason — but note the two fail differently, and neither fails the
+      # build. Without this, AGP falls back to the runner's own generated
+      # `~/.android/debug.keystore`, which still produces an installable APK;
+      # it just cannot be upgraded in place by a debug build from anywhere else.
+      # A missing release key produces an *unsigned* APK, which cannot be
+      # installed at all. So this step warns and continues, exactly as that one
+      # does.
+      #
+      # The debug key is not a secret in the way the release key is — it is the
+      # Android convention (alias `androiddebugkey`, password `android`) and
+      # signs nothing anyone installs from a release. It is carried as a secret
+      # for symmetry with the release key, not because the value is sensitive;
+      # dev-environment.adoc §10 says so where someone reading `keystore/` will
+      # find it.
+      - name: Decode debug keystore
+        id: debug-keystore
+        env:
+          KEYSTORE: ${{ secrets.PODSILO_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          jks="$RUNNER_TEMP/podsilo-debug.jks"
+          if [ -z "$KEYSTORE" ]; then
+              echo "No debug keystore secret configured — AGP's generated debug key will be used."
+              exit 0
+          fi
+
+          if ! printf '%s' "$KEYSTORE" | tr -d '[:space:]' | base64 -d > "$jks" 2>/dev/null || [ ! -s "$jks" ]; then
+              rm -f "$jks"
+              echo "::warning::PODSILO_DEBUG_KEYSTORE_BASE64 could not be decoded — falling back to AGP's generated debug key. Regenerate with: base64 -w0 keystore/podsilo-debug.jks"
+              exit 0
+          fi
+
+          echo "Decoded debug keystore: $(wc -c < "$jks") bytes"
+          echo "path=$jks" >> "$GITHUB_OUTPUT"
 
       # The keystore never exists in the repository. It is written from a secret
       # into the runner's workspace for the length of the job, and the workspace
@@ -227,6 +267,10 @@ jobs:
           PODSILO_KEYSTORE_PASSWORD: ${{ secrets.PODSILO_KEYSTORE_PASSWORD }}
           PODSILO_KEY_ALIAS: ${{ secrets.PODSILO_KEY_ALIAS }}
           PODSILO_KEY_PASSWORD: ${{ secrets.PODSILO_KEY_PASSWORD }}
+          PODSILO_DEBUG_KEYSTORE_FILE: ${{ steps.debug-keystore.outputs.path }}
+          PODSILO_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.PODSILO_DEBUG_KEYSTORE_PASSWORD }}
+          PODSILO_DEBUG_KEY_ALIAS: ${{ secrets.PODSILO_DEBUG_KEY_ALIAS }}
+          PODSILO_DEBUG_KEY_PASSWORD: ${{ secrets.PODSILO_DEBUG_KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease
 
       # The R8 mapping goes with them. A stack trace from a minified build is
