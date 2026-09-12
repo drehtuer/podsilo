@@ -7,7 +7,17 @@
 // Archivo is not in this repository. The icon also carries its own accent ground (§C5 allows the
 // mark on the accent field), so it stays legible on GitHub's light and dark themes alike, which a
 // two-colour mark on transparency would not.
-image::assets/logos/podsilo-icon.svg[Podsilo,96]
+//
+// Raw HTML rather than `image::...[align="center"]`, and that is not a preference. Asciidoctor
+// centres a block image by wrapping it in `<div class="imageblock text-center">`, which needs
+// Asciidoctor's own stylesheet — GitHub loads none of it and strips the wrapper outright (checked
+// against GitHub's rendered output: zero occurrences of `text-center`). `<p align="center">`
+// survives its sanitiser and is what actually centres the mark on the page people read.
+++++
+<p align="center">
+  <img src="assets/logos/podsilo-icon.svg" width="96" alt="Podsilo">
+</p>
+++++
 
 image:https://github.com/drehtuer/podsiloApp/actions/workflows/ci.yml/badge.svg?branch=main[CI,link=https://github.com/drehtuer/podsiloApp/actions/workflows/ci.yml]
 image:https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsonarcloud.io%2Fapi%2Fmeasures%2Fcomponent%3Fcomponent%3Ddrehtuer_podsiloApp%26metricKeys%3Dline_coverage&query=%24.component.measures%5B0%5D.value&suffix=%25&label=lines&color=4c1[Line coverage,link=https://sonarcloud.io/component_measures?id=drehtuer_podsiloApp&metric=line_coverage]
@@ -22,35 +32,6 @@ does not play them.
 
 Think of it as a silo: episodes flow in from your feeds, pool in a folder you picked, and are
 consumed by whatever audio player you actually like.
-
-____
-*Status: https://github.com/drehtuer/podsiloApp/releases/latest[v0.7.0 released] -- the app works
-end to end, and this release is about being able to take a decision back.* Subscription
-mirroring, feed refresh, the download pipeline, GPodder sync, Nextcloud login, naming and tagging
-are built and tested (819 JVM tests, green), and all eight screens in `docs/UI.adoc` render and are
-reachable. `podsilo-0.7.0.apk` is a signed, minified release build; sideload it on your own device.
-
-*Activity now lists what you decided, not just what is downloading.* _Mark as played_ holds its
-decision for five seconds and is then silent, so a mis-swipe was unrecoverable in practice -- not
-because the state could not be changed back, but because there was no way to find out _which_
-episode it was. S7's new *Recent actions* group is that list, with _Mark as unplayed_ beside each
-decision it can still take back.
-
-*Two things that made the app feel broken are gone.* A swipe meant for the system -- back from
-either screen edge, or the app-switch drag -- no longer lands on an episode row and marks it played.
-And the episode list no longer freezes during a download: its rows were being re-projected on the
-main thread once a second for the length of every download, and on every triage decision.
-
-*A bad address now says what is wrong with it.* A space in the server address used to report as
-"can't reach that address" -- the same words a real network failure gets -- which sends you to look
-at your network for a typo. It is now named while you type, before anything is contacted.
-
-*Verified on real hardware against a real Nextcloud* (2026-08-23, Pixel 10a / Android 17): the
-device test set is *61 tests, 0 failed, 0 skipped*, and the two fixes above were driven on the
-phone that reported them -- an edge swipe now goes to the system, and a real download measured
-*3 % janky frames* while scrolling a 2,468-episode library. See
-link:docs/modules/ROOT/pages/dev-environment.adoc[`docs/dev-environment.adoc`] §6.
-____
 
 == The idea
 
