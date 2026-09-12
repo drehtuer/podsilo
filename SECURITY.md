@@ -11,7 +11,7 @@ means for reporting a vulnerability, and what the app already does and does not 
 **Do not open a public issue for a security problem.** Use either of:
 
 1. **GitHub private vulnerability reporting** — the *Report a vulnerability* button under
-   [Security](https://github.com/drehtuer/podsilo/security/advisories/new). Preferred: it keeps the
+   [Security](https://github.com/drehtuer/podsiloApp/security/advisories/new). Preferred: it keeps the
    report, the fix and the advisory in one place.
 2. **Email** — <drehtuer@drehtuer.de>. There is no PGP key; if you need encryption, say so in a first
    message and one will be arranged.
@@ -85,7 +85,7 @@ Stated so you can check it rather than trust it. Each claim points at where it l
   subscription list, episode titles and show notes in readable form — treat it accordingly
   (`core/model/.../port/DatabaseArchive.kt`).
 - **Four permissions**, all in
-  [`app/src/main/AndroidManifest.xml`](https://github.com/drehtuer/podsilo/blob/main/app/src/main/AndroidManifest.xml):
+  [`app/src/main/AndroidManifest.xml`](https://github.com/drehtuer/podsiloApp/blob/main/app/src/main/AndroidManifest.xml):
   `INTERNET`, `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_DATA_SYNC` (active downloads), and
   `POST_NOTIFICATIONS`. No storage permission — downloads go through the Storage Access Framework
   into a folder you pick, so the app can write there and nowhere else.
@@ -93,7 +93,7 @@ Stated so you can check it rather than trust it. Each claim points at where it l
   feed servers on your subscription list, and nothing else.
 - **Dependencies are pinned** in `gradle/libs.versions.toml` (no floating versions) and every one is
   licence-reviewed in
-  [`third-party.adoc`](https://drehtuer.github.io/podsilo/podsilo/third-party.html). Releases are
+  [`third-party.adoc`](https://drehtuer.github.io/podsiloApp/podsilo/third-party.html). Releases are
   minified R8 builds signed with a key that is not in this repository — `*.jks` and `keystore.properties` are
   gitignored. Android enforces signature continuity, so an update that will not install over your
   existing one is a signal worth reporting.

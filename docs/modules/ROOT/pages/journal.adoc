@@ -6271,3 +6271,45 @@ upload, because Codecov accepts an upload of nothing and leaves the badge showin
 *Verified:* `./gradlew ktlintCheck detekt coverage` green in the dev container, 77.2 % line coverage
 across the twelve modules. The Codecov upload itself is *unverified* — it can only run on GitHub
 Actions, so the first push is what proves the token, the action version and the report paths.
+
+
+== 2026-09-12 (repo rename) — `drehtuer/podsilo` became `drehtuer/podsiloApp`
+
+*Attempted:* the author renamed the GitHub repository to `podsiloApp`; adapt every reference to the
+new slug.
+
+*What the rename does and does not touch.* The distinction that made this a five-minute job rather
+than a sweep through 12 modules: *the project is still called Podsilo.* Only the repository slug
+changed. So the Kotlin package `net.drehtuer.podsilo`, the Antora component `podsilo::`, the APK and
+artifact names (`podsilo-*.apk`, `podsilo-apks`), the `PODSILO_*` CI secrets, the on-device database
+file, the `run-podsilo` skill and the `PODSILO_REPOSITORY_URL` constant's *name* all stay exactly as
+they were. What changed is a URL prefix, in three shapes — `github.com/drehtuer/podsilo`,
+`codecov.io/gh/drehtuer/podsilo` and the Pages host `drehtuer.github.io/podsilo` — which is why the
+rewrite was anchored on those prefixes with a `(?!App)` guard rather than on the word "podsilo".
+A blind `podsilo` → `podsiloApp` substitution would have renamed the package.
+
+Eleven URLs across six files: the five README badges and their prose, two links in `SECURITY.md`, the
+Antora playbook's `site.url`, the docs-site index, the clone command in `dev-environment.adoc` (and
+the `cd` after it), and the About screen's source-code pointer. `git remote set-url` too. Note
+`SECURITY.md`'s third-party link is now `drehtuer.github.io/podsiloApp/podsilo/third-party.html` —
+the second segment is the Antora component name, not a missed replacement.
+
+*Deliberately not changed.* Two things:
+
+* `journal.adoc`'s 2026-08-30 entry quotes the About screen as it read that day, old URL and all.
+Section 9 of this file says a log edited to match the present is not a log; GitHub redirects the old
+slug permanently, so the citation still resolves.
+* `.devcontainer/devcontainer.json` still mounts the tree at `/workspaces/podsilo`. That is a path
+inside the container, bound from `${localWorkspaceFolder}` whatever the host directory is called, and
+changing it would orphan the existing container and its named volumes for no gain.
+
+*The redirect is a grace period, not a fix.* GitHub forwards the old slug until someone creates a new
+repository at `drehtuer/podsilo`, at which point every unfixed link silently points at a stranger's
+project. The badge SVGs would have been the visible symptom — they fetch by slug and would have kept
+rendering, from the wrong repository.
+
+*Verified:* `./gradlew ktlintCheck detekt test` green in the dev container (the host has no Android
+SDK — the run needs the `vsc-podsilo-*` image with the `podsilo-android-sdk` and `podsilo-gradle`
+volumes), plus `yamllint .` and the `asciidoctor --failure-level=WARN` sweep over every `.adoc`. The
+two yamllint line-length warnings in `ci.yml` predate this change. *Unverified:* the badges and the
+Pages URL, which can only be confirmed once this lands on `main` and the site redeploys.

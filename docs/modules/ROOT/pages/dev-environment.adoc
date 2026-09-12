@@ -151,7 +151,7 @@ below differ enormously in how well-proven they are.
 
 | *The documentation site, deployed*
 | ✅ *Verified*
-| 2026-08-23, first push to `main` after #107: `deploy` green in 10s and the site answers at https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo] -- 20 pages in the sitemap, and the diagrams are served as site assets, so nothing points at the build-time Kroki
+| 2026-08-23, first push to `main` after #107: `deploy` green in 10s and the site answers at https://drehtuer.github.io/podsiloApp[drehtuer.github.io/podsiloApp] -- 20 pages in the sitemap, and the diagrams are served as site assets, so nothing points at the build-time Kroki
 |===
 
 *In short: Tier 1 is the everyday path, Tier 2 covers what cannot run headless, and Tier 3 works
@@ -169,8 +169,8 @@ Assuming the <<3-host-prerequisites-windows-wsl2-docker,host prerequisites>> are
 
 [,bash]
 ----
-git clone https://github.com/drehtuer/podsilo.git
-cd podsilo
+git clone https://github.com/drehtuer/podsiloApp.git
+cd podsiloApp
 code .          # then: "Reopen in Container" when VS Code offers it
 ----
 
@@ -503,7 +503,7 @@ Three things follow from choosing Antora, and the first is a real cost:
   inside the zip (`~/.cache/antora/ui/*.zip`).
 
 *Publishing is `.github/workflows/docs.yml`*, and the site is at
-https://drehtuer.github.io/podsilo[drehtuer.github.io/podsilo]. Pages' own build step only knows
+https://drehtuer.github.io/podsiloApp[drehtuer.github.io/podsiloApp]. Pages' own build step only knows
 Jekyll, so AsciiDoc has to arrive as a finished artifact: the workflow installs the same two npm
 packages the container carries, runs Kroki as a pair of service containers, builds, and uploads
 `build/site/` for `deploy-pages`. Three things about it are worth knowing before touching it:

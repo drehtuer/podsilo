@@ -5,7 +5,7 @@
 # local preview show uncommitted edits; CI passes `--fetch` and a branch instead.
 site:
   title: Podsilo
-  url: https://drehtuer.github.io/podsilo
+  url: https://drehtuer.github.io/podsiloApp
   start_page: podsilo::index.adoc
 
 # Build-time only: rewrites [source,mermaid] to [mermaid] so Kroki renders it, while

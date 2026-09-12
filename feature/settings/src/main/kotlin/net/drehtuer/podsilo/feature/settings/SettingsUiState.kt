@@ -232,7 +232,7 @@ interface SettingsCounts {
 }
 
 /** Where the source lives. GPL-3.0 obliges us to be able to point at it; this is that pointer. */
-const val PODSILO_REPOSITORY_URL: String = "https://github.com/drehtuer/podsilo"
+const val PODSILO_REPOSITORY_URL: String = "https://github.com/drehtuer/podsiloApp"
 
 /**
  * The two directional passes, as a port (`decisions/0025`).

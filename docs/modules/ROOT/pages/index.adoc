@@ -8,7 +8,7 @@ Nextcloud, lists their episodes for manual triage, and downloads what you choose
 control. It deliberately does not play anything.
 
 This is the documentation site. The code, the README and the issue tracker live at
-https://github.com/drehtuer/podsilo[github.com/drehtuer/podsilo].
+https://github.com/drehtuer/podsiloApp[github.com/drehtuer/podsiloApp].
 
 == Where to start
 
